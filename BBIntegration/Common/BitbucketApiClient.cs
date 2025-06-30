@@ -77,5 +77,27 @@ namespace BBIntegration.Common
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
         }
+
+        public async Task<string> GetCommitsAsync(string workspace, string repoSlug, string nextPageUrl = null)
+        {
+            await EnsureAuthenticatedAsync();
+            
+            // Use the next page URL if provided, otherwise construct the initial URL
+            var url = !string.IsNullOrEmpty(nextPageUrl) 
+                ? nextPageUrl 
+                : $"repositories/{workspace}/{repoSlug}/commits";
+
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        public async Task<string> GetCommitDiffStatAsync(string workspace, string repoSlug, string commitHash)
+        {
+            await EnsureAuthenticatedAsync();
+            var response = await _httpClient.GetAsync($"repositories/{workspace}/{repoSlug}/diffstat/{commitHash}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
     }
 }
