@@ -18,18 +18,18 @@ namespace BB.Api.Endpoints.Analytics
 
         [HttpGet("commits/activity")]
         public async Task<IActionResult> GetCommitActivity(
-            [FromQuery] int repoId,
+            [FromQuery] string repoSlug,
             [FromQuery] string workspace,
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
-            [FromQuery] GroupingType groupBy = GroupingType.Week)
+            [FromQuery] GroupingType groupBy = GroupingType.Day)
         {
-            if (repoId == 0 && string.IsNullOrEmpty(workspace))
+            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
             {
-                return BadRequest("The 'workspace' parameter is required when 'repoId' is 0.");
+                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
             }
 
-            var result = await _analyticsService.GetCommitActivityAsync(repoId, workspace, startDate, endDate, groupBy);
+            var result = await _analyticsService.GetCommitActivityAsync(repoSlug, workspace, startDate, endDate, groupBy);
             return Ok(result);
         }
     }

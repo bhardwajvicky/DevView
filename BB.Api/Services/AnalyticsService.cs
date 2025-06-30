@@ -18,7 +18,7 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
-            int repoId, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy)
+            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy)
         {
             using var connection = new SqlConnection(_connectionString);
             
@@ -41,21 +41,23 @@ namespace BB.Api.Services
                 SELECT 
                     CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                     COUNT(c.Id) AS CommitCount,
-                    SUM(c.LinesAdded) AS LinesAdded,
-                    SUM(c.LinesRemoved) AS LinesRemoved
+                    SUM(c.LinesAdded) AS TotalLinesAdded,
+                    SUM(c.LinesRemoved) AS TotalLinesRemoved,
+                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
+                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 WHERE 
                     c.IsMerge = 0
-                    AND (@RepoId = 0 OR c.RepositoryId = @RepoId)
-                    AND (@RepoId != 0 OR r.Workspace = @Workspace)
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
                 ORDER BY Date;
             ";
 
-            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoId, workspace, startDate, endDate });
+            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate });
         }
     }
 } 

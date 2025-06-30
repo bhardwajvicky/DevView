@@ -6,8 +6,10 @@ namespace BB.Api.Endpoints.Analytics
     {
         public DateTime Date { get; set; }
         public int CommitCount { get; set; }
-        public int LinesAdded { get; set; }
-        public int LinesRemoved { get; set; }
+        public int TotalLinesAdded { get; set; }
+        public int TotalLinesRemoved { get; set; }
+        public int CodeLinesAdded { get; set; }
+        public int CodeLinesRemoved { get; set; }
     }
 
     public enum GroupingType
