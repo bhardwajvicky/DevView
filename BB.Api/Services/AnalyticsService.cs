@@ -18,7 +18,7 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy)
+            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId)
         {
             using var connection = new SqlConnection(_connectionString);
             
@@ -51,17 +51,14 @@ namespace BB.Api.Services
                     c.IsMerge = 0
                     AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
                     AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
+                    AND (@UserId IS NULL OR c.AuthorId = @UserId)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
                 ORDER BY Date;
             ";
 
-            Console.WriteLine("Executing SQL Query:");
-            Console.WriteLine(sql);
-            Console.WriteLine("Parameters: " + new { repoSlug, workspace, startDate, endDate });
-
-            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate });
+            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
         }
 
         public async Task<IEnumerable<ContributorActivityDto>> GetContributorActivityAsync(
@@ -108,11 +105,33 @@ namespace BB.Api.Services
                 ORDER BY Date, DisplayName;
             ";
 
-            Console.WriteLine("Executing SQL Query for Contributor Activity:");
-            Console.WriteLine(sql);
-            Console.WriteLine("Parameters: " + new { repoSlug, workspace, startDate, endDate, userId });
-
             return await connection.QueryAsync<ContributorActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
+        }
+
+        public async Task<IEnumerable<CommitPunchcardDto>> GetCommitPunchcardAsync(
+            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, int? userId)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            const string sql = @"
+                SELECT 
+                    DATEPART(weekday, c.Date) - 1 AS DayOfWeek,
+                    DATEPART(hour, c.Date) AS Hour,
+                    COUNT(c.Id) AS CommitCount
+                FROM Commits c
+                JOIN Repositories r ON c.RepositoryId = r.Id
+                WHERE 
+                    c.IsMerge = 0
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
+                    AND (@UserId IS NULL OR c.AuthorId = @UserId)
+                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
+                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                GROUP BY DATEPART(weekday, c.Date), DATEPART(hour, c.Date)
+                ORDER BY DayOfWeek, Hour;
+            ";
+
+            return await connection.QueryAsync<CommitPunchcardDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
         }
     }
 } 
