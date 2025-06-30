@@ -92,10 +92,10 @@ namespace BBIntegration.Common
             return await response.Content.ReadAsStringAsync();
         }
 
-        public async Task<string> GetCommitDiffStatAsync(string workspace, string repoSlug, string commitHash)
+        public async Task<string> GetCommitDiffAsync(string workspace, string repoSlug, string commitHash)
         {
             await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync($"repositories/{workspace}/{repoSlug}/diffstat/{commitHash}");
+            var response = await _httpClient.GetAsync($"repositories/{workspace}/{repoSlug}/diff/{commitHash}");
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
         }

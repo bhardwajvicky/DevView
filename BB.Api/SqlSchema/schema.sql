@@ -30,6 +30,8 @@ CREATE TABLE Commits (
     LinesAdded INT,
     LinesRemoved INT,
     IsMerge BIT NOT NULL DEFAULT 0,
+    CodeLinesAdded INT,
+    CodeLinesRemoved INT,
     -- Add more commit fields as needed
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
     FOREIGN KEY (AuthorId) REFERENCES Users(Id)

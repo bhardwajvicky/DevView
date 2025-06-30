@@ -1,5 +1,6 @@
 using BBIntegration.Common;
 using BBIntegration.Users; // Reusing PaginatedResponseDto
+using BBIntegration.Utils;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using System;
@@ -13,11 +14,13 @@ namespace BBIntegration.Commits
     {
         private readonly BitbucketApiClient _apiClient;
         private readonly BitbucketConfig _config;
+        private readonly DiffParserService _diffParser;
 
         public BitbucketCommitsService(BitbucketConfig config, BitbucketApiClient apiClient)
         {
             _config = config;
             _apiClient = apiClient;
+            _diffParser = new DiffParserService();
         }
 
         public async Task SyncCommitsAsync(string workspace, string repoSlug, DateTime startDate, DateTime endDate)
@@ -57,48 +60,72 @@ namespace BBIntegration.Commits
                     // Skip if the commit is outside our desired date range
                     if (commit.Date > endDate) continue;
 
-                    // Check if the commit already exists in the database
-                    var existingCommit = await connection.QuerySingleOrDefaultAsync<int?>(
-                        "SELECT 1 FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
+                    // Check if the commit already exists and if it's incomplete
+                    var existingCommit = await connection.QuerySingleOrDefaultAsync<(int Id, int? CodeLinesAdded)>(
+                        "SELECT Id, CodeLinesAdded FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
                     
-                    if (existingCommit.HasValue) continue;
-
-                    // Fetch diff stats for the new commit
-                    var diffStatJson = await _apiClient.GetCommitDiffStatAsync(workspace, repoSlug, commit.Hash);
-                    var diffStats = JsonSerializer.Deserialize<PaginatedResponseDto<DiffStatDto>>(diffStatJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    
-                    var linesAdded = diffStats.Values.Sum(s => s.LinesAdded);
-                    var linesRemoved = diffStats.Values.Sum(s => s.LinesRemoved);
-
-                    // Find the author's internal ID
-                    var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                        "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = commit.Author?.User?.Uuid });
-
-                    if (authorId == null)
+                    if (existingCommit.Id > 0 && existingCommit.CodeLinesAdded.HasValue)
                     {
-                        Console.WriteLine($"Author with UUID '{commit.Author?.User?.Uuid}' not found for commit '{commit.Hash}'. Sync users first.");
+                        // Commit exists and is complete, so skip it
                         continue;
                     }
 
-                    // Insert the new commit
-                    const string sql = @"
-                        INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge)
-                        VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge);
-                    ";
-                    
-                    await connection.ExecuteAsync(sql, new
-                    {
-                        commit.Hash,
-                        RepoId = repoId.Value,
-                        AuthorId = authorId.Value,
-                        commit.Date,
-                        commit.Message,
-                        LinesAdded = linesAdded,
-                        LinesRemoved = linesRemoved,
-                        IsMerge = commit.Message.Trim().StartsWith("Merge branch")
-                    });
+                    // Fetch raw diff and parse it
+                    var diffContent = await _apiClient.GetCommitDiffAsync(workspace, repoSlug, commit.Hash);
+                    var (totalAdded, totalRemoved, codeAdded, codeRemoved) = _diffParser.ParseDiff(diffContent);
 
-                    Console.WriteLine($"Added commit: {commit.Hash}");
+                    if (existingCommit.Id > 0)
+                    {
+                        // UPDATE the existing, incomplete commit
+                        const string updateSql = @"
+                            UPDATE Commits 
+                            SET LinesAdded = @LinesAdded, LinesRemoved = @LinesRemoved, CodeLinesAdded = @CodeLinesAdded, CodeLinesRemoved = @CodeLinesRemoved, IsMerge = @IsMerge
+                            WHERE Id = @Id;
+                        ";
+                        await connection.ExecuteAsync(updateSql, new 
+                        {
+                            Id = existingCommit.Id,
+                            LinesAdded = totalAdded,
+                            LinesRemoved = totalRemoved,
+                            CodeLinesAdded = codeAdded,
+                            CodeLinesRemoved = codeRemoved,
+                            IsMerge = commit.Message.Trim().StartsWith("Merge branch")
+                        });
+                        Console.WriteLine($"Updated commit: {commit.Hash}");
+                    }
+                    else
+                    {
+                        // INSERT the new commit
+                        // Find the author's internal ID
+                        var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
+                            "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = commit.Author?.User?.Uuid });
+
+                        if (authorId == null)
+                        {
+                            Console.WriteLine($"Author with UUID '{commit.Author?.User?.Uuid}' not found for commit '{commit.Hash}'. Sync users first.");
+                            continue;
+                        }
+                        
+                        const string insertSql = @"
+                            INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
+                            VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
+                        ";
+                        
+                        await connection.ExecuteAsync(insertSql, new
+                        {
+                            commit.Hash,
+                            RepoId = repoId.Value,
+                            AuthorId = authorId.Value,
+                            commit.Date,
+                            commit.Message,
+                            LinesAdded = totalAdded,
+                            LinesRemoved = totalRemoved,
+                            IsMerge = commit.Message.Trim().StartsWith("Merge branch"),
+                            CodeLinesAdded = codeAdded,
+                            CodeLinesRemoved = codeRemoved
+                        });
+                        Console.WriteLine($"Added commit: {commit.Hash}");
+                    }
                 }
 
                 // Prepare for the next page
