@@ -1,0 +1,46 @@
+{
+  "project": "BB (Bitbucket Analytics)",
+  "description": "A .NET 9 solution for fetching, storing, and analyzing Bitbucket Cloud commit and PR data. Integrates with Bitbucket APIs, stores data in a SQL database, and exposes analysis endpoints via a modular API.",
+  "tech_stack": {
+    "language": "C#",
+    "framework": ".NET 9",
+    "database": "SQL (schema managed via SQL files, no migrations)",
+    "api": "ASP.NET Core Web API",
+    "bitbucket_api": [
+      "https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commits/#api-group-commits",
+      "https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/#api-group-pullrequests"
+    ]
+  },
+  "structure": {
+    "solution": "BB.sln",
+    "projects": [
+      {
+        "name": "BBIntegration",
+        "type": "Class Library",
+        "folders": [
+          "Commits (BitbucketCommitsService.cs, CommitDto.cs)",
+          "PullRequests (BitbucketPullRequestsService.cs, PullRequestDto.cs)",
+          "Common (BitbucketApiClient.cs, BitbucketConfig.cs)"
+        ]
+      },
+      {
+        "name": "BB.Api",
+        "type": "ASP.NET Core Web API",
+        "folders": [
+          "Endpoints/Commits (CommitsController.cs, CommitRequestDto.cs, CommitResponseDto.cs)",
+          "Endpoints/PullRequests (PullRequestsController.cs, PullRequestRequestDto.cs, PullRequestResponseDto.cs)",
+          "Services (CommitAnalysisService.cs, PullRequestAnalysisService.cs)",
+          "Models (Commit.cs, PullRequest.cs)",
+          "SqlSchema (schema.sql)",
+          "appsettings.json"
+        ]
+      }
+    ]
+  },
+  "notes": [
+    "No test project included.",
+    "No DB migrations; use SQL files for schema.",
+    "Each API endpoint has its own folder with controller and DTOs.",
+    "Integration logic grouped by feature in the integration class library."
+  ]
+} 
