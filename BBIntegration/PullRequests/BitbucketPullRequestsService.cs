@@ -45,12 +45,13 @@ namespace BBIntegration.PullRequests
 
                 foreach (var pr in prPagedResponse.Values)
                 {
-                    // Find Author ID
+                    // Find the author's internal ID
                     var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                        "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = pr.Author?.Uuid });
+                        "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = pr.Author.User.Uuid });
+
                     if (authorId == null)
                     {
-                        Console.WriteLine($"Author '{pr.Author?.Uuid}' not found for PR '{pr.Id}'. Sync users first.");
+                        Console.WriteLine($"Author with UUID '{pr.Author.User.Uuid}' not found for PR '{pr.Id}'. Sync users first.");
                         continue;
                     }
 

@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
+using BBIntegration.Common;
 
 namespace BBIntegration.Common
 {
@@ -16,41 +17,31 @@ namespace BBIntegration.Common
         public BitbucketApiClient(BitbucketConfig config)
         {
             _config = config;
-            _httpClient = new HttpClient();
-            _httpClient.BaseAddress = new Uri(_config.BitbucketApiBaseUrl);
+            _httpClient = new HttpClient { BaseAddress = new Uri(_config.BitbucketApiBaseUrl) };
         }
 
         private async Task EnsureAuthenticatedAsync()
         {
-            // If we already have a token, we can use it.
-            // In a real-world scenario, you would also check for token expiration.
-            if (!string.IsNullOrEmpty(_accessToken))
-            {
-                return;
-            }
+            if (!string.IsNullOrEmpty(_accessToken)) return;
 
-            // Get the token using the OAuth Client Credentials Grant flow
-            using var authClient = new HttpClient();
-            var authRequest = new HttpRequestMessage(HttpMethod.Post, "https://bitbucket.org/site/oauth2/access_token")
+            var authClient = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://bitbucket.org/site/oauth2/access_token")
             {
                 Content = new FormUrlEncodedContent(new[]
                 {
-                    new KeyValuePair<string, string>("grant_type", "client_credentials")
+                    new KeyValuePair<string, string>("grant_type", "client_credentials"),
+                    new KeyValuePair<string, string>("client_id", _config.BitbucketConsumerKey),
+                    new KeyValuePair<string, string>("client_secret", _config.BitbucketConsumerSecret)
                 })
             };
 
-            var basicAuth = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{_config.BitbucketConsumerKey}:{_config.BitbucketConsumerSecret}"));
-            authClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", basicAuth);
+            var response = await authClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
 
-            var authResponse = await authClient.SendAsync(authRequest);
-            authResponse.EnsureSuccessStatusCode();
-
-            var responseStream = await authResponse.Content.ReadAsStreamAsync();
-            var tokenResponse = await JsonSerializer.DeserializeAsync<JsonElement>(responseStream);
-            
+            var content = await response.Content.ReadAsStringAsync();
+            var tokenResponse = JsonSerializer.Deserialize<JsonElement>(content);
             _accessToken = tokenResponse.GetProperty("access_token").GetString();
 
-            // Set the Bearer token for subsequent API requests
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         }
 
@@ -78,11 +69,28 @@ namespace BBIntegration.Common
             return await response.Content.ReadAsStringAsync();
         }
 
+        public async Task<string> GetUsersAsync(string workspace, string nextPageUrl = null)
+        {
+            await EnsureAuthenticatedAsync();
+            var url = !string.IsNullOrEmpty(nextPageUrl) ? nextPageUrl : $"workspaces/{workspace}/members";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        public async Task<string> GetRepositoriesAsync(string workspace, string nextPageUrl = null)
+        {
+            await EnsureAuthenticatedAsync();
+            var url = !string.IsNullOrEmpty(nextPageUrl) ? nextPageUrl : $"repositories/{workspace}";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+        
         public async Task<string> GetCommitsAsync(string workspace, string repoSlug, string nextPageUrl = null)
         {
             await EnsureAuthenticatedAsync();
             
-            // Use the next page URL if provided, otherwise construct the initial URL
             var url = !string.IsNullOrEmpty(nextPageUrl) 
                 ? nextPageUrl 
                 : $"repositories/{workspace}/{repoSlug}/commits";
@@ -91,15 +99,7 @@ namespace BBIntegration.Common
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
         }
-
-        public async Task<string> GetCommitDiffAsync(string workspace, string repoSlug, string commitHash)
-        {
-            await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync($"repositories/{workspace}/{repoSlug}/diff/{commitHash}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
-        }
-
+        
         public async Task<string> GetPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate, string nextPageUrl = null)
         {
             await EnsureAuthenticatedAsync();
@@ -107,9 +107,15 @@ namespace BBIntegration.Common
             var url = nextPageUrl;
             if (string.IsNullOrEmpty(url))
             {
-                // Build the initial URL with date filtering
-                var query = $"updated_on >= {startDate:yyyy-MM-ddTHH:mm:ssZ} AND updated_on <= {endDate:yyyy-MM-ddTHH:mm:ssZ}";
-                url = $"repositories/{workspace}/{repoSlug}/pullrequests?q={Uri.EscapeDataString(query)}";
+                if (startDate.HasValue && endDate.HasValue)
+                {
+                    var query = $"updated_on >= {startDate:yyyy-MM-ddTHH:mm:ssZ} AND updated_on <= {endDate:yyyy-MM-ddTHH:mm:ssZ}";
+                    url = $"repositories/{workspace}/{repoSlug}/pullrequests?q={Uri.EscapeDataString(query)}";
+                }
+                else
+                {
+                     url = $"repositories/{workspace}/{repoSlug}/pullrequests";
+                }
             }
 
             var response = await _httpClient.GetAsync(url);
@@ -127,6 +133,24 @@ namespace BBIntegration.Common
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
+        }
+        
+        public async Task<string> GetCommitDiffAsync(string workspace, string repoSlug, string commitHash)
+        {
+            await EnsureAuthenticatedAsync();
+            var response = await _httpClient.GetAsync($"repositories/{workspace}/{repoSlug}/diff/{commitHash}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        private string BuildPullRequestsUrl(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
+        {
+            if (startDate.HasValue && endDate.HasValue)
+            {
+                var query = $"updated_on >= {startDate:yyyy-MM-ddTHH:mm:ssZ} AND updated_on <= {endDate:yyyy-MM-ddTHH:mm:ssZ}";
+                return $"repositories/{workspace}/{repoSlug}/pullrequests?q={Uri.EscapeDataString(query)}";
+            }
+            return null;
         }
     }
 }

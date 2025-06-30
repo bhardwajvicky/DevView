@@ -32,5 +32,23 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetCommitActivityAsync(repoSlug, workspace, startDate, endDate, groupBy);
             return Ok(result);
         }
+
+        [HttpGet("contributors")]
+        public async Task<IActionResult> GetContributorActivity(
+            [FromQuery] string repoSlug,
+            [FromQuery] string workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] GroupingType groupBy = GroupingType.Day,
+            [FromQuery] int? userId = null)
+        {
+            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetContributorActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId);
+            return Ok(result);
+        }
     }
 } 

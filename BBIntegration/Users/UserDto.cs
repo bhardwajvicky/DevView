@@ -21,10 +21,10 @@ namespace BBIntegration.Users
     public class UserLinksDto
     {
         [JsonPropertyName("avatar")]
-        public LinkDto Avatar { get; set; }
+        public AvatarLinkDto Avatar { get; set; }
     }
 
-    public class LinkDto
+    public class AvatarLinkDto
     {
         [JsonPropertyName("href")]
         public string Href { get; set; }

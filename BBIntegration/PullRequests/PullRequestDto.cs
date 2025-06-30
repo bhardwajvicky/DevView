@@ -16,15 +16,15 @@ namespace BBIntegration.PullRequests
         public string State { get; set; }
 
         [JsonPropertyName("author")]
-        public BitbucketUserDto Author { get; set; }
+        public CommitAuthorDto Author { get; set; }
 
         [JsonPropertyName("created_on")]
         public DateTime CreatedOn { get; set; }
 
         [JsonPropertyName("updated_on")]
-        public DateTime UpdatedOn { get; set; }
+        public DateTime? UpdatedOn { get; set; }
 
         [JsonPropertyName("merge_commit")]
-        public CommitDto MergeCommit { get; set; } // Can be null
+        public CommitDto MergeCommit { get; set; }
     }
 }

@@ -23,14 +23,14 @@ namespace BBIntegration.Commits
     {
         // The 'user' object is sometimes nested within the 'author' object
         [JsonPropertyName("user")]
-        public BitbucketUserDto User { get; set; }
+        public AuthorUserDto User { get; set; }
 
         // Sometimes the author email is in the 'raw' field
         [JsonPropertyName("raw")]
-        public string Raw { get; set; } 
+        public string Raw { get; set; }
     }
 
-    public class BitbucketUserDto
+    public class AuthorUserDto
     {
         [JsonPropertyName("uuid")]
         public string Uuid { get; set; }
