@@ -17,6 +17,19 @@ namespace BB.Api.Services
             _connectionString = config.DbConnectionString;
         }
 
+        private static string GetFilterClause()
+        {
+            return @"
+                WHERE 
+                    c.IsMerge = 0
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
+                    AND (@UserId IS NULL OR c.AuthorId = @UserId)
+                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
+                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+            ";
+        }
+
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
             string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId)
         {
@@ -47,13 +60,7 @@ namespace BB.Api.Services
                     SUM(c.CodeLinesRemoved) AS CodeLinesRemoved
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
-                WHERE 
-                    c.IsMerge = 0
-                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
-                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
-                    AND (@UserId IS NULL OR c.AuthorId = @UserId)
-                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
-                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                {GetFilterClause()}
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
                 ORDER BY Date;
             ";
@@ -94,13 +101,7 @@ namespace BB.Api.Services
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 JOIN Users u ON c.AuthorId = u.Id
-                WHERE 
-                    c.IsMerge = 0
-                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
-                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
-                    AND (@UserId IS NULL OR u.Id = @UserId)
-                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
-                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                {GetFilterClause()}
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE), u.Id, u.DisplayName
                 ORDER BY Date, DisplayName;
             ";
@@ -120,13 +121,7 @@ namespace BB.Api.Services
                     COUNT(c.Id) AS CommitCount
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
-                WHERE 
-                    c.IsMerge = 0
-                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
-                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
-                    AND (@UserId IS NULL OR c.AuthorId = @UserId)
-                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
-                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                {GetFilterClause()}
                 GROUP BY DATEPART(weekday, c.Date), DATEPART(hour, c.Date)
                 ORDER BY DayOfWeek, Hour;
             ";

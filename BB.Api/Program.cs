@@ -4,6 +4,7 @@ using BBIntegration.Common;
 using BBIntegration.PullRequests;
 using BBIntegration.Repositories;
 using BBIntegration.Users;
+using BBIntegration.Utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,7 @@ builder.Services.AddScoped<BitbucketRepositoriesService>();
 builder.Services.AddScoped<BitbucketCommitsService>();
 builder.Services.AddScoped<BitbucketPullRequestsService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<DiffParserService>();
 
 // Add services to the container.
 builder.Services.AddControllers()

@@ -45,6 +45,14 @@ namespace BBIntegration.Common
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         }
 
+        private async Task<string> SendRequestAsync(string url)
+        {
+            await EnsureAuthenticatedAsync();
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+
         public async Task<string> GetCurrentUserAsync()
         {
             await EnsureAuthenticatedAsync();
@@ -71,39 +79,26 @@ namespace BBIntegration.Common
 
         public async Task<string> GetUsersAsync(string workspace, string nextPageUrl = null)
         {
-            await EnsureAuthenticatedAsync();
             var url = !string.IsNullOrEmpty(nextPageUrl) ? nextPageUrl : $"workspaces/{workspace}/members";
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync(url);
         }
 
         public async Task<string> GetRepositoriesAsync(string workspace, string nextPageUrl = null)
         {
-            await EnsureAuthenticatedAsync();
             var url = !string.IsNullOrEmpty(nextPageUrl) ? nextPageUrl : $"repositories/{workspace}";
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync(url);
         }
         
         public async Task<string> GetCommitsAsync(string workspace, string repoSlug, string nextPageUrl = null)
         {
-            await EnsureAuthenticatedAsync();
-            
             var url = !string.IsNullOrEmpty(nextPageUrl) 
                 ? nextPageUrl 
                 : $"repositories/{workspace}/{repoSlug}/commits";
-
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync(url);
         }
         
         public async Task<string> GetPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate, string nextPageUrl = null)
         {
-            await EnsureAuthenticatedAsync();
-
             var url = nextPageUrl;
             if (string.IsNullOrEmpty(url))
             {
@@ -117,30 +112,21 @@ namespace BBIntegration.Common
                      url = $"repositories/{workspace}/{repoSlug}/pullrequests";
                 }
             }
-
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync(url);
         }
 
         public async Task<string> GetPullRequestCommitsAsync(string workspace, string repoSlug, int pullRequestId, string nextPageUrl = null)
         {
-            await EnsureAuthenticatedAsync();
             var url = !string.IsNullOrEmpty(nextPageUrl)
                 ? nextPageUrl
                 : $"repositories/{workspace}/{repoSlug}/pullrequests/{pullRequestId}/commits";
-            
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync(url);
         }
         
         public async Task<string> GetCommitDiffAsync(string workspace, string repoSlug, string commitHash)
         {
-            await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync($"repositories/{workspace}/{repoSlug}/diff/{commitHash}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            var url = $"repositories/{workspace}/{repoSlug}/diff/{commitHash}";
+            return await SendRequestAsync(url);
         }
 
         private string BuildPullRequestsUrl(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
