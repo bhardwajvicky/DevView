@@ -69,5 +69,13 @@ namespace BBIntegration.Common
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
         }
+
+        public async Task<string> GetWorkspaceRepositoriesAsync(string workspace)
+        {
+            await EnsureAuthenticatedAsync();
+            var response = await _httpClient.GetAsync($"repositories/{workspace}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
     }
 }

@@ -1,3 +1,4 @@
+using BBIntegration.Repositories;
 using BBIntegration.Users;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -10,10 +11,12 @@ namespace BB.Api.Endpoints.Sync
     public class SyncController : ControllerBase
     {
         private readonly BitbucketUsersService _usersService;
+        private readonly BitbucketRepositoriesService _reposService;
 
-        public SyncController(BitbucketUsersService usersService)
+        public SyncController(BitbucketUsersService usersService, BitbucketRepositoriesService reposService)
         {
             _usersService = usersService;
+            _reposService = reposService;
         }
 
         [HttpPost("users/{workspace}")]
@@ -23,6 +26,21 @@ namespace BB.Api.Endpoints.Sync
             {
                 await _usersService.SyncUsersAsync(workspace);
                 return Ok("User synchronization completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                // In a real app, you would log the exception
+                return StatusCode(500, $"An error occurred during synchronization: {ex.Message}");
+            }
+        }
+
+        [HttpPost("repositories/{workspace}")]
+        public async Task<IActionResult> SyncRepositories(string workspace)
+        {
+            try
+            {
+                await _reposService.SyncRepositoriesAsync(workspace);
+                return Ok("Repository synchronization completed successfully.");
             }
             catch (Exception ex)
             {

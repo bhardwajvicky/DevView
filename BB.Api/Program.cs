@@ -1,4 +1,5 @@
 using BBIntegration.Common;
+using BBIntegration.Repositories;
 using BBIntegration.Users;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,7 @@ builder.Services.AddSingleton(bitbucketConfig);
 // The ApiClient must be a singleton to manage the lifecycle of the access token
 builder.Services.AddSingleton<BitbucketApiClient>();
 builder.Services.AddScoped<BitbucketUsersService>();
+builder.Services.AddScoped<BitbucketRepositoriesService>();
 
 // Add services to the container.
 builder.Services.AddControllers();
