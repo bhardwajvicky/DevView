@@ -82,8 +82,8 @@ namespace BBIntegration.Commits
 
                     // Insert the new commit
                     const string sql = @"
-                        INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved)
-                        VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved);
+                        INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge)
+                        VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge);
                     ";
                     
                     await connection.ExecuteAsync(sql, new
@@ -94,7 +94,8 @@ namespace BBIntegration.Commits
                         commit.Date,
                         commit.Message,
                         LinesAdded = linesAdded,
-                        LinesRemoved = linesRemoved
+                        LinesRemoved = linesRemoved,
+                        IsMerge = commit.Message.Trim().StartsWith("Merge branch")
                     });
 
                     Console.WriteLine($"Added commit: {commit.Hash}");

@@ -29,6 +29,7 @@ CREATE TABLE Commits (
     Message NVARCHAR(MAX),
     LinesAdded INT,
     LinesRemoved INT,
+    IsMerge BIT NOT NULL DEFAULT 0,
     -- Add more commit fields as needed
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
     FOREIGN KEY (AuthorId) REFERENCES Users(Id)

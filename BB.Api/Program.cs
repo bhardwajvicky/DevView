@@ -1,3 +1,4 @@
+using BB.Api.Services;
 using BBIntegration.Commits;
 using BBIntegration.Common;
 using BBIntegration.PullRequests;
@@ -23,9 +24,14 @@ builder.Services.AddScoped<BitbucketUsersService>();
 builder.Services.AddScoped<BitbucketRepositoriesService>();
 builder.Services.AddScoped<BitbucketCommitsService>();
 builder.Services.AddScoped<BitbucketPullRequestsService>();
+builder.Services.AddScoped<AnalyticsService>();
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
