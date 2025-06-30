@@ -1,5 +1,6 @@
 using BBIntegration.Commits;
 using BBIntegration.Common;
+using BBIntegration.PullRequests;
 using BBIntegration.Repositories;
 using BBIntegration.Users;
 
@@ -21,6 +22,7 @@ builder.Services.AddSingleton<BitbucketApiClient>();
 builder.Services.AddScoped<BitbucketUsersService>();
 builder.Services.AddScoped<BitbucketRepositoriesService>();
 builder.Services.AddScoped<BitbucketCommitsService>();
+builder.Services.AddScoped<BitbucketPullRequestsService>();
 
 // Add services to the container.
 builder.Services.AddControllers();

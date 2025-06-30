@@ -99,5 +99,34 @@ namespace BBIntegration.Common
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
         }
+
+        public async Task<string> GetPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate, string nextPageUrl = null)
+        {
+            await EnsureAuthenticatedAsync();
+
+            var url = nextPageUrl;
+            if (string.IsNullOrEmpty(url))
+            {
+                // Build the initial URL with date filtering
+                var query = $"updated_on >= {startDate:yyyy-MM-ddTHH:mm:ssZ} AND updated_on <= {endDate:yyyy-MM-ddTHH:mm:ssZ}";
+                url = $"repositories/{workspace}/{repoSlug}/pullrequests?q={Uri.EscapeDataString(query)}";
+            }
+
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        public async Task<string> GetPullRequestCommitsAsync(string workspace, string repoSlug, int pullRequestId, string nextPageUrl = null)
+        {
+            await EnsureAuthenticatedAsync();
+            var url = !string.IsNullOrEmpty(nextPageUrl)
+                ? nextPageUrl
+                : $"repositories/{workspace}/{repoSlug}/pullrequests/{pullRequestId}/commits";
+            
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
     }
 }
