@@ -1,9 +1,333 @@
 @page "/dashboard"
-@using System.Net.Http.Json
-@inject HttpClient Http
+@rendermode InteractiveServer
 
-<h3>Dashboard</h3>
+@using Radzen
+@using Radzen.Blazor
+@using BB.Web.DTOs
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject HttpClient Http
+@inject ILogger<Dashboard> Logger
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Commit Activity</h1>
+
+<div class="rz-p-4">
+    @if (isLoadingRepos)
+    {
+        <div class="rz-mb-4">
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Medium" />
+            <p><em>Loading repositories...</em></p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="rz-mb-4">
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <strong>Error:</strong> @errorMessage
+                <br />
+                <small>Make sure the BB.Api project is running on http://localhost:5000</small>
+            </RadzenAlert>
+            <RadzenButton Text="Retry" Click="@LoadRepositories" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small" />
+        </div>
+    }
+    else if (repositories == null || !repositories.Any())
+    {
+        <div class="rz-mb-4">
+            <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <strong>No Repositories Found</strong>
+                <br />
+                <small>Please sync some repositories first using the API endpoints.</small>
+            </RadzenAlert>
+        </div>
+    }
+    else
+    {
+        <div class="rz-mb-4">
+            <!-- Repository Selection -->
+            <div class="mb-4">
+                <label class="form-label"><strong>Repository:</strong></label>
+                <InputSelect Value="@selectedRepoSlug" ValueChanged="@((string value) => OnRepositorySelectionChanged(value))" ValueExpression="@(() => selectedRepoSlug)" class="form-select" style="width: 400px; height: 38px;">
+                    <option value="">Select a repository...</option>
+                    @if (repositories != null)
+                    {
+                        @foreach (var repo in repositories)
+                        {
+                            <option value="@repo.Slug">@repo.Name</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+            
+            <!-- Date Range Filter -->
+            @if (!string.IsNullOrEmpty(selectedRepoSlug))
+            {
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>From Date:</strong></label>
+                        <RadzenDatePicker @bind-Value="@startDate" DateFormat="yyyy-MM-dd" 
+                                        ShowCalendarWeek="false" 
+                                        class="w-100"
+                                        Change="@OnDateRangeChanged" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label"><strong>To Date:</strong></label>
+                        <RadzenDatePicker @bind-Value="@endDate" DateFormat="yyyy-MM-dd" 
+                                        ShowCalendarWeek="false" 
+                                        class="w-100"
+                                        Change="@OnDateRangeChanged" />
+                    </div>
+                </div>
+                
+                <!-- Quick Date Range Buttons -->
+                <div class="mb-4">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(30)">Last 30 Days</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(90)">Last 3 Months</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(180)">Last 6 Months</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(365)">Last Year</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(null)">All Time</button>
+                    </div>
+                </div>
+            }
+            
+            @* Debug info *@
+            <div class="mb-2">
+                <small class="text-muted">Selected: @(selectedRepoSlug ?? "None")</small>
+                @if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue)
+                {
+                    <br />
+                    <small class="text-muted">Date Range: @startDate.Value.ToString("yyyy-MM-dd") to @endDate.Value.ToString("yyyy-MM-dd")</small>
+                }
+            </div>
+        </div>
+    }
+
+    @if (isLoadingCommits)
+    {
+        <div class="rz-mb-4">
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Medium" />
+            <p><em>Loading commit activity...</em></p>
+        </div>
+    }
+    else if (commitActivity == null && !string.IsNullOrEmpty(selectedRepoSlug))
+    {
+        <p><em>Select a repository to view activity...</em></p>
+    }
+    else if (commitActivity != null && !commitActivity.Any())
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+            <strong>No Commit Activity Found</strong>
+            <br />
+            <small>No commits found for the selected repository. Try syncing commits first.</small>
+        </RadzenAlert>
+    }
+    else if (commitActivity != null && commitActivity.Any())
+    {
+        <RadzenChart SeriesClick="@OnChartSeriesClick">
+            <RadzenLineSeries Data="@commitActivity" CategoryProperty="Date" Title="Commits" ValueProperty="CommitCount">
+                <RadzenMarkers MarkerType="MarkerType.Circle" />
+            </RadzenLineSeries>
+            <RadzenCategoryAxis Padding="20" FormatString="{0:MMM dd}" />
+            <RadzenValueAxis Min="0">
+                <RadzenGridLines Visible="true" />
+                <RadzenAxisTitle Text="Number of Commits" />
+            </RadzenValueAxis>
+            <RadzenLegend Position="LegendPosition.Top" />
+            <RadzenChartTooltipOptions Visible="true" Style="background-color: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px;" />
+        </RadzenChart>
+        
+        <!-- Chart Click Information -->
+        @if (!string.IsNullOrEmpty(selectedDataPoint))
+        {
+            <div class="mt-3">
+                <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                    <strong>Selected Data Point:</strong> @selectedDataPoint
+                </RadzenAlert>
+            </div>
+        }
+        
+        <!-- Data Table showing commit activity details -->
+        <div class="mt-4">
+            <h5>Commit Activity Data</h5>
+            <RadzenDataGrid AllowFiltering="true" AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                            Data="@commitActivity" TItem="CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or">
+                <Columns>
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="Date" Title="Date" Width="120px" FormatString="{0:MMM dd, yyyy}" />
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CommitCount" Title="Commits" Width="100px" TextAlign="TextAlign.Center">
+                        <Template Context="data">
+                            <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Actions" Width="100px" Sortable="false" Filterable="false">
+                        <Template Context="data">
+                            <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Primary" Text="Select" Click="@(() => SelectDataPoint(data))" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </div>
+    }
+</div>
 
 @code {
+    private RepositorySummaryDto[]? repositories;
+    private CommitActivityDto[]? commitActivity;
+    private bool isLoadingRepos = true;
+    private bool isLoadingCommits = false;
+    private string? errorMessage;
+    private string? selectedRepoSlug;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private string? selectedDataPoint;
+    private CommitActivityDto? selectedCommitData;
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRepositories();
+    }
+
+    private async Task LoadRepositories()
+    {
+        try
+        {
+            isLoadingRepos = true;
+            repositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("http://localhost:5000/api/analytics/repositories");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading repositories: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingRepos = false;
+        }
+    }
+
+    private void OnRepositorySelectionChanged(string? newRepoSlug)
+    {
+        Console.WriteLine($"Repository selection changed to: {newRepoSlug}");
+        Logger.LogInformation("Repository selection changed to: {RepoSlug}", newRepoSlug);
+        
+        selectedRepoSlug = newRepoSlug;
+        
+        // Set default date range to 2019-01-01 to 2020-02-05 when selecting a repo for the first time
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && !startDate.HasValue && !endDate.HasValue)
+        {
+            startDate = new DateTime(2019, 1, 1);
+            endDate = new DateTime(2020, 2, 5);
+        }
+        
+        StateHasChanged(); // Force UI update
+        
+        if (!string.IsNullOrEmpty(selectedRepoSlug))
+        {
+            Console.WriteLine($"Loading commit activity for: {selectedRepoSlug}");
+            Logger.LogInformation("Loading commit activity for: {RepoSlug}", selectedRepoSlug);
+            InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
+        }
+        else
+        {
+            commitActivity = null;
+            startDate = null;
+            endDate = null;
+            StateHasChanged();
+        }
+    }
+
+    private void OnDateRangeChanged(DateTime? newDate)
+    {
+        // Reload commit activity when date range changes
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue)
+        {
+            InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
+        }
+    }
+
+    private void SetDateRange(int? days)
+    {
+        if (days.HasValue)
+        {
+            endDate = DateTime.Today;
+            startDate = DateTime.Today.AddDays(-days.Value);
+        }
+        else
+        {
+            // All time - clear date filters
+            startDate = null;
+            endDate = null;
+        }
+        
+        // Reload data with new date range
+        if (!string.IsNullOrEmpty(selectedRepoSlug))
+        {
+            InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
+        }
+    }
+
+    private async Task LoadCommitActivity(string repoSlug)
+    {
+        try
+        {
+            Console.WriteLine($"LoadCommitActivity started for: {repoSlug}");
+            Logger.LogInformation("LoadCommitActivity started for: {RepoSlug}", repoSlug);
+            
+            isLoadingCommits = true;
+            commitActivity = null;
+            StateHasChanged();
+            
+            var workspace = repositories?.FirstOrDefault(r => r.Slug == repoSlug)?.Workspace ?? "vbhardwaj66";
+            var url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}";
+            
+            // Add date range parameters if specified
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+            
+            Console.WriteLine($"Making API call to: {url}");
+            Logger.LogInformation("Making API call to: {Url}", url);
+            
+            commitActivity = await Http.GetFromJsonAsync<CommitActivityDto[]>(url);
+            
+            Console.WriteLine($"Received {commitActivity?.Length ?? 0} commit activity records");
+            Logger.LogInformation("Received {Count} commit activity records", commitActivity?.Length ?? 0);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading commit activity: {ex.Message}");
+            Logger.LogError(ex, "Error loading commit activity: {Message}", ex.Message);
+            errorMessage = $"Error loading commit activity: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingCommits = false;
+            StateHasChanged();
+            Console.WriteLine($"LoadCommitActivity completed. Loading: {isLoadingCommits}");
+        }
+    }
+
+    private void SelectDataPoint(CommitActivityDto data)
+    {
+        selectedCommitData = data;
+        selectedDataPoint = $"Selected: {data.Date:MMM dd, yyyy} - {data.CommitCount} commits";
+        StateHasChanged();
+    }
+
+    private void OnChartSeriesClick(SeriesClickEventArgs args)
+    {
+        // Handle series click event - the clicked data point is in args.Data
+        if (args.Data is CommitActivityDto clickedData)
+        {
+            selectedCommitData = clickedData;
+            selectedDataPoint = $"Clicked on chart: {clickedData.Date:MMM dd, yyyy} - {clickedData.CommitCount} commits";
+            StateHasChanged();
+        }
+    }
 } 

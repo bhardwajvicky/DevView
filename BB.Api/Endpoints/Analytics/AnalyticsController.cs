@@ -68,5 +68,12 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetCommitPunchcardAsync(repoSlug, workspace, startDate, endDate, userId);
             return Ok(result);
         }
+
+        [HttpGet("repositories")]
+        public async Task<IActionResult> GetRepositories()
+        {
+            var result = await _analyticsService.GetRepositoriesAsync();
+            return Ok(result);
+        }
     }
 } 

@@ -128,5 +128,12 @@ namespace BB.Api.Services
 
             return await connection.QueryAsync<CommitPunchcardDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
         }
+
+        public async Task<IEnumerable<RepositorySummaryDto>> GetRepositoriesAsync()
+        {
+            using var connection = new SqlConnection(_connectionString);
+            const string sql = "SELECT Name, Slug, Workspace FROM Repositories ORDER BY Name;";
+            return await connection.QueryAsync<RepositorySummaryDto>(sql);
+        }
     }
 } 

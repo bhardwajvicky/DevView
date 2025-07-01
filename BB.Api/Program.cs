@@ -28,6 +28,17 @@ builder.Services.AddScoped<BitbucketPullRequestsService>();
 builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<DiffParserService>();
 
+// Add CORS for Blazor web app
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowBlazorApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:5084", "https://localhost:7051")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Add services to the container.
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -47,6 +58,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Enable CORS
+app.UseCors("AllowBlazorApp");
 
 app.UseAuthorization();
 
