@@ -18,8 +18,8 @@ namespace BB.Api.Endpoints.Analytics
 
         [HttpGet("commits/activity")]
         public async Task<IActionResult> GetCommitActivity(
-            [FromQuery] string repoSlug,
-            [FromQuery] string workspace,
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
@@ -36,8 +36,8 @@ namespace BB.Api.Endpoints.Analytics
 
         [HttpGet("contributors")]
         public async Task<IActionResult> GetContributorActivity(
-            [FromQuery] string repoSlug,
-            [FromQuery] string workspace,
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
@@ -54,8 +54,8 @@ namespace BB.Api.Endpoints.Analytics
 
         [HttpGet("commits/punchcard")]
         public async Task<IActionResult> GetCommitPunchcard(
-            [FromQuery] string repoSlug,
-            [FromQuery] string workspace,
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] int? userId = null)

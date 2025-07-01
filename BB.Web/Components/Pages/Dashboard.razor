@@ -46,7 +46,7 @@
                                 Value="@selectedRepoSlug" 
                                 ValueChanged="@((string value) => OnRepositorySelectionChanged(value))"
                                 ValueExpression="@(() => selectedRepoSlug)">
-                        <option value="">-- Select a repository --</option>
+                        <option value="ALL">📊 ALL Repositories (@repositories.Count())</option>
                         @foreach (var repo in repositories)
                         {
                             <option value="@repo.Slug">@repo.Name</option>
@@ -55,7 +55,7 @@
                 }
                 else
                 {
-                    <p class="text-muted">No repositories found.</p>
+                    <p class="text-muted">No repositories found for workspace <strong>@WorkspaceService.SelectedWorkspace</strong>.</p>
                 }
             </div>
         </div>
@@ -115,7 +115,18 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">📊 Commit Activity Over Time</h5>
+                        <h5 class="card-title mb-0">
+                            📊 Commit Activity Over Time
+                            @if (selectedRepoSlug == "ALL")
+                            {
+                                <span class="text-muted">- All Repositories</span>
+                            }
+                            else if (!string.IsNullOrEmpty(selectedRepoSlug))
+                            {
+                                var selectedRepo = repositories?.FirstOrDefault(r => r.Slug == selectedRepoSlug);
+                                <span class="text-muted">- @(selectedRepo?.Name ?? selectedRepoSlug)</span>
+                            }
+                        </h5>
                         <small class="text-muted">Interactive area chart showing commits, code additions, and deletions</small>
                     </div>
                     <div class="card-body">
@@ -746,14 +757,53 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Check if workspace is selected, redirect to Settings if not
+        Console.WriteLine($"Dashboard OnInitializedAsync - WorkspaceService.HasSelectedWorkspace: {WorkspaceService.HasSelectedWorkspace}");
+        Console.WriteLine($"Dashboard OnInitializedAsync - WorkspaceService.SelectedWorkspace: '{WorkspaceService.SelectedWorkspace}'");
+        
+        await LoadRepositories();
+        
+        // If no workspace is selected but we have repositories, auto-select the first workspace
+        if (!WorkspaceService.HasSelectedWorkspace && repositories != null && repositories.Any())
+        {
+            var firstWorkspace = repositories.First().Workspace;
+            Console.WriteLine($"Auto-selecting first available workspace: {firstWorkspace}");
+            WorkspaceService.SelectedWorkspace = firstWorkspace;
+            
+            // Re-filter repositories for the selected workspace
+            repositories = repositories.Where(r => r.Workspace == firstWorkspace).ToArray();
+            Console.WriteLine($"Filtered to {repositories.Length} repositories for workspace '{firstWorkspace}'");
+        }
+        else if (WorkspaceService.HasSelectedWorkspace && repositories != null && repositories.Any())
+        {
+            // Filter repositories for the already selected workspace
+            repositories = repositories.Where(r => r.Workspace == WorkspaceService.SelectedWorkspace).ToArray();
+            Console.WriteLine($"Filtered to {repositories.Length} repositories for existing workspace '{WorkspaceService.SelectedWorkspace}'");
+        }
+        
+        // Check if workspace is selected, redirect to Settings if still not available
         if (!WorkspaceService.HasSelectedWorkspace)
         {
+            Console.WriteLine("No workspace available, redirecting to settings");
             Navigation.NavigateTo("/admin/settings");
             return;
         }
         
-        await LoadRepositories();
+        // Auto-select ALL and load data if repositories are available and workspace is set
+        if (repositories != null && repositories.Any() && string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
+        {
+            Console.WriteLine($"Auto-selecting ALL repositories for workspace: {WorkspaceService.SelectedWorkspace}");
+            selectedRepoSlug = "ALL";
+            // Set default date range
+            startDate = new DateTime(2019, 1, 1);
+            endDate = new DateTime(2019, 4, 1);
+            
+            // Load data automatically - pass null for ALL repositories
+            await LoadCommitActivity(null, WorkspaceService.SelectedWorkspace!);
+        }
+        else
+        {
+            Console.WriteLine($"Not auto-loading data - repositories: {repositories?.Count() ?? 0}, selectedRepoSlug: '{selectedRepoSlug}', hasWorkspace: {WorkspaceService.HasSelectedWorkspace}");
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -775,23 +825,28 @@
     {
         try
         {
+            Console.WriteLine($"LoadRepositories started - WorkspaceService.HasSelectedWorkspace: {WorkspaceService.HasSelectedWorkspace}");
+            Console.WriteLine($"LoadRepositories started - WorkspaceService.SelectedWorkspace: '{WorkspaceService.SelectedWorkspace}'");
+            
             isLoadingRepos = true;
             var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("http://localhost:5000/api/analytics/repositories");
             
-            // Filter repositories by selected workspace
-            if (allRepositories != null && WorkspaceService.HasSelectedWorkspace)
+            Console.WriteLine($"Loaded {allRepositories?.Length ?? 0} total repositories from API");
+            
+            if (allRepositories != null && allRepositories.Any())
             {
-                repositories = allRepositories
-                    .Where(r => r.Workspace == WorkspaceService.SelectedWorkspace)
-                    .ToArray();
+                repositories = allRepositories;
+                Console.WriteLine($"Set repositories to all {repositories.Length} repositories initially");
             }
             else
             {
                 repositories = Array.Empty<RepositorySummaryDto>();
+                Console.WriteLine("No repositories available from API");
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error in LoadRepositories: {ex.Message}");
             errorMessage = $"Error loading repositories: {ex.Message}";
         }
         finally
@@ -809,20 +864,21 @@
         chartInitialized = false; // Reset chart flag when repo changes
         contributorChartsInitialized = false; // Reset contributor charts flag when repo changes
         
-        // Set default date range to 2019-01-01 to 2019-04-01 when selecting a repo for the first time
+        // Set default date range when selecting a repo/ALL for the first time
         if (!string.IsNullOrEmpty(selectedRepoSlug) && !startDate.HasValue && !endDate.HasValue)
         {
             startDate = new DateTime(2019, 1, 1);
             endDate = new DateTime(2019, 4, 1);
         }
         
-        StateHasChanged(); // Force UI update
-        
-        if (!string.IsNullOrEmpty(selectedRepoSlug))
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
         {
             Console.WriteLine($"Loading commit activity for: {selectedRepoSlug}");
             Logger.LogInformation("Loading commit activity for: {RepoSlug}", selectedRepoSlug);
-            InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug, WorkspaceService.SelectedWorkspace!));
+            
+            // Pass the repo slug directly - API will handle "ALL" as null for repoSlug
+            var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
+            InvokeAsync(async () => await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!));
         }
         else
         {
@@ -837,11 +893,12 @@
     private void OnDateRangeChanged(DateTime? newDate)
     {
         // Reload commit activity when date range changes
-        if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue)
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue && WorkspaceService.HasSelectedWorkspace)
         {
             chartInitialized = false; // Reset main chart flag
             contributorChartsInitialized = false; // Reset contributor charts flag
-            InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug, WorkspaceService.SelectedWorkspace!));
+            var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
+            InvokeAsync(async () => await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!));
         }
     }
 
@@ -860,25 +917,46 @@
         }
         
         // Reload data with new date range
-        if (!string.IsNullOrEmpty(selectedRepoSlug))
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
         {
             chartInitialized = false; // Reset main chart flag
             contributorChartsInitialized = false; // Reset contributor charts flag
-            InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug, WorkspaceService.SelectedWorkspace!));
+            var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
+            InvokeAsync(async () => await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!));
         }
     }
 
-    private async Task LoadCommitActivity(string repoSlug, string workspace)
+    private async Task LoadCommitActivity(string? repoSlug, string workspace)
     {
         try
         {
-            Console.WriteLine($"LoadCommitActivity started for: {repoSlug}");
-            Logger.LogInformation("LoadCommitActivity started for: {RepoSlug}", repoSlug);
+            // Validate that we have a workspace
+            if (string.IsNullOrEmpty(workspace))
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                Console.WriteLine("LoadCommitActivity: No workspace provided");
+                Logger.LogWarning("LoadCommitActivity: No workspace provided");
+                return;
+            }
+
+            Console.WriteLine($"LoadCommitActivity started for: {repoSlug ?? "ALL"}, workspace: {workspace}");
+            Logger.LogInformation("LoadCommitActivity started for: {RepoSlug}, workspace: {Workspace}", repoSlug ?? "ALL", workspace);
             
             isLoadingCommits = true;
             StateHasChanged();
             
-            var url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}";
+            // Build URL based on whether we're loading ALL repositories or a specific one
+            string url;
+            if (string.IsNullOrEmpty(repoSlug))
+            {
+                // ALL repositories - only pass workspace
+                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}";
+            }
+            else
+            {
+                // Specific repository
+                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}";
+            }
             
             // Add date range parameters if specified
             if (startDate.HasValue)
@@ -997,17 +1075,36 @@
         StateHasChanged();
     }
 
-    private async Task LoadContributorActivity(string repoSlug, string workspace)
+    private async Task LoadContributorActivity(string? repoSlug, string workspace)
     {
         try
         {
-            Console.WriteLine($"LoadContributorActivity started for: {repoSlug}");
-            Logger.LogInformation("LoadContributorActivity started for: {RepoSlug}", repoSlug);
+            // Validate that we have a workspace
+            if (string.IsNullOrEmpty(workspace))
+            {
+                Console.WriteLine("LoadContributorActivity: No workspace provided");
+                Logger.LogWarning("LoadContributorActivity: No workspace provided");
+                return;
+            }
+
+            Console.WriteLine($"LoadContributorActivity started for: {repoSlug ?? "ALL"}, workspace: {workspace}");
+            Logger.LogInformation("LoadContributorActivity started for: {RepoSlug}, workspace: {Workspace}", repoSlug ?? "ALL", workspace);
             
             isLoadingContributors = true;
             contributorData = null;
             
-            var url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}";
+            // Build URL based on whether we're loading ALL repositories or a specific one
+            string url;
+            if (string.IsNullOrEmpty(repoSlug))
+            {
+                // ALL repositories - only pass workspace
+                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}";
+            }
+            else
+            {
+                // Specific repository
+                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}";
+            }
             
             // Add date range parameters if specified
             if (startDate.HasValue)

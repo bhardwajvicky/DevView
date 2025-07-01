@@ -23,7 +23,7 @@ namespace BB.Api.Services
                 WHERE 
                     c.IsMerge = 0
                     AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
-                    AND (@RepoSlug IS NOT NULL OR r.Workspace = @Workspace)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@UserId IS NULL OR c.AuthorId = @UserId)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)

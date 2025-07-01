@@ -72,7 +72,7 @@
     "Integration: All Bitbucket API logic should be in BBIntegration project, not in BB.Api directly"
   ],
   "ports": {
-    "BB.Api": "5000 (HTTP), 5001 (HTTPS)",
+    "BB.Api": "5000 (HTTP), 5000 (HTTPS)",
     "BB.Web": "5084 (HTTP), 7051 (HTTPS)"
   },
   "notes": [
