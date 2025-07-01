@@ -55,6 +55,7 @@ artifacts/
 # Local config
 appsettings.Development.json
 appsettings.Local.json
+appsettings.json
 secrets.json
 launchSettings.json
 

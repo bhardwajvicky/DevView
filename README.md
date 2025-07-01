@@ -88,12 +88,23 @@ git clone <repository-url>
 cd easy-api-dev
 ```
 
-### 2. Database Setup
+### 2. Configuration Setup
+```bash
+# Run the configuration setup script
+./setup-config.sh
+```
+
+This will:
+- Copy configuration templates to actual config files
+- Provide instructions for filling in sensitive values
+- Make startup scripts executable
+
+### 3. Database Setup
 1. **Create Database**: Create a database named `bb` in SQL Server
 2. **Run Schema**: Execute the SQL schema from `BB.Api/SqlSchema/schema.sql`
-3. **Update Connection**: Update connection string in `BB.Api/appsettings.json`
+3. **Configure Connection**: Update the connection string in `BB.Api/appsettings.json` (created from template)
 
-### 3. Start Development Environment
+### 4. Start Development Environment
 ```bash
 # Option 1: Use the automated script (Recommended)
 ./start-dev.sh
@@ -108,7 +119,7 @@ cd BB.Web
 dotnet run
 ```
 
-### 4. Access the Application
+### 5. Access the Application
 - **📊 Dashboard**: http://localhost:5084/dashboard
 - **🧪 API Test**: http://localhost:5084/api-test
 - **📖 API Docs**: http://localhost:5000/swagger
