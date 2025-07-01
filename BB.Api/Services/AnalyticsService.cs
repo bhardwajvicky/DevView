@@ -135,5 +135,12 @@ namespace BB.Api.Services
             const string sql = "SELECT Name, Slug, Workspace FROM Repositories ORDER BY Name;";
             return await connection.QueryAsync<RepositorySummaryDto>(sql);
         }
+
+        public async Task<IEnumerable<UserDto>> GetUsersAsync()
+        {
+            using var connection = new SqlConnection(_connectionString);
+            const string sql = "SELECT Id, BitbucketUserId, DisplayName, AvatarUrl, CreatedOn FROM Users ORDER BY DisplayName;";
+            return await connection.QueryAsync<UserDto>(sql);
+        }
     }
 } 

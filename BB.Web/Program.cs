@@ -1,4 +1,5 @@
 using BB.Web.Components;
+using BB.Web.Services;
 using Radzen;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddRadzenComponents();
+
+// Add WorkspaceService as singleton to maintain state across the application
+builder.Services.AddSingleton<WorkspaceService>();
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]!) });
 

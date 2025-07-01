@@ -75,5 +75,12 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetRepositoriesAsync();
             return Ok(result);
         }
+
+        [HttpGet("users")]
+        public async Task<IActionResult> GetUsers()
+        {
+            var result = await _analyticsService.GetUsersAsync();
+            return Ok(result);
+        }
     }
 } 

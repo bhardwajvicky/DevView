@@ -1,0 +1,181 @@
+@page "/admin/repositories"
+@using BB.Web.DTOs
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Admin - Repositories</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-folder-fill me-2"></i>
+                    Repositories Management
+                </h1>
+                <div>
+                    <input type="text" class="form-control d-inline-block me-2" style="width: 200px;" 
+                           @bind="workspaceForSync" placeholder="Workspace name" />
+                    <button class="btn btn-success" @onclick="SyncRepositories" disabled="@isSyncing">
+                        @if (isSyncing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-arrow-repeat me-2"></i>
+                        }
+                        Sync Repositories
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="alert @(messageType == "success" ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                    @message
+                    <button type="button" class="btn-close" @onclick="() => message = string.Empty"></button>
+                </div>
+            }
+
+            @if (repositories == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading repositories...</p>
+                </div>
+            }
+            else if (!repositories.Any())
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    No repositories found. Try syncing repositories from a workspace.
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-table me-2"></i>
+                            Repositories (@repositories.Count())
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Slug</th>
+                                        <th>Workspace</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var repo in repositories)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@repo.Name</strong>
+                                            </td>
+                                            <td>
+                                                <code>@repo.Slug</code>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary">@repo.Workspace</span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewRepository(repo)">
+                                                    <i class="bi bi-eye"></i> View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private IEnumerable<RepositorySummaryDto>? repositories;
+    private string workspaceForSync = "";
+    private bool isSyncing = false;
+    private string message = "";
+    private string messageType = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRepositories();
+    }
+
+    private async Task LoadRepositories()
+    {
+        try
+        {
+            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("http://localhost:5000/api/analytics/repositories");
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error loading repositories: {ex.Message}", "error");
+        }
+    }
+
+    private async Task SyncRepositories()
+    {
+        if (string.IsNullOrWhiteSpace(workspaceForSync))
+        {
+            ShowMessage("Please enter a workspace name", "error");
+            return;
+        }
+
+        isSyncing = true;
+        message = "";
+
+        try
+        {
+            var response = await Http.PostAsync($"http://localhost:5000/api/sync/repositories/{workspaceForSync}", null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                ShowMessage(responseContent, "success");
+                await LoadRepositories(); // Refresh the list
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ShowMessage($"Sync failed: {errorContent}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error during sync: {ex.Message}", "error");
+        }
+        finally
+        {
+            isSyncing = false;
+        }
+    }
+
+    private void ShowMessage(string msg, string type)
+    {
+        message = msg;
+        messageType = type;
+    }
+
+    private async Task ViewRepository(RepositorySummaryDto repo)
+    {
+        // Navigate to dashboard with the repository selected
+        await JSRuntime.InvokeVoidAsync("open", $"/dashboard?repo={repo.Slug}", "_blank");
+    }
+} 
