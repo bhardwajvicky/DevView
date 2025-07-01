@@ -129,6 +129,7 @@
         <RadzenChart SeriesClick="@OnChartSeriesClick">
             <RadzenLineSeries Data="@commitActivity" CategoryProperty="Date" Title="Commits" ValueProperty="CommitCount">
                 <RadzenMarkers MarkerType="MarkerType.Circle" />
+                <RadzenSeriesDataLabels Visible="false" />
             </RadzenLineSeries>
             <RadzenCategoryAxis Padding="20" FormatString="{0:MMM dd}" />
             <RadzenValueAxis Min="0">
@@ -136,7 +137,8 @@
                 <RadzenAxisTitle Text="Number of Commits" />
             </RadzenValueAxis>
             <RadzenLegend Position="LegendPosition.Top" />
-            <RadzenChartTooltipOptions Visible="true" Style="background-color: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px;" />
+            <RadzenChartTooltipOptions Visible="true" Shared="false" 
+                                       Style="background-color: rgba(33, 37, 41, 0.95); color: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);" />
         </RadzenChart>
         
         <!-- Chart Click Information -->
@@ -152,16 +154,33 @@
         <!-- Data Table showing commit activity details -->
         <div class="mt-4">
             <h5>Commit Activity Data</h5>
+            <div class="mb-2">
+                <small class="text-muted">💡 <strong>Chart:</strong> Hover for basic info, click to select • <strong>Table:</strong> Hover rows for detailed line counts</small>
+            </div>
             <RadzenDataGrid AllowFiltering="true" AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
-                            Data="@commitActivity" TItem="CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or">
+                            Data="@commitActivity" TItem="CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or" RowRender="@OnRowRender">
                 <Columns>
                     <RadzenDataGridColumn TItem="CommitActivityDto" Property="Date" Title="Date" Width="120px" FormatString="{0:MMM dd, yyyy}" />
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CommitCount" Title="Commits" Width="100px" TextAlign="TextAlign.Center">
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CommitCount" Title="Commits" Width="80px" TextAlign="TextAlign.Center">
                         <Template Context="data">
                             <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
                         </Template>
                     </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Actions" Width="100px" Sortable="false" Filterable="false">
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
+                        <Template Context="data">
+                            @{
+                                var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
+                                var badgeStyle = netChange > 0 ? BadgeStyle.Success : netChange < 0 ? BadgeStyle.Danger : BadgeStyle.Secondary;
+                                var sign = netChange > 0 ? "+" : "";
+                            }
+                            <RadzenBadge BadgeStyle="@badgeStyle" Text="@($"{sign}{netChange:N0}")" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Actions" Width="80px" Sortable="false" Filterable="false">
                         <Template Context="data">
                             <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Primary" Text="Select" Click="@(() => SelectDataPoint(data))" />
                         </Template>
@@ -213,11 +232,11 @@
         
         selectedRepoSlug = newRepoSlug;
         
-        // Set default date range to 2019-01-01 to 2020-02-05 when selecting a repo for the first time
+        // Set default date range to 2019-01-01 to 2019-04-01 when selecting a repo for the first time
         if (!string.IsNullOrEmpty(selectedRepoSlug) && !startDate.HasValue && !endDate.HasValue)
         {
             startDate = new DateTime(2019, 1, 1);
-            endDate = new DateTime(2020, 2, 5);
+            endDate = new DateTime(2019, 4, 1);
         }
         
         StateHasChanged(); // Force UI update
@@ -320,6 +339,18 @@
         StateHasChanged();
     }
 
+    private void OnRowRender(RowRenderEventArgs<CommitActivityDto> args)
+    {
+        var data = args.Data;
+        var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
+        var tooltipText = $"📅 {data.Date:MMM dd, yyyy}&#10;📝 Commits: {data.CommitCount}&#10;➕ Code Added: {data.CodeLinesAdded:N0} lines&#10;➖ Code Removed: {data.CodeLinesRemoved:N0} lines&#10;📊 Total Added: {data.TotalLinesAdded:N0} lines&#10;📊 Total Removed: {data.TotalLinesRemoved:N0} lines&#10;💡 Net Change: {netChange:+#,0;-#,0;0} code lines";
+        
+        args.Attributes.Add("title", tooltipText);
+        args.Attributes.Add("style", "cursor: pointer;");
+    }
+
+
+
     private void OnChartSeriesClick(SeriesClickEventArgs args)
     {
         // Handle series click event - the clicked data point is in args.Data
@@ -330,4 +361,6 @@
             StateHasChanged();
         }
     }
+
+
 } 
