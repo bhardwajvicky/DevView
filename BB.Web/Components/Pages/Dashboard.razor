@@ -306,6 +306,76 @@
     }
 </div>
 
+<!-- Commit Details Modal -->
+@if (showCommitDetailsModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">📝 Commit Details for @commitDetailsModalTitle</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCommitDetailsModal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isLoadingCommitDetails)
+                    {
+                        <div class="d-flex align-items-center justify-content-center" style="height:200px;">
+                            <div class="spinner-border text-primary me-2"></div>
+                            <span>Loading commit details...</span>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(commitDetailsError))
+                    {
+                        <div class="alert alert-danger">@commitDetailsError</div>
+                    }
+                    else if (commitDetailsList != null && commitDetailsList.Any())
+                    {
+                        <RadzenDataGrid Data="@commitDetailsList" TItem="CommitDetailDto" AllowPaging="true" PageSize="10" AllowSorting="true">
+                            <Columns>
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="CommitHash" Title="Hash" Width="120px">
+                                    <Template Context="data">
+                                        <span title="@data.CommitHash">@data.CommitHash.Substring(0, Math.Min(8, data.CommitHash.Length))...</span>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="Message" Title="Message" Width="300px">
+                                    <Template Context="data">
+                                        <span title="@data.Message">@((data.Message?.Length > 80) ? data.Message.Substring(0, 80) + "..." : data.Message)</span>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="RepositoryName" Title="Repository" Width="150px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="LinesAdded" Title="+Lines" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="LinesRemoved" Title="-Lines" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="CodeLinesAdded" Title="+Code" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="CodeLinesRemoved" Title="-Code" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="Date" Title="Date" Width="160px" FormatString="{0:yyyy-MM-dd HH:mm}" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="IsMerge" Title="Merge?" Width="60px">
+                                    <Template Context="data">
+                                        @if (data.IsMerge)
+                                        {
+                                            <span class="badge bg-secondary">Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">No</span>
+                                        }
+                                    </Template>
+                                </RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">No commits found for this contributor on this date.</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseCommitDetailsModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Chart.js JavaScript -->
 <script>
     // Use window scope to avoid variable redeclaration issues
@@ -516,6 +586,11 @@
         console.log('Chart created successfully:', window.commitChart);
     };
     
+    window.dashboardComponent = { dotNetRef: null };
+    window.setDashboardDotNetRef = function(dotNetRef) {
+        window.dashboardComponent.dotNetRef = dotNetRef;
+    };
+    
     // Initialize contributor charts
     window.initializeContributorCharts = (contributorData) => {
         console.log('initializeContributorCharts called with data:', contributorData);
@@ -629,7 +704,7 @@
                                 },
                                 padding: 10
                             },
-                            onClick: function(e, legendItem, legend) {
+                            onClick: async (event, legendItem, legend) => {
                                 const index = legendItem.datasetIndex;
                                 const chart = legend.chart;
                                 const meta = chart.getDatasetMeta(index);
@@ -690,6 +765,24 @@
                     interaction: {
                         intersect: false,
                         mode: 'index'
+                    },
+                    onClick: async (event, elements) => {
+                        if (elements.length > 0) {
+                            const dataIndex = elements[0].index;
+                            const item = contributor.data[dataIndex];
+                            const date = item.date.split('T')[0];
+                            const repoSlug = window.selectedRepoSlug || null;
+                            try {
+                                if (window.dashboardComponent.dotNetRef) {
+                                    await window.dashboardComponent.dotNetRef.invokeMethodAsync('ShowCommitDetailsModal',
+                                        item.userId, contributor.displayName, date, repoSlug);
+                                } else {
+                                    console.error('DotNetObjectReference not set for dashboardComponent');
+                                }
+                            } catch (err) {
+                                console.error('Error calling ShowCommitDetailsModal:', err);
+                            }
+                        }
                     }
                 }
             });
@@ -754,6 +847,12 @@
     private CommitActivityDto? selectedCommitData;
     private bool chartInitialized = false;
     private bool contributorChartsInitialized = false;
+    private bool showCommitDetailsModal = false;
+    private bool isLoadingCommitDetails = false;
+    private string? commitDetailsError;
+    private List<CommitDetailDto>? commitDetailsList;
+    private string? commitDetailsModalTitle;
+    private DotNetObjectReference<Dashboard>? _dotNetRef;
 
     protected override async Task OnInitializedAsync()
     {
@@ -808,6 +907,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setDashboardDotNetRef", _dotNetRef);
+        }
         // Initialize chart after render if we have data but no chart yet
         if (!firstRender && commitActivity != null && commitActivity.Any() && !chartInitialized)
         {
@@ -1216,5 +1320,56 @@
         return $"{totalCommits} commits, {codeAdded:N0}++ {codeRemoved:N0}--";
     }
 
+    private void CloseCommitDetailsModal()
+    {
+        showCommitDetailsModal = false;
+        commitDetailsList = null;
+        commitDetailsError = null;
+        isLoadingCommitDetails = false;
+    }
 
+    [JSInvokable]
+    public async Task ShowCommitDetailsModal(int userId, string displayName, string date, string? repoSlug)
+    {
+        Console.WriteLine($"ShowCommitDetailsModal called with userId={userId}, displayName={displayName}, date={date}, repoSlug={repoSlug}");
+        Logger.LogInformation("ShowCommitDetailsModal called with userId={UserId}, displayName={DisplayName}, date={Date}, repoSlug={RepoSlug}", userId, displayName, date, repoSlug);
+        showCommitDetailsModal = true;
+        isLoadingCommitDetails = true;
+        commitDetailsError = null;
+        commitDetailsList = null;
+        commitDetailsModalTitle = $"{displayName} on {date}";
+        StateHasChanged();
+        try
+        {
+            var workspace = WorkspaceService.SelectedWorkspace;
+            if (string.IsNullOrEmpty(workspace))
+            {
+                commitDetailsError = "No workspace selected.";
+                isLoadingCommitDetails = false;
+                Console.WriteLine("ShowCommitDetailsModal: No workspace selected");
+                Logger.LogWarning("ShowCommitDetailsModal: No workspace selected");
+                return;
+            }
+            var url = $"api/analytics/commits/details?workspace={workspace}&userId={userId}&date={date}";
+            if (!string.IsNullOrEmpty(repoSlug) && repoSlug != "ALL")
+                url += $"&repoSlug={repoSlug}";
+            Console.WriteLine($"ShowCommitDetailsModal: Fetching {url}");
+            Logger.LogInformation("ShowCommitDetailsModal: Fetching {Url}", url);
+            var result = await Http.GetFromJsonAsync<List<CommitDetailDto>>(url);
+            commitDetailsList = result;
+            Console.WriteLine($"ShowCommitDetailsModal: Received {result?.Count ?? 0} commits");
+            Logger.LogInformation("ShowCommitDetailsModal: Received {Count} commits", result?.Count ?? 0);
+        }
+        catch (Exception ex)
+        {
+            commitDetailsError = $"Error loading commit details: {ex.Message}";
+            Console.WriteLine($"ShowCommitDetailsModal: Exception: {ex}");
+            Logger.LogError(ex, "ShowCommitDetailsModal: Exception: {Message}", ex.Message);
+        }
+        finally
+        {
+            isLoadingCommitDetails = false;
+            StateHasChanged();
+        }
+    }
 } 

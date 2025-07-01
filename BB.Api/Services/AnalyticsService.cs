@@ -142,5 +142,39 @@ namespace BB.Api.Services
             const string sql = "SELECT Id, BitbucketUserId, DisplayName, AvatarUrl, CreatedOn FROM Users ORDER BY DisplayName;";
             return await connection.QueryAsync<UserDto>(sql);
         }
+
+        public async Task<IEnumerable<CommitDetailDto>> GetCommitDetailsAsync(
+            string? repoSlug, string? workspace, int userId, DateTime date, DateTime? startDate, DateTime? endDate)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            const string sql = @"
+                SELECT 
+                    c.Id,
+                    c.BitbucketCommitHash AS CommitHash,
+                    c.Date,
+                    c.Message,
+                    u.DisplayName AS AuthorName,
+                    r.Name AS RepositoryName,
+                    r.Slug AS RepositorySlug,
+                    c.LinesAdded,
+                    c.LinesRemoved,
+                    c.CodeLinesAdded,
+                    c.CodeLinesRemoved,
+                    c.IsMerge
+                FROM Commits c
+                JOIN Users u ON c.AuthorId = u.Id
+                JOIN Repositories r ON c.RepositoryId = r.Id
+                WHERE c.AuthorId = @UserId 
+                    AND CAST(c.Date AS DATE) = CAST(@Date AS DATE)
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
+                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                ORDER BY c.Date DESC;
+            ";
+
+            return await connection.QueryAsync<CommitDetailDto>(sql, new { repoSlug, workspace, userId, date, startDate, endDate });
+        }
     }
 } 

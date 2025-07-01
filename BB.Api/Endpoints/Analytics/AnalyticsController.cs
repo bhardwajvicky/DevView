@@ -82,5 +82,28 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetUsersAsync();
             return Ok(result);
         }
+
+        [HttpGet("commits/details")]
+        public async Task<IActionResult> GetCommitDetails(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] int userId,
+            [FromQuery] DateTime date,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            if (string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("'workspace' must be provided.");
+            }
+
+            if (userId <= 0)
+            {
+                return BadRequest("'userId' must be a positive integer.");
+            }
+
+            var result = await _analyticsService.GetCommitDetailsAsync(repoSlug, workspace, userId, date, startDate, endDate);
+            return Ok(result);
+        }
     }
 } 

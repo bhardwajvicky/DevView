@@ -15,6 +15,8 @@ builder.Services.AddSingleton<WorkspaceService>();
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]!) });
 
+builder.Services.AddServerSideBlazor().AddCircuitOptions(options => { options.DetailedErrors = true; });
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
