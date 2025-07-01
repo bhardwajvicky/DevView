@@ -115,23 +115,29 @@
                         <small class="text-muted">Interactive area chart showing commits, code additions, and deletions</small>
                     </div>
                     <div class="card-body">
-                        <div style="position: relative; height: 400px;">
-                            @if (commitActivity != null && commitActivity.Any())
-                            {
-                                <canvas id="commitChart"></canvas>
-                            }
-                            else
-                            {
-                                <div class="d-flex align-items-center justify-content-center h-100">
-                                    <div class="text-center">
-                                        <div class="spinner-border text-primary" role="status">
-                                            <span class="visually-hidden">Loading chart...</span>
-                                        </div>
-                                        <p class="mt-2 text-muted">Loading chart data...</p>
-                                    </div>
-                                </div>
-                            }
+                                <div style="position: relative; height: 400px;">
+            <canvas id="commitChart"></canvas>
+            @if (isLoadingCommits)
+            {
+                <div class="d-flex align-items-center justify-content-center h-100 position-absolute top-0 start-0 w-100 bg-white bg-opacity-75">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading chart...</span>
                         </div>
+                        <p class="mt-2 text-muted">Loading chart data...</p>
+                    </div>
+                </div>
+            }
+            @if (commitActivity == null || !commitActivity.Any())
+            {
+                <div class="d-flex align-items-center justify-content-center h-100 position-absolute top-0 start-0 w-100">
+                    <div class="text-center text-muted">
+                        <i class="bi bi-chart-line" style="font-size: 3rem;"></i>
+                        <p class="mt-2">No data available. Please select a repository and date range.</p>
+                    </div>
+                </div>
+            }
+        </div>
                         
                         <!-- Chart Controls -->
                         <div class="mt-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
@@ -810,6 +816,7 @@
         // Reload commit activity when date range changes
         if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue)
         {
+            chartInitialized = false; // Reset main chart flag
             contributorChartsInitialized = false; // Reset contributor charts flag
             InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
         }
@@ -832,6 +839,7 @@
         // Reload data with new date range
         if (!string.IsNullOrEmpty(selectedRepoSlug))
         {
+            chartInitialized = false; // Reset main chart flag
             contributorChartsInitialized = false; // Reset contributor charts flag
             InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
         }
@@ -845,7 +853,6 @@
             Logger.LogInformation("LoadCommitActivity started for: {RepoSlug}", repoSlug);
             
             isLoadingCommits = true;
-            commitActivity = null;
             StateHasChanged();
             
             var workspace = repositories?.FirstOrDefault(r => r.Slug == repoSlug)?.Workspace ?? "vbhardwaj66";
@@ -1084,10 +1091,10 @@
         
         var userCommits = contributorData.Where(c => c.UserId == userId);
         var totalCommits = userCommits.Sum(c => c.CommitCount);
-        var totalAdded = userCommits.Sum(c => c.CodeLinesAdded);
-        var totalRemoved = userCommits.Sum(c => c.CodeLinesRemoved);
+        var codeAdded = userCommits.Sum(c => c.CodeLinesAdded);
+        var codeRemoved = userCommits.Sum(c => c.CodeLinesRemoved);
         
-        return $"{totalCommits:N0} commits, {totalAdded:N0}++ {totalRemoved:N0}--";
+        return $"{totalCommits} commits, {codeAdded:N0}++ {codeRemoved:N0}--";
     }
 
 
