@@ -6,6 +6,7 @@
 @using BB.Web.DTOs
 @using System.Net.Http.Json
 @using System.Text.Json
+@using System.Linq
 @inject HttpClient Http
 @inject ILogger<Dashboard> Logger
 @inject IJSRuntime JSRuntime
@@ -135,17 +136,11 @@
                         <!-- Chart Controls -->
                         <div class="mt-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
                             <div class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-sm btn-outline-primary" onclick="toggleDataset(0)">
-                                    🔵 Commits
-                                </button>
-                                <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(1)">
+                                <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(0)">
                                     🟢 Code Added
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(2)">
+                                <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(1)">
                                     🔴 Code Removed
-                                </button>
-                                <button class="btn btn-sm btn-outline-info" onclick="toggleDataset(3)">
-                                    🔵 Net Change
                                 </button>
                             </div>
                             <div>
@@ -235,6 +230,58 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Loading Contributors -->
+        @if (isLoadingContributors)
+        {
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Loading contributor charts...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Individual Contributor Charts -->
+        @if (contributorData != null && contributorData.Any())
+        {
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h4 class="mb-3">👥 Individual Contributors (@GetUniqueContributors().Count())</h4>
+                    <div class="row" id="contributorChartsContainer">
+                        @foreach (var contributor in GetUniqueContributors())
+                        {
+                            <div class="col-md-6 col-lg-4 mb-4">
+                                <div class="card">
+                                    <div class="card-header d-flex align-items-center">
+                                        <div class="me-2">
+                                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 14px;">
+                                                @contributor.DisplayName.Substring(0, Math.Min(2, contributor.DisplayName.Length)).ToUpper()
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h6 class="card-title mb-0">@contributor.DisplayName</h6>
+                                            <small class="text-muted">@GetContributorStats(contributor.UserId)</small>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="position: relative; height: 200px;">
+                                            <canvas id="contributorChart_@contributor.UserId"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -313,10 +360,10 @@
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Commits',
-                        data: commitCounts,
-                        borderColor: 'rgb(54, 162, 235)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        label: 'Code Lines Added',
+                        data: codeAdded,
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.2)',
                         fill: true,
                         tension: 0.4,
                         pointRadius: 5,
@@ -324,37 +371,15 @@
                         yAxisID: 'y'
                     },
                     {
-                        label: 'Code Lines Added',
-                        data: codeAdded,
-                        borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointHoverRadius: 8,
-                        yAxisID: 'y1'
-                    },
-                    {
                         label: 'Code Lines Removed',
                         data: codeRemoved,
-                        borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgb(239, 68, 68)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
                         fill: true,
                         tension: 0.4,
                         pointRadius: 5,
                         pointHoverRadius: 8,
-                        yAxisID: 'y1'
-                    },
-                    {
-                        label: 'Net Change',
-                        data: netChange,
-                        borderColor: 'rgb(153, 102, 255)',
-                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointHoverRadius: 8,
-                        yAxisID: 'y1'
+                        yAxisID: 'y'
                     }
                 ]
             },
@@ -398,23 +423,22 @@
                                 const dataIndex = context.dataIndex;
                                 const item = data[dataIndex];
                                 
-                                if (context.dataset.label === 'Commits') {
-                                    return `📝 Commits: ${item.commitCount}`;
-                                } else if (context.dataset.label === 'Code Lines Added') {
+                                if (context.dataset.label === 'Code Lines Added') {
                                     return `➕ Code Added: ${item.codeLinesAdded.toLocaleString()} lines`;
                                 } else if (context.dataset.label === 'Code Lines Removed') {
                                     return `➖ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`;
-                                } else if (context.dataset.label === 'Net Change') {
-                                    const net = item.codeLinesAdded - item.codeLinesRemoved;
-                                    const sign = net > 0 ? '+' : '';
-                                    return `📊 Net Change: ${sign}${net.toLocaleString()} lines`;
                                 }
                             },
                             afterBody: function(context) {
                                 if (context.length > 0) {
                                     const dataIndex = context[0].dataIndex;
                                     const item = data[dataIndex];
+                                    const net = item.codeLinesAdded - item.codeLinesRemoved;
+                                    const sign = net > 0 ? '+' : '';
                                     return [
+                                        '',
+                                        `📝 Commits: ${item.commitCount}`,
+                                        `📊 Net Change: ${sign}${net.toLocaleString()} lines`,
                                         '',
                                         `📄 Total Lines Added: ${item.totalLinesAdded.toLocaleString()}`,
                                         `📄 Total Lines Removed: ${item.totalLinesRemoved.toLocaleString()}`
@@ -439,28 +463,15 @@
                     y: {
                         type: 'linear',
                         display: true,
-                        position: 'left',
                         title: {
                             display: true,
-                            text: 'Number of Commits'
+                            text: 'Lines of Code'
                         },
                         grid: {
                             display: true,
                             color: 'rgba(0, 0, 0, 0.1)'
                         },
                         min: 0
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
-                            display: true,
-                            text: 'Lines of Code'
-                        },
-                        grid: {
-                            drawOnChartArea: false,
-                        }
                     }
                 },
                 onClick: (event, elements) => {
@@ -482,6 +493,188 @@
         });
         
         console.log('Chart created successfully:', window.commitChart);
+    };
+    
+    // Initialize contributor charts
+    window.initializeContributorCharts = (contributorData) => {
+        console.log('initializeContributorCharts called with data:', contributorData);
+        console.log('Data type:', typeof contributorData, 'Length:', contributorData?.length);
+        
+        if (!Array.isArray(contributorData) || contributorData.length === 0) {
+            console.warn('No contributor data provided or data is empty');
+            return;
+        }
+        
+        // Group data by contributor
+        const contributorGroups = {};
+        contributorData.forEach(item => {
+            if (!contributorGroups[item.userId]) {
+                contributorGroups[item.userId] = {
+                    displayName: item.displayName,
+                    data: []
+                };
+            }
+            contributorGroups[item.userId].data.push(item);
+        });
+        
+        // Create chart for each contributor
+        Object.keys(contributorGroups).forEach(userId => {
+            const contributor = contributorGroups[userId];
+            const canvasId = `contributorChart_${userId}`;
+            
+            console.log(`Looking for canvas: ${canvasId}`);
+            const canvas = document.getElementById(canvasId);
+            
+            if (!canvas) {
+                console.error(`Canvas ${canvasId} not found in DOM. Available canvases:`, 
+                    Array.from(document.querySelectorAll('canvas')).map(c => c.id));
+                return;
+            }
+            
+            console.log(`Found canvas ${canvasId}, creating chart for ${contributor.displayName}`);
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (window[`contributorChart_${userId}`] && typeof window[`contributorChart_${userId}`].destroy === 'function') {
+                window[`contributorChart_${userId}`].destroy();
+            }
+            
+            // Prepare data
+            const labels = contributor.data.map(item => {
+                const date = new Date(item.date);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            
+            const commitCounts = contributor.data.map(item => item.commitCount);
+            const codeAdded = contributor.data.map(item => item.codeLinesAdded);
+            const codeRemoved = contributor.data.map(item => item.codeLinesRemoved);
+            
+            // Create chart
+            window[`contributorChart_${userId}`] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Commits',
+                            data: commitCounts,
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointHoverRadius: 6,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Lines Added',
+                            data: codeAdded,
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        },
+                        {
+                            label: 'Lines Removed',
+                            data: codeRemoved,
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                font: {
+                                    size: 10
+                                },
+                                padding: 10
+                            },
+                            onClick: function(e, legendItem, legend) {
+                                const index = legendItem.datasetIndex;
+                                const chart = legend.chart;
+                                const meta = chart.getDatasetMeta(index);
+                                
+                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                                chart.update();
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const dataIndex = context[0].dataIndex;
+                                    const date = new Date(contributor.data[dataIndex].date);
+                                    return date.toLocaleDateString('en-US', { 
+                                        weekday: 'short', 
+                                        month: 'short', 
+                                        day: 'numeric' 
+                                    });
+                                },
+                                label: function(context) {
+                                    const dataIndex = context.dataIndex;
+                                    const item = contributor.data[dataIndex];
+                                    return [
+                                        `📝 Commits: ${item.commitCount}`,
+                                        `➕ Code Added: ${item.codeLinesAdded.toLocaleString()} lines`,
+                                        `➖ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxTicksLimit: 6,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        },
+                        y: {
+                            display: true,
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+            
+            console.log(`Created contributor chart for ${contributor.displayName}`);
+        });
     };
     
     window.exportTableData = () => {
@@ -517,10 +710,8 @@
             });
             
             window.commitChart.data.labels = labels;
-            window.commitChart.data.datasets[0].data = data.map(item => item.commitCount);
-            window.commitChart.data.datasets[1].data = data.map(item => item.codeLinesAdded);
-            window.commitChart.data.datasets[2].data = data.map(item => item.codeLinesRemoved);
-            window.commitChart.data.datasets[3].data = data.map(item => item.codeLinesAdded - item.codeLinesRemoved);
+            window.commitChart.data.datasets[0].data = data.map(item => item.codeLinesAdded);
+            window.commitChart.data.datasets[1].data = data.map(item => item.codeLinesRemoved);
             
             window.commitChart.update();
         }
@@ -530,8 +721,10 @@
 @code {
     private RepositorySummaryDto[]? repositories;
     private CommitActivityDto[]? commitActivity;
+    private ContributorActivityDto[]? contributorData;
     private bool isLoadingRepos = true;
     private bool isLoadingCommits = false;
+    private bool isLoadingContributors = false;
     private string? errorMessage;
     private string? selectedRepoSlug;
     private DateTime? startDate;
@@ -539,6 +732,7 @@
     private string? selectedDataPoint;
     private CommitActivityDto? selectedCommitData;
     private bool chartInitialized = false;
+    private bool contributorChartsInitialized = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -551,6 +745,12 @@
         if (!firstRender && commitActivity != null && commitActivity.Any() && !chartInitialized)
         {
             await InitializeChart();
+        }
+        
+        // Initialize contributor charts after render if we have data but no charts yet
+        if (!firstRender && contributorData != null && contributorData.Any() && !contributorChartsInitialized)
+        {
+            await InitializeContributorCharts();
         }
     }
 
@@ -578,6 +778,7 @@
         
         selectedRepoSlug = newRepoSlug;
         chartInitialized = false; // Reset chart flag when repo changes
+        contributorChartsInitialized = false; // Reset contributor charts flag when repo changes
         
         // Set default date range to 2019-01-01 to 2019-04-01 when selecting a repo for the first time
         if (!string.IsNullOrEmpty(selectedRepoSlug) && !startDate.HasValue && !endDate.HasValue)
@@ -597,6 +798,7 @@
         else
         {
             commitActivity = null;
+            contributorData = null;
             startDate = null;
             endDate = null;
             StateHasChanged();
@@ -608,6 +810,7 @@
         // Reload commit activity when date range changes
         if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue)
         {
+            contributorChartsInitialized = false; // Reset contributor charts flag
             InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
         }
     }
@@ -629,6 +832,7 @@
         // Reload data with new date range
         if (!string.IsNullOrEmpty(selectedRepoSlug))
         {
+            contributorChartsInitialized = false; // Reset contributor charts flag
             InvokeAsync(async () => await LoadCommitActivity(selectedRepoSlug));
         }
     }
@@ -664,6 +868,9 @@
             
             Console.WriteLine($"Received {commitActivity?.Length ?? 0} commit activity records");
             Logger.LogInformation("Received {Count} commit activity records", commitActivity?.Length ?? 0);
+            
+            // Also load contributor data
+            await LoadContributorActivity(repoSlug, workspace);
         }
         catch (Exception ex)
         {
@@ -759,6 +966,128 @@
         
         selectedDataPoint = $"{data.Date:MMM dd, yyyy} - {data.CommitCount} commits, {sign}{netChange:N0} net lines";
         StateHasChanged();
+    }
+
+    private async Task LoadContributorActivity(string repoSlug, string workspace)
+    {
+        try
+        {
+            Console.WriteLine($"LoadContributorActivity started for: {repoSlug}");
+            Logger.LogInformation("LoadContributorActivity started for: {RepoSlug}", repoSlug);
+            
+            isLoadingContributors = true;
+            contributorData = null;
+            
+            var url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}";
+            
+            // Add date range parameters if specified
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+            
+            Console.WriteLine($"Making contributor API call to: {url}");
+            Logger.LogInformation("Making contributor API call to: {Url}", url);
+            
+            contributorData = await Http.GetFromJsonAsync<ContributorActivityDto[]>(url);
+            
+            Console.WriteLine($"Received {contributorData?.Length ?? 0} contributor activity records");
+            Logger.LogInformation("Received {Count} contributor activity records", contributorData?.Length ?? 0);
+            
+            if (contributorData != null && contributorData.Any())
+            {
+                var uniqueContributors = contributorData.GroupBy(c => c.UserId).Select(g => g.First()).ToArray();
+                Console.WriteLine($"Found {uniqueContributors.Length} unique contributors: {string.Join(", ", uniqueContributors.Select(c => c.DisplayName))}");
+                Logger.LogInformation("Found {Count} unique contributors: {Names}", uniqueContributors.Length, string.Join(", ", uniqueContributors.Select(c => c.DisplayName)));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading contributor activity: {ex.Message}");
+            Logger.LogError(ex, "Error loading contributor activity: {Message}", ex.Message);
+            // Don't set error message for contributor data - it's not critical
+        }
+        finally
+        {
+            isLoadingContributors = false;
+        }
+    }
+
+    private async Task InitializeContributorCharts()
+    {
+        if (contributorData != null && contributorData.Any())
+        {
+            // Convert data for JavaScript with explicit array serialization
+            var chartData = contributorData.Select(c => new
+            {
+                date = c.Date.ToString("yyyy-MM-dd"),
+                userId = c.UserId,
+                displayName = c.DisplayName,
+                commitCount = c.CommitCount,
+                codeLinesAdded = c.CodeLinesAdded,
+                codeLinesRemoved = c.CodeLinesRemoved,
+                totalLinesAdded = c.TotalLinesAdded,
+                totalLinesRemoved = c.TotalLinesRemoved
+            }).ToArray();
+            
+            Console.WriteLine($"Preparing contributor chart data: {chartData.Length} items");
+            Logger.LogInformation("Preparing contributor chart data: {Count} items", chartData.Length);
+            
+            // Add delay to ensure DOM is rendered
+            await Task.Delay(200);
+            
+            try 
+            {
+                await JSRuntime.InvokeVoidAsync("initializeContributorCharts", new object[] { chartData });
+                contributorChartsInitialized = true;
+                Console.WriteLine("Contributor charts initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing contributor charts: {ex.Message}");
+                Logger.LogError(ex, "Error initializing contributor charts: {Message}", ex.Message);
+                
+                // Retry after longer delay
+                await Task.Delay(500);
+                try 
+                {
+                    await JSRuntime.InvokeVoidAsync("initializeContributorCharts", new object[] { chartData });
+                    contributorChartsInitialized = true;
+                    Console.WriteLine("Contributor charts initialized successfully on retry");
+                }
+                catch (Exception retryEx)
+                {
+                    Console.WriteLine($"Failed to initialize contributor charts after retry: {retryEx.Message}");
+                    Logger.LogError(retryEx, "Failed to initialize contributor charts after retry: {Message}", retryEx.Message);
+                }
+            }
+        }
+    }
+
+    private IEnumerable<ContributorActivityDto> GetUniqueContributors()
+    {
+        if (contributorData == null) return Enumerable.Empty<ContributorActivityDto>();
+        
+        return contributorData
+            .GroupBy(c => c.UserId)
+            .Select(g => g.First())
+            .OrderBy(c => c.DisplayName);
+    }
+
+    private string GetContributorStats(int userId)
+    {
+        if (contributorData == null) return "";
+        
+        var userCommits = contributorData.Where(c => c.UserId == userId);
+        var totalCommits = userCommits.Sum(c => c.CommitCount);
+        var totalAdded = userCommits.Sum(c => c.CodeLinesAdded);
+        var totalRemoved = userCommits.Sum(c => c.CodeLinesRemoved);
+        
+        return $"{totalCommits:N0} commits, {totalAdded:N0}++ {totalRemoved:N0}--";
     }
 
 
