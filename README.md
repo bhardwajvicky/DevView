@@ -100,8 +100,16 @@ This will:
 - Make startup scripts executable
 
 ### 3. Database Setup
-1. **Create Database**: Create a database named `bb` in SQL Server
-2. **Run Schema**: Execute the SQL schema from `BB.Api/SqlSchema/schema.sql`
+1. **Create Database**: Create a new database named `bb` in SQL Server
+   ```sql
+   CREATE DATABASE bb;
+   ```
+2. **Run Schema**: Execute the complete SQL schema from `BB.Api/SqlSchema/schema.sql` to create all tables:
+   - Users table (with avatar support)
+   - Repositories table 
+   - Commits table (with code line tracking)
+   - PullRequests table
+   - All necessary indexes and foreign key relationships
 3. **Configure Connection**: Update the connection string in `BB.Api/appsettings.json` (created from template)
 
 ### 4. Start Development Environment
