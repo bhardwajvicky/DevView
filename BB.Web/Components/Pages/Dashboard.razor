@@ -12,134 +12,153 @@
 
 <PageTitle>Dashboard</PageTitle>
 
-<h1>Commit Activity</h1>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="bi bi-graph-up"></i> Analytics Dashboard
+            </h1>
+        </div>
+    </div>
 
-<div class="rz-p-4">
-    @if (isLoadingRepos)
-    {
-        <div class="rz-mb-4">
-            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Medium" />
-            <p><em>Loading repositories...</em></p>
-        </div>
-    }
-    else if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="rz-mb-4">
-            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
-                <strong>Error:</strong> @errorMessage
-                <br />
-                <small>Make sure the BB.Api project is running on http://localhost:5000</small>
-            </RadzenAlert>
-            <RadzenButton Text="Retry" Click="@LoadRepositories" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small" />
-        </div>
-    }
-    else if (repositories == null || !repositories.Any())
-    {
-        <div class="rz-mb-4">
-            <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter">
-                <strong>No Repositories Found</strong>
-                <br />
-                <small>Please sync some repositories first using the API endpoints.</small>
-            </RadzenAlert>
-        </div>
-    }
-    else
-    {
-        <div class="rz-mb-4">
-            <!-- Repository Selection -->
-            <div class="mb-4">
-                <label class="form-label"><strong>Repository:</strong></label>
-                <InputSelect Value="@selectedRepoSlug" ValueChanged="@((string value) => OnRepositorySelectionChanged(value))" ValueExpression="@(() => selectedRepoSlug)" class="form-select" style="width: 400px; height: 38px;">
-                    <option value="">Select a repository...</option>
-                    @if (repositories != null)
-                    {
+    <!-- Repository Selection -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="repoSelect" class="form-label fw-bold">Select Repository</label>
+                @if (isLoadingRepos)
+                {
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span>Loading repositories...</span>
+                    </div>
+                }
+                else if (repositories != null && repositories.Any())
+                {
+                    <InputSelect id="repoSelect" class="form-select" 
+                                Value="@selectedRepoSlug" 
+                                ValueChanged="@((string value) => OnRepositorySelectionChanged(value))"
+                                ValueExpression="@(() => selectedRepoSlug)">
+                        <option value="">-- Select a repository --</option>
                         @foreach (var repo in repositories)
                         {
                             <option value="@repo.Slug">@repo.Name</option>
                         }
-                    }
-                </InputSelect>
-            </div>
-            
-            <!-- Date Range Filter -->
-            @if (!string.IsNullOrEmpty(selectedRepoSlug))
-            {
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <label class="form-label"><strong>From Date:</strong></label>
-                        <RadzenDatePicker @bind-Value="@startDate" DateFormat="yyyy-MM-dd" 
-                                        ShowCalendarWeek="false" 
-                                        class="w-100"
-                                        Change="@OnDateRangeChanged" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label"><strong>To Date:</strong></label>
-                        <RadzenDatePicker @bind-Value="@endDate" DateFormat="yyyy-MM-dd" 
-                                        ShowCalendarWeek="false" 
-                                        class="w-100"
-                                        Change="@OnDateRangeChanged" />
-                    </div>
-                </div>
-                
-                <!-- Quick Date Range Buttons -->
-                <div class="mb-4">
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(30)">Last 30 Days</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(90)">Last 3 Months</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(180)">Last 6 Months</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(365)">Last Year</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => SetDateRange(null)">All Time</button>
-                    </div>
-                </div>
-            }
-            
-            @* Debug info *@
-            <div class="mb-2">
-                <small class="text-muted">Selected: @(selectedRepoSlug ?? "None")</small>
-                @if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue)
+                    </InputSelect>
+                }
+                else
                 {
-                    <br />
-                    <small class="text-muted">Date Range: @startDate.Value.ToString("yyyy-MM-dd") to @endDate.Value.ToString("yyyy-MM-dd")</small>
+                    <p class="text-muted">No repositories found.</p>
                 }
             </div>
         </div>
+        
+        <!-- Date Range Selection -->
+        @if (!string.IsNullOrEmpty(selectedRepoSlug))
+        {
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Date Range</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <RadzenDatePicker @bind-Value="startDate" DateFormat="MM/dd/yyyy" Placeholder="Start Date" 
+                                            Change="@(() => OnDateRangeChanged(startDate))" class="w-100" />
+                        </div>
+                        <div class="col-md-6">
+                            <RadzenDatePicker @bind-Value="endDate" DateFormat="MM/dd/yyyy" Placeholder="End Date" 
+                                            Change="@(() => OnDateRangeChanged(endDate))" class="w-100" />
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="30 Days" Click="@(() => SetDateRange(30))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="3 Months" Click="@(() => SetDateRange(90))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="6 Months" Click="@(() => SetDateRange(180))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Year" Click="@(() => SetDateRange(365))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Info" Text="All Time" Click="@(() => SetDateRange(null))" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Error Message -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Darker">
+            @errorMessage
+        </RadzenAlert>
     }
 
+    <!-- Loading Indicator -->
     @if (isLoadingCommits)
     {
-        <div class="rz-mb-4">
-            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Medium" />
-            <p><em>Loading commit activity...</em></p>
-        </div>
-    }
-    else if (commitActivity == null && !string.IsNullOrEmpty(selectedRepoSlug))
-    {
-        <p><em>Select a repository to view activity...</em></p>
-    }
-    else if (commitActivity != null && !commitActivity.Any())
-    {
         <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
-            <strong>No Commit Activity Found</strong>
-            <br />
-            <small>No commits found for the selected repository. Try syncing commits first.</small>
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span>Loading commit activity...</span>
+            </div>
         </RadzenAlert>
     }
     else if (commitActivity != null && commitActivity.Any())
     {
-        <RadzenChart SeriesClick="@OnChartSeriesClick">
-            <RadzenLineSeries Data="@commitActivity" CategoryProperty="Date" Title="Commits" ValueProperty="CommitCount">
-                <RadzenMarkers MarkerType="MarkerType.Circle" />
-                <RadzenSeriesDataLabels Visible="false" />
-            </RadzenLineSeries>
-            <RadzenCategoryAxis Padding="20" FormatString="{0:MMM dd}" />
-            <RadzenValueAxis Min="0">
-                <RadzenGridLines Visible="true" />
-                <RadzenAxisTitle Text="Number of Commits" />
-            </RadzenValueAxis>
-            <RadzenLegend Position="LegendPosition.Top" />
-            <RadzenChartTooltipOptions Visible="true" Shared="false" 
-                                       Style="background-color: rgba(33, 37, 41, 0.95); color: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);" />
-        </RadzenChart>
+        <!-- Chart.js Area Chart -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">📊 Commit Activity Over Time</h5>
+                        <small class="text-muted">Interactive area chart showing commits, code additions, and deletions</small>
+                    </div>
+                    <div class="card-body">
+                        <div style="position: relative; height: 400px;">
+                            @if (commitActivity != null && commitActivity.Any())
+                            {
+                                <canvas id="commitChart"></canvas>
+                            }
+                            else
+                            {
+                                <div class="d-flex align-items-center justify-content-center h-100">
+                                    <div class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading chart...</span>
+                                        </div>
+                                        <p class="mt-2 text-muted">Loading chart data...</p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <!-- Chart Controls -->
+                        <div class="mt-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-sm btn-outline-primary" onclick="toggleDataset(0)">
+                                    🔵 Commits
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(1)">
+                                    🟢 Code Added
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(2)">
+                                    🔴 Code Removed
+                                </button>
+                                <button class="btn btn-sm btn-outline-info" onclick="toggleDataset(3)">
+                                    🔵 Net Change
+                                </button>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#dataTableModal">
+                                    📋 Show Data
+                                </button>
+                                <small class="text-muted ms-2">(Table should be hidden by default)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- Chart Click Information -->
         @if (!string.IsNullOrEmpty(selectedDataPoint))
@@ -151,45 +170,362 @@
             </div>
         }
         
-        <!-- Data Table showing commit activity details -->
-        <div class="mt-4">
-            <h5>Commit Activity Data</h5>
-            <div class="mb-2">
-                <small class="text-muted">💡 <strong>Chart:</strong> Hover for basic info, click to select • <strong>Table:</strong> Hover rows for detailed line counts</small>
+        <!-- Data Table Modal -->
+        <div class="modal fade" id="dataTableModal" tabindex="-1" aria-labelledby="dataTableModalLabel" aria-hidden="true" style="display: none;">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dataTableModalLabel">📋 Commit Activity Data</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <small class="text-muted">💡 <strong>Chart:</strong> Hover for detailed tooltips, click legends to toggle datasets • <strong>Table:</strong> Hover rows for detailed line counts</small>
+                        </div>
+                        @if (commitActivity != null && commitActivity.Any())
+                        {
+                            <RadzenDataGrid AllowFiltering="true" AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="15" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                                            Data="@commitActivity" TItem="CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or" RowRender="@OnRowRender">
+                                <Columns>
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="Date" Title="Date" Width="120px" FormatString="{0:MMM dd, yyyy}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CommitCount" Title="Commits" Width="80px" TextAlign="TextAlign.Center">
+                                        <Template Context="data">
+                                            <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
+                                        <Template Context="data">
+                                            @{
+                                                var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
+                                                var badgeStyle = netChange > 0 ? BadgeStyle.Success : netChange < 0 ? BadgeStyle.Danger : BadgeStyle.Secondary;
+                                                var sign = netChange > 0 ? "+" : "";
+                                            }
+                                            <RadzenBadge BadgeStyle="@badgeStyle" Text="@($"{sign}{netChange:N0}")" />
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Actions" Width="80px" Sortable="false" Filterable="false">
+                                        <Template Context="data">
+                                            <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Primary" Text="Select" Click="@(() => SelectDataPoint(data))" />
+                                        </Template>
+                                    </RadzenDataGridColumn>
+                                </Columns>
+                            </RadzenDataGrid>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-table"></i>
+                                <p class="mt-2">No data available. Please select a repository and date range.</p>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        @if (commitActivity != null && commitActivity.Any())
+                        {
+                            <button type="button" class="btn btn-primary" onclick="exportTableData()">
+                                📊 Export Data
+                            </button>
+                        }
+                    </div>
+                </div>
             </div>
-            <RadzenDataGrid AllowFiltering="true" AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
-                            Data="@commitActivity" TItem="CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or" RowRender="@OnRowRender">
-                <Columns>
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="Date" Title="Date" Width="120px" FormatString="{0:MMM dd, yyyy}" />
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CommitCount" Title="Commits" Width="80px" TextAlign="TextAlign.Center">
-                        <Template Context="data">
-                            <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
-                        </Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
-                        <Template Context="data">
-                            @{
-                                var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
-                                var badgeStyle = netChange > 0 ? BadgeStyle.Success : netChange < 0 ? BadgeStyle.Danger : BadgeStyle.Secondary;
-                                var sign = netChange > 0 ? "+" : "";
-                            }
-                            <RadzenBadge BadgeStyle="@badgeStyle" Text="@($"{sign}{netChange:N0}")" />
-                        </Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="CommitActivityDto" Title="Actions" Width="80px" Sortable="false" Filterable="false">
-                        <Template Context="data">
-                            <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Primary" Text="Select" Click="@(() => SelectDataPoint(data))" />
-                        </Template>
-                    </RadzenDataGridColumn>
-                </Columns>
-            </RadzenDataGrid>
         </div>
     }
 </div>
+
+<!-- Chart.js JavaScript -->
+<script>
+    // Use window scope to avoid variable redeclaration issues
+    window.initializeChart = (data) => {
+        console.log('initializeChart called with data:', data);
+        
+        // Validate data is an array
+        if (!Array.isArray(data)) {
+            console.error('Data is not an array:', typeof data, data);
+            return;
+        }
+        
+        if (data.length === 0) {
+            console.warn('Data array is empty');
+            return;
+        }
+        
+        // Check if DOM element exists
+        const chartElement = document.getElementById('commitChart');
+        if (!chartElement) {
+            console.error('Chart canvas element not found. Retrying...');
+            // Retry after a short delay
+            setTimeout(() => {
+                const retryElement = document.getElementById('commitChart');
+                if (retryElement) {
+                    window.initializeChart(data);
+                } else {
+                    console.error('Chart canvas element still not found after retry');
+                }
+            }, 200);
+            return;
+        }
+        
+        // Check if Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded yet. Retrying...');
+            setTimeout(() => {
+                window.initializeChart(data);
+            }, 500);
+            return;
+        }
+        
+        const ctx = chartElement.getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (window.commitChart) {
+            console.log('Existing chart found:', typeof window.commitChart, window.commitChart);
+            if (typeof window.commitChart.destroy === 'function') {
+                console.log('Destroying existing chart');
+                window.commitChart.destroy();
+            } else {
+                console.warn('commitChart exists but destroy is not a function:', typeof window.commitChart.destroy);
+            }
+        } else {
+            console.log('No existing chart to destroy');
+        }
+        
+        // Prepare data for Chart.js
+        const labels = data.map(item => {
+            const date = new Date(item.date);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+        
+        const commitCounts = data.map(item => item.commitCount);
+        const codeAdded = data.map(item => item.codeLinesAdded);
+        const codeRemoved = data.map(item => item.codeLinesRemoved);
+        const netChange = data.map(item => item.codeLinesAdded - item.codeLinesRemoved);
+        
+        console.log('Creating new Chart.js chart');
+        window.commitChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Commits',
+                        data: commitCounts,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Code Lines Added',
+                        data: codeAdded,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Code Lines Removed',
+                        data: codeRemoved,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Net Change',
+                        data: netChange,
+                        borderColor: 'rgb(153, 102, 255)',
+                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Repository Activity Timeline',
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const dataIndex = context[0].dataIndex;
+                                const date = new Date(data[dataIndex].date);
+                                return date.toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                });
+                            },
+                            label: function(context) {
+                                const dataIndex = context.dataIndex;
+                                const item = data[dataIndex];
+                                
+                                if (context.dataset.label === 'Commits') {
+                                    return `📝 Commits: ${item.commitCount}`;
+                                } else if (context.dataset.label === 'Code Lines Added') {
+                                    return `➕ Code Added: ${item.codeLinesAdded.toLocaleString()} lines`;
+                                } else if (context.dataset.label === 'Code Lines Removed') {
+                                    return `➖ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`;
+                                } else if (context.dataset.label === 'Net Change') {
+                                    const net = item.codeLinesAdded - item.codeLinesRemoved;
+                                    const sign = net > 0 ? '+' : '';
+                                    return `📊 Net Change: ${sign}${net.toLocaleString()} lines`;
+                                }
+                            },
+                            afterBody: function(context) {
+                                if (context.length > 0) {
+                                    const dataIndex = context[0].dataIndex;
+                                    const item = data[dataIndex];
+                                    return [
+                                        '',
+                                        `📄 Total Lines Added: ${item.totalLinesAdded.toLocaleString()}`,
+                                        `📄 Total Lines Removed: ${item.totalLinesRemoved.toLocaleString()}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        },
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Number of Commits'
+                        },
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        min: 0
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Lines of Code'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const dataIndex = elements[0].index;
+                        const item = data[dataIndex];
+                        const date = new Date(item.date).toLocaleDateString();
+                        
+                        // Call Blazor method to handle chart click
+                        DotNet.invokeMethodAsync('BB.Web', 'HandleChartClick', {
+                            date: date,
+                            commitCount: item.commitCount,
+                            codeLinesAdded: item.codeLinesAdded,
+                            codeLinesRemoved: item.codeLinesRemoved
+                        });
+                    }
+                }
+            }
+        });
+        
+        console.log('Chart created successfully:', window.commitChart);
+    };
+    
+    window.exportTableData = () => {
+        console.log('Export functionality - to be implemented');
+        alert('Export functionality coming soon!');
+    };
+    
+    // Ensure modal is hidden on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('dataTableModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+            console.log('Modal explicitly hidden on page load');
+        }
+    });
+    
+    window.toggleDataset = (datasetIndex) => {
+        if (window.commitChart && typeof window.commitChart.update === 'function') {
+            const dataset = window.commitChart.data.datasets[datasetIndex];
+            dataset.hidden = !dataset.hidden;
+            window.commitChart.update();
+        }
+    };
+    
+    window.updateChart = (data) => {
+        if (window.commitChart && typeof window.commitChart.update === 'function' && data && Array.isArray(data)) {
+            // Update chart data
+            const labels = data.map(item => {
+                const date = new Date(item.date);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+            
+            window.commitChart.data.labels = labels;
+            window.commitChart.data.datasets[0].data = data.map(item => item.commitCount);
+            window.commitChart.data.datasets[1].data = data.map(item => item.codeLinesAdded);
+            window.commitChart.data.datasets[2].data = data.map(item => item.codeLinesRemoved);
+            window.commitChart.data.datasets[3].data = data.map(item => item.codeLinesAdded - item.codeLinesRemoved);
+            
+            window.commitChart.update();
+        }
+    };
+</script>
 
 @code {
     private RepositorySummaryDto[]? repositories;
@@ -202,10 +538,20 @@
     private DateTime? endDate;
     private string? selectedDataPoint;
     private CommitActivityDto? selectedCommitData;
+    private bool chartInitialized = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadRepositories();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Initialize chart after render if we have data but no chart yet
+        if (!firstRender && commitActivity != null && commitActivity.Any() && !chartInitialized)
+        {
+            await InitializeChart();
+        }
     }
 
     private async Task LoadRepositories()
@@ -231,6 +577,7 @@
         Logger.LogInformation("Repository selection changed to: {RepoSlug}", newRepoSlug);
         
         selectedRepoSlug = newRepoSlug;
+        chartInitialized = false; // Reset chart flag when repo changes
         
         // Set default date range to 2019-01-01 to 2019-04-01 when selecting a repo for the first time
         if (!string.IsNullOrEmpty(selectedRepoSlug) && !startDate.HasValue && !endDate.HasValue)
@@ -328,38 +675,90 @@
         {
             isLoadingCommits = false;
             StateHasChanged();
-            Console.WriteLine($"LoadCommitActivity completed. Loading: {isLoadingCommits}");
         }
     }
 
-    private void SelectDataPoint(CommitActivityDto data)
+    private async Task InitializeChart()
     {
-        selectedCommitData = data;
-        selectedDataPoint = $"Selected: {data.Date:MMM dd, yyyy} - {data.CommitCount} commits";
-        StateHasChanged();
+        if (commitActivity != null && commitActivity.Any())
+        {
+            // Convert data for JavaScript with explicit array serialization
+            var chartData = commitActivity.Select(c => new
+            {
+                date = c.Date.ToString("yyyy-MM-dd"),
+                commitCount = c.CommitCount,
+                codeLinesAdded = c.CodeLinesAdded,
+                codeLinesRemoved = c.CodeLinesRemoved,
+                totalLinesAdded = c.TotalLinesAdded,
+                totalLinesRemoved = c.TotalLinesRemoved
+            }).ToArray();
+            
+            Console.WriteLine($"Preparing chart data: {chartData.Length} items");
+            Logger.LogInformation("Preparing chart data: {Count} items", chartData.Length);
+            
+            // Add delay to ensure DOM is rendered
+            await Task.Delay(100);
+            
+            try 
+            {
+                // Pass as individual parameters to ensure proper serialization
+                await JSRuntime.InvokeVoidAsync("initializeChart", new object[] { chartData });
+                chartInitialized = true;
+                Console.WriteLine("Chart initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing chart: {ex.Message}");
+                Logger.LogError(ex, "Error initializing chart: {Message}", ex.Message);
+                
+                // Retry after longer delay
+                await Task.Delay(500);
+                try 
+                {
+                    await JSRuntime.InvokeVoidAsync("initializeChart", new object[] { chartData });
+                    chartInitialized = true;
+                    Console.WriteLine("Chart initialized successfully on retry");
+                }
+                catch (Exception retryEx)
+                {
+                    Console.WriteLine($"Failed to initialize chart after retry: {retryEx.Message}");
+                    Logger.LogError(retryEx, "Failed to initialize chart after retry: {Message}", retryEx.Message);
+                }
+            }
+        }
+    }
+
+    // JavaScript interop methods for chart interaction
+    [JSInvokable]
+    public static void HandleChartClick(object dataPoint)
+    {
+        // Handle chart click events from JavaScript
+        Console.WriteLine($"Chart clicked: {JsonSerializer.Serialize(dataPoint)}");
     }
 
     private void OnRowRender(RowRenderEventArgs<CommitActivityDto> args)
     {
         var data = args.Data;
         var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
-        var tooltipText = $"📅 {data.Date:MMM dd, yyyy}&#10;📝 Commits: {data.CommitCount}&#10;➕ Code Added: {data.CodeLinesAdded:N0} lines&#10;➖ Code Removed: {data.CodeLinesRemoved:N0} lines&#10;📊 Total Added: {data.TotalLinesAdded:N0} lines&#10;📊 Total Removed: {data.TotalLinesRemoved:N0} lines&#10;💡 Net Change: {netChange:+#,0;-#,0;0} code lines";
+        var sign = netChange > 0 ? "+" : "";
         
-        args.Attributes.Add("title", tooltipText);
-        args.Attributes.Add("style", "cursor: pointer;");
+        args.Attributes.Add("title", 
+            $"📝 Commits: {data.CommitCount}\n" +
+            $"➕ Code Added: {data.CodeLinesAdded:N0} lines\n" +
+            $"➖ Code Removed: {data.CodeLinesRemoved:N0} lines\n" +
+            $"📊 Total Added: {data.TotalLinesAdded:N0} lines\n" +
+            $"📊 Total Removed: {data.TotalLinesRemoved:N0} lines\n" +
+            $"💡 Net Change: {sign}{netChange:N0} lines");
     }
 
-
-
-    private void OnChartSeriesClick(SeriesClickEventArgs args)
+    private void SelectDataPoint(CommitActivityDto data)
     {
-        // Handle series click event - the clicked data point is in args.Data
-        if (args.Data is CommitActivityDto clickedData)
-        {
-            selectedCommitData = clickedData;
-            selectedDataPoint = $"Clicked on chart: {clickedData.Date:MMM dd, yyyy} - {clickedData.CommitCount} commits";
-            StateHasChanged();
-        }
+        selectedCommitData = data;
+        var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
+        var sign = netChange > 0 ? "+" : "";
+        
+        selectedDataPoint = $"{data.Date:MMM dd, yyyy} - {data.CommitCount} commits, {sign}{netChange:N0} net lines";
+        StateHasChanged();
     }
 
 
