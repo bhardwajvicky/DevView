@@ -17,14 +17,14 @@ check_port() {
 
 # Check required ports
 echo "📋 Checking ports..."
-check_port 5000 || exit 1
+check_port 5005 || exit 1
 check_port 5084 || exit 1
 
 # Start API in background
 echo ""
-echo "🔧 Starting BB.Api on http://localhost:5000..."
+echo "🔧 Starting BB.Api on http://localhost:5005..."
 cd BB.Api
-dotnet run --no-launch-profile --urls="http://localhost:5000" > ../api.log 2>&1 &
+dotnet run --no-launch-profile --urls="http://localhost:5005" > ../api.log 2>&1 &
 API_PID=$!
 cd ..
 
@@ -34,7 +34,7 @@ sleep 5
 
 # Test API endpoint
 echo "🧪 Testing API endpoint..."
-if curl -s http://localhost:5000/api/analytics/repositories > /dev/null; then
+if curl -s http://localhost:5005/api/analytics/repositories > /dev/null; then
     echo "✅ API is responding"
 else
     echo "❌ API is not responding"
@@ -56,7 +56,7 @@ echo ""
 echo "🎉 Both applications are starting!"
 echo "📊 Dashboard: http://localhost:5084/dashboard"
 echo "🧪 API Test: http://localhost:5084/api-test"
-echo "📖 API Docs: http://localhost:5000/swagger"
+echo "📖 API Docs: http://localhost:5005/swagger"
 echo ""
 echo "📝 Logs:"
 echo "   API logs: tail -f api.log"
