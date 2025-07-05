@@ -16,7 +16,7 @@ namespace BBIntegration.PullRequests
         public string State { get; set; }
 
         [JsonPropertyName("author")]
-        public CommitAuthorDto Author { get; set; }
+        public PRAuthorDto Author { get; set; }
 
         [JsonPropertyName("created_on")]
         public DateTime CreatedOn { get; set; }
@@ -26,5 +26,19 @@ namespace BBIntegration.PullRequests
 
         [JsonPropertyName("merge_commit")]
         public CommitDto MergeCommit { get; set; }
+    }
+
+    public class PRAuthorDto
+    {
+        [JsonPropertyName("uuid")]
+        public string Uuid { get; set; }
+
+        [JsonPropertyName("display_name")]
+        public string DisplayName { get; set; }
+
+        [JsonPropertyName("nickname")]
+        public string Nickname { get; set; }
+
+        // Add other fields as needed
     }
 }
