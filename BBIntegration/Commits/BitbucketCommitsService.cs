@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace BBIntegration.Commits
@@ -104,21 +105,75 @@ namespace BBIntegration.Commits
                         else
                         {
                             // INSERT the new commit
-                            // Find the author's internal ID
-                            var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                                "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = commit.Author?.User?.Uuid });
-
+                            // Find or insert the author's internal ID
+                            int? authorId = null;
+                            string displayName = null, email = null, bitbucketUserId = null;
+                            if (commit.Author?.User?.Uuid != null)
+                            {
+                                bitbucketUserId = commit.Author.User.Uuid;
+                                authorId = await connection.QuerySingleOrDefaultAsync<int?>(
+                                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = bitbucketUserId });
+                            }
                             if (authorId == null)
                             {
-                                _logger.LogWarning("Author with UUID '{AuthorUuid}' not found for commit '{CommitHash}'. Sync users first.", commit.Author?.User?.Uuid, commit.Hash);
+                                // Try to parse from raw
+                                var raw = commit.Author?.Raw;
+                                if (!string.IsNullOrEmpty(raw))
+                                {
+                                    var match = Regex.Match(raw, @"^(.*?)\s*<(.+?)>$");
+                                    if (match.Success)
+                                    {
+                                        displayName = match.Groups[1].Value;
+                                        email = match.Groups[2].Value;
+                                    }
+                                    else
+                                    {
+                                        displayName = raw;
+                                    }
+                                }
+                                if (string.IsNullOrEmpty(bitbucketUserId) && !string.IsNullOrEmpty(email))
+                                {
+                                    bitbucketUserId = $"synthetic:{email}";
+                                }
+                                if (string.IsNullOrEmpty(bitbucketUserId))
+                                {
+                                    // Fallback: use commit hash as synthetic user ID
+                                    bitbucketUserId = $"synthetic:unknown:{commit.Hash}";
+                                }
+                                if (string.IsNullOrEmpty(displayName))
+                                {
+                                    displayName = "Unknown";
+                                }
+                                if (!string.IsNullOrEmpty(bitbucketUserId))
+                                {
+                                    // Insert user if not exists
+                                    const string insertUserSql = @"
+                                        IF NOT EXISTS (SELECT 1 FROM Users WHERE BitbucketUserId = @BitbucketUserId)
+                                        BEGIN
+                                            INSERT INTO Users (BitbucketUserId, DisplayName, AvatarUrl, CreatedOn)
+                                            VALUES (@BitbucketUserId, @DisplayName, NULL, @CreatedOn);
+                                        END
+                                        SELECT Id FROM Users WHERE BitbucketUserId = @BitbucketUserId;
+                                    ";
+                                    authorId = await connection.QuerySingleOrDefaultAsync<int?>(insertUserSql, new
+                                    {
+                                        BitbucketUserId = bitbucketUserId,
+                                        DisplayName = displayName,
+                                        CreatedOn = commit.Date
+                                    });
+                                }
+                            }
+                            if (authorId == null)
+                            {
+                                _logger.LogWarning(
+                                    "Author for commit '{CommitHash}' not found and could not be created. Raw: '{Raw}', User UUID: '{Uuid}', DisplayName: '{DisplayName}', Email: '{Email}', BitbucketUserId: '{BitbucketUserId}'. Skipping commit insert.",
+                                    commit.Hash, commit.Author?.Raw, commit.Author?.User?.Uuid, displayName, email, bitbucketUserId);
                                 continue;
                             }
-                            
                             const string insertSql = @"
                                 INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
                                 VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
                             ";
-                            
                             await connection.ExecuteAsync(insertSql, new
                             {
                                 commit.Hash,
