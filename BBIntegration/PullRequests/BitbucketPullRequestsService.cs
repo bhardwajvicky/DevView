@@ -49,7 +49,7 @@ namespace BBIntegration.PullRequests
                 do
                 {
                     var prsJson = await _apiClient.GetPullRequestsAsync(workspace, repoSlug, startDate, endDate, nextPageUrl);
-                    _logger.LogInformation("Raw PRs JSON: {Json}", prsJson);
+                    //_logger.LogInformation("Raw PRs JSON: {Json}", prsJson);
                     var prPagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<PullRequestDto>>(prsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                     if (prPagedResponse?.Values == null || !prPagedResponse.Values.Any()) break;
