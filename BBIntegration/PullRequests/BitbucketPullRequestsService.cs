@@ -52,7 +52,7 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
-                        if (pr.Author?.User?.Uuid == null)
+                        if (pr.Author?.Uuid == null)
                         {
                             _logger.LogWarning("PR '{PrId}' has no author or author UUID. Skipping.", pr.Id);
                             continue;
@@ -60,11 +60,11 @@ namespace BBIntegration.PullRequests
 
                         // Find the author's internal ID
                         var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                            "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = pr.Author.User.Uuid });
+                            "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = pr.Author.Uuid });
 
                         if (authorId == null)
                         {
-                            _logger.LogWarning("Author with UUID '{AuthorUuid}' not found for PR '{PrId}'. Sync users first.", pr.Author.User.Uuid, pr.Id);
+                            _logger.LogWarning("Author with UUID '{AuthorUuid}' not found for PR '{PrId}'. Sync users first.", pr.Author.Uuid, pr.Id);
                             continue;
                         }
 
