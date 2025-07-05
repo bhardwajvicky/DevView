@@ -216,7 +216,7 @@ namespace BBIntegration.PullRequests
                             bool isMerge = commit.Message != null && commit.Message.Trim().ToLower().StartsWith("merge");
                             bool isPRMergeCommit = false;
                             // If this commit is the merge_commit for the PR, set the flag
-                            if (prDbId > 0 && commit.Message?.Trim().StartsWith("Merge branch") ?? false)
+                            if (prDbId > 0 && commit.Message != null && commit.Message.Trim().StartsWith("Merge branch"))
                             {
                                 isPRMergeCommit = true;
                             }

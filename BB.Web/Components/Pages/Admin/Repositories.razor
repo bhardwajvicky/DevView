@@ -106,6 +106,12 @@
                                                 <span class="badge bg-primary">@repo.Workspace</span>
                                             </td>
                                             <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => NavigateToCommits(repo)">
+                                                    <i class="bi bi-clock-history"></i> Commits
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => NavigateToPRs(repo)">
+                                                    <i class="bi bi-git"></i> Pull Requests
+                                                </button>
                                                 <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewRepository(repo)">
                                                     <i class="bi bi-eye"></i> View
                                                 </button>
@@ -195,5 +201,15 @@
     {
         // Navigate to dashboard with the repository selected
         await JSRuntime.InvokeVoidAsync("open", $"/dashboard?repo={repo.Slug}", "_blank");
+    }
+
+    private void NavigateToCommits(RepositorySummaryDto repo)
+    {
+        Navigation.NavigateTo($"/repositories/{repo.Slug}/commits");
+    }
+
+    private void NavigateToPRs(RepositorySummaryDto repo)
+    {
+        Navigation.NavigateTo($"/repositories/{repo.Slug}/pullrequests");
     }
 } 
