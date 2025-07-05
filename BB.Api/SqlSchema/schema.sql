@@ -33,6 +33,7 @@ CREATE TABLE Commits (
     IsMerge BIT NOT NULL DEFAULT 0,
     CodeLinesAdded INT,
     CodeLinesRemoved INT,
+    IsPRMergeCommit BIT NOT NULL DEFAULT 0,
     -- Add more commit fields as needed
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
     FOREIGN KEY (AuthorId) REFERENCES Users(Id)
@@ -70,3 +71,25 @@ CREATE TABLE PullRequestCommits (
 );
 CREATE INDEX IX_PullRequestCommits_PullRequestId ON PullRequestCommits(PullRequestId);
 CREATE INDEX IX_PullRequestCommits_CommitId ON PullRequestCommits(CommitId);
+
+-- Update script for existing DB
+-- Add the new column
+ALTER TABLE Commits ADD IsPRMergeCommit BIT NOT NULL DEFAULT 0;
+
+-- Set IsMerge for commits whose message starts with 'merge' or 'Merged' (case-insensitive)
+UPDATE Commits
+SET IsMerge = 1
+WHERE LOWER(LEFT(LTRIM(Message), 5)) = 'merge' OR LOWER(LEFT(LTRIM(Message), 6)) = 'merged';
+
+-- Set IsPRMergeCommit for commits that are the merge_commit for a PR
+UPDATE Commits
+SET IsPRMergeCommit = 1
+WHERE BitbucketCommitHash IN (
+    SELECT pr.MergeCommitHash
+    FROM (
+        SELECT BitbucketPrId, (SELECT TOP 1 BitbucketCommitHash FROM Commits WHERE Commits.Message LIKE '%pull request%' AND Commits.Message LIKE '%' + CAST(PullRequests.BitbucketPrId AS NVARCHAR) + '%') AS MergeCommitHash
+        FROM PullRequests
+    ) pr
+    WHERE pr.MergeCommitHash IS NOT NULL
+);
+-- You may need to adjust the above subquery depending on how you store PR merge commit hashes.

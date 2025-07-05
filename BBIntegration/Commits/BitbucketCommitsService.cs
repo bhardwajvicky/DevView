@@ -170,6 +170,7 @@ namespace BBIntegration.Commits
                                     commit.Hash, commit.Author?.Raw, commit.Author?.User?.Uuid, displayName, email, bitbucketUserId);
                                 continue;
                             }
+                            bool isMerge = commit.Message != null && commit.Message.Trim().ToLower().StartsWith("merge");
                             const string insertSql = @"
                                 INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
                                 VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
@@ -183,7 +184,7 @@ namespace BBIntegration.Commits
                                 commit.Message,
                                 LinesAdded = totalAdded,
                                 LinesRemoved = totalRemoved,
-                                IsMerge = commit.Message.Trim().StartsWith("Merge branch"),
+                                IsMerge = isMerge,
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved
                             });

@@ -213,9 +213,16 @@ namespace BBIntegration.PullRequests
                             }
 
                             // Insert the commit
+                            bool isMerge = commit.Message != null && commit.Message.Trim().ToLower().StartsWith("merge");
+                            bool isPRMergeCommit = false;
+                            // If this commit is the merge_commit for the PR, set the flag
+                            if (prDbId > 0 && commit.Message?.Trim().StartsWith("Merge branch") ?? false)
+                            {
+                                isPRMergeCommit = true;
+                            }
                             const string insertSql = @"
-                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
-                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
+                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved, IsPRMergeCommit)
+                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved, @IsPRMergeCommit);
                                 SELECT SCOPE_IDENTITY();
                             ";
                             var insertedId = await connection.ExecuteScalarAsync<int?>(insertSql, new
@@ -227,9 +234,10 @@ namespace BBIntegration.PullRequests
                                 commit.Message,
                                 LinesAdded = totalAdded,
                                 LinesRemoved = totalRemoved,
-                                IsMerge = commit.Message?.Trim().StartsWith("Merge branch") ?? false,
+                                IsMerge = isMerge,
                                 CodeLinesAdded = codeAdded,
-                                CodeLinesRemoved = codeRemoved
+                                CodeLinesRemoved = codeRemoved,
+                                IsPRMergeCommit = isPRMergeCommit
                             });
                             finalCommitId = insertedId;
                             _logger.LogInformation("Inserted missing commit '{CommitHash}' for PR '{BitbucketPrId}'.", commit.Hash, bitbucketPrId);
