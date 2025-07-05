@@ -345,4 +345,29 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Made with ❤️ using .NET 9, Blazor, and Chart.js** 
+**Made with ❤️ using .NET 9, Blazor, and Chart.js**
+
+# Launch Settings Templates
+
+This repository includes launch settings templates for both the API and Web projects to help standardize local development environments.
+
+## API Project (BB.Api)
+- **Template file:** `BB.Api/Properties/launchSettings.template.json`
+- **Default HTTP port:** `5000`
+- **How to use:**
+  1. Copy `BB.Api/Properties/launchSettings.template.json` to `BB.Api/Properties/launchSettings.json`.
+  2. Adjust any settings as needed for your local environment.
+  3. The API will be available at `http://localhost:5000` by default.
+
+## Web Project (BB.Web)
+- **Template file:** `BB.Web/appsettings.template.json`
+- **Default HTTP port:** `5084`
+- **How to use:**
+  1. Copy `BB.Web/appsettings.template.json` to `BB.Web/Properties/launchSettings.json`.
+  2. Adjust any settings as needed for your local environment.
+  3. The web app will be available at `http://localhost:5084` by default.
+
+## Notes
+- These templates are not used directly by the .NET runtime. You must copy them to `launchSettings.json` in the appropriate `Properties` folder for them to take effect.
+- The `ASPNETCORE_ENVIRONMENT` is set to `Development` by default in these templates, which enables developer features such as Swagger UI for the API.
+- Do **not** commit your local `launchSettings.json` files to version control, as they may contain machine-specific settings. 
