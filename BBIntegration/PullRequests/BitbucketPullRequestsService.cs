@@ -152,7 +152,7 @@ namespace BBIntegration.PullRequests
                                 var raw = commit.Author?.Raw;
                                 if (!string.IsNullOrEmpty(raw))
                                 {
-                                    var match = Regex.Match(raw, @"^(.*?)\\s*<(.+?)>$");
+                                    var match = Regex.Match(raw, @"^(.*?)\s*<(.+?)>$");
                                     if (match.Success)
                                     {
                                         displayName = match.Groups[1].Value;
@@ -163,10 +163,18 @@ namespace BBIntegration.PullRequests
                                         displayName = raw;
                                     }
                                 }
-                                // Use email as synthetic BitbucketUserId if uuid is missing
                                 if (string.IsNullOrEmpty(bitbucketUserId) && !string.IsNullOrEmpty(email))
                                 {
                                     bitbucketUserId = $"synthetic:{email}";
+                                }
+                                if (string.IsNullOrEmpty(bitbucketUserId))
+                                {
+                                    // Fallback: use commit hash as synthetic user ID
+                                    bitbucketUserId = $"synthetic:unknown:{commit.Hash}";
+                                }
+                                if (string.IsNullOrEmpty(displayName))
+                                {
+                                    displayName = "Unknown";
                                 }
                                 if (!string.IsNullOrEmpty(bitbucketUserId))
                                 {
@@ -182,7 +190,7 @@ namespace BBIntegration.PullRequests
                                     authorId = await connection.QuerySingleOrDefaultAsync<int?>(insertUserSql, new
                                     {
                                         BitbucketUserId = bitbucketUserId,
-                                        DisplayName = displayName ?? email ?? "Unknown",
+                                        DisplayName = displayName,
                                         CreatedOn = commit.Date
                                     });
                                 }
