@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace BBIntegration.PullRequests
@@ -136,16 +137,59 @@ namespace BBIntegration.PullRequests
                             var diffContent = await _apiClient.GetCommitDiffAsync(workspace, repoSlug, commit.Hash);
                             var (totalAdded, totalRemoved, codeAdded, codeRemoved) = _diffParser.ParseDiff(diffContent);
 
-                            // Find the author's internal ID
+                            // Find or insert the author's internal ID
                             int? authorId = null;
+                            string displayName = null, email = null, bitbucketUserId = null;
                             if (commit.Author?.User?.Uuid != null)
                             {
+                                bitbucketUserId = commit.Author.User.Uuid;
                                 authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = commit.Author.User.Uuid });
+                                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = bitbucketUserId });
                             }
                             if (authorId == null)
                             {
-                                _logger.LogWarning("Author for commit '{CommitHash}' not found. Skipping commit insert.", commit.Hash);
+                                // Try to parse from raw
+                                var raw = commit.Author?.Raw;
+                                if (!string.IsNullOrEmpty(raw))
+                                {
+                                    var match = Regex.Match(raw, @"^(.*?)\\s*<(.+?)>$");
+                                    if (match.Success)
+                                    {
+                                        displayName = match.Groups[1].Value;
+                                        email = match.Groups[2].Value;
+                                    }
+                                    else
+                                    {
+                                        displayName = raw;
+                                    }
+                                }
+                                // Use email as synthetic BitbucketUserId if uuid is missing
+                                if (string.IsNullOrEmpty(bitbucketUserId) && !string.IsNullOrEmpty(email))
+                                {
+                                    bitbucketUserId = $"synthetic:{email}";
+                                }
+                                if (!string.IsNullOrEmpty(bitbucketUserId))
+                                {
+                                    // Insert user if not exists
+                                    const string insertUserSql = @"
+                                        IF NOT EXISTS (SELECT 1 FROM Users WHERE BitbucketUserId = @BitbucketUserId)
+                                        BEGIN
+                                            INSERT INTO Users (BitbucketUserId, DisplayName, AvatarUrl, CreatedOn)
+                                            VALUES (@BitbucketUserId, @DisplayName, NULL, @CreatedOn);
+                                        END
+                                        SELECT Id FROM Users WHERE BitbucketUserId = @BitbucketUserId;
+                                    ";
+                                    authorId = await connection.QuerySingleOrDefaultAsync<int?>(insertUserSql, new
+                                    {
+                                        BitbucketUserId = bitbucketUserId,
+                                        DisplayName = displayName ?? email ?? "Unknown",
+                                        CreatedOn = commit.Date
+                                    });
+                                }
+                            }
+                            if (authorId == null)
+                            {
+                                _logger.LogWarning("Author for commit '{CommitHash}' not found and could not be created. Skipping commit insert.", commit.Hash);
                                 continue;
                             }
 
