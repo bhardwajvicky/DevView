@@ -22,44 +22,51 @@ namespace BBIntegration.Repositories
 
         public async Task SyncRepositoriesAsync(string workspace)
         {
-            var reposJson = await _apiClient.GetWorkspaceRepositoriesAsync(workspace);
-
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var pagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<RepositoryDto>>(reposJson, options);
-
-            if (pagedResponse?.Values == null || !pagedResponse.Values.Any())
+            string nextPageUrl = null;
+            int totalSynced = 0;
+            do
             {
-                Console.WriteLine("No repositories found to sync.");
-                return;
-            }
+                var reposJson = await _apiClient.GetRepositoriesAsync(workspace, nextPageUrl);
+                var pagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<RepositoryDto>>(reposJson, options);
 
-            using var connection = new SqlConnection(_config.DbConnectionString);
-            await connection.OpenAsync();
-
-            foreach (var repo in pagedResponse.Values)
-            {
-                const string sql = @"
-                    MERGE Repositories AS target
-                    USING (SELECT @Uuid AS BitbucketRepoId, @Slug AS Slug, @Name AS Name, @FullName AS FullName, @Workspace AS Workspace, @CreatedOn AS CreatedOn) AS source
-                    ON (target.BitbucketRepoId = source.BitbucketRepoId)
-                    WHEN MATCHED THEN 
-                        UPDATE SET Name = source.Name, FullName = source.FullName, Workspace = source.Workspace, Slug = source.Slug
-                    WHEN NOT MATCHED THEN
-                        INSERT (BitbucketRepoId, Slug, Name, FullName, Workspace, CreatedOn)
-                        VALUES (source.BitbucketRepoId, source.Slug, source.Name, source.FullName, source.Workspace, source.CreatedOn);
-                ";
-                await connection.ExecuteAsync(sql, new
+                if (pagedResponse?.Values == null || !pagedResponse.Values.Any())
                 {
-                    repo.Uuid,
-                    repo.Slug,
-                    repo.Name,
-                    repo.FullName,
-                    Workspace = workspace,
-                    repo.CreatedOn
-                });
-            }
+                    if (totalSynced == 0)
+                        Console.WriteLine("No repositories found to sync.");
+                    break;
+                }
 
-            Console.WriteLine($"{pagedResponse.Values.Count()} repositories successfully synced.");
+                using var connection = new SqlConnection(_config.DbConnectionString);
+                await connection.OpenAsync();
+
+                foreach (var repo in pagedResponse.Values)
+                {
+                    const string sql = @"
+                        MERGE Repositories AS target
+                        USING (SELECT @Uuid AS BitbucketRepoId, @Slug AS Slug, @Name AS Name, @FullName AS FullName, @Workspace AS Workspace, @CreatedOn AS CreatedOn) AS source
+                        ON (target.BitbucketRepoId = source.BitbucketRepoId)
+                        WHEN MATCHED THEN 
+                            UPDATE SET Name = source.Name, FullName = source.FullName, Workspace = source.Workspace, Slug = source.Slug
+                        WHEN NOT MATCHED THEN
+                            INSERT (BitbucketRepoId, Slug, Name, FullName, Workspace, CreatedOn)
+                            VALUES (source.BitbucketRepoId, source.Slug, source.Name, source.FullName, source.Workspace, source.CreatedOn);
+                    ";
+                    await connection.ExecuteAsync(sql, new
+                    {
+                        repo.Uuid,
+                        repo.Slug,
+                        repo.Name,
+                        repo.FullName,
+                        Workspace = workspace,
+                        repo.CreatedOn
+                    });
+                    totalSynced++;
+                }
+
+                Console.WriteLine($"{pagedResponse.Values.Count()} repositories successfully synced.");
+                nextPageUrl = pagedResponse.NextPageUrl;
+            } while (!string.IsNullOrEmpty(nextPageUrl));
         }
     }
 } 
