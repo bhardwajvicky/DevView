@@ -13,7 +13,7 @@ builder.Services.AddRadzenComponents();
 // Add WorkspaceService as singleton to maintain state across the application
 builder.Services.AddSingleton<WorkspaceService>();
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]!) });
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]!), Timeout = TimeSpan.FromHours(1) });
 
 builder.Services.AddServerSideBlazor().AddCircuitOptions(options => { options.DetailedErrors = true; });
 

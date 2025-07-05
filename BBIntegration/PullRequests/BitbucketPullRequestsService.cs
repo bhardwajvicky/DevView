@@ -1,6 +1,7 @@
 using BBIntegration.Common;
 using BBIntegration.Commits; // Reusing CommitDto
 using BBIntegration.Users;   // Reusing PaginatedResponseDto
+using BBIntegration.Utils;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -16,12 +17,14 @@ namespace BBIntegration.PullRequests
         private readonly BitbucketApiClient _apiClient;
         private readonly string _connectionString;
         private readonly ILogger<BitbucketPullRequestsService> _logger;
+        private readonly DiffParserService _diffParser;
 
-        public BitbucketPullRequestsService(BitbucketApiClient apiClient, BitbucketConfig config, ILogger<BitbucketPullRequestsService> logger)
+        public BitbucketPullRequestsService(BitbucketApiClient apiClient, BitbucketConfig config, ILogger<BitbucketPullRequestsService> logger, DiffParserService diffParser)
         {
             _apiClient = apiClient;
             _connectionString = config.DbConnectionString;
             _logger = logger;
+            _diffParser = diffParser;
         }
 
         public async Task SyncPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
@@ -123,7 +126,67 @@ namespace BBIntegration.PullRequests
                     var commitId = await connection.QuerySingleOrDefaultAsync<int?>(
                         "SELECT Id FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
                     
-                    if (commitId.HasValue)
+                    int? finalCommitId = commitId;
+                    if (!commitId.HasValue)
+                    {
+                        // Try to fetch and insert the commit
+                        try
+                        {
+                            // Fetch raw diff and parse it
+                            var diffContent = await _apiClient.GetCommitDiffAsync(workspace, repoSlug, commit.Hash);
+                            var (totalAdded, totalRemoved, codeAdded, codeRemoved) = _diffParser.ParseDiff(diffContent);
+
+                            // Find the author's internal ID
+                            int? authorId = null;
+                            if (commit.Author?.User?.Uuid != null)
+                            {
+                                authorId = await connection.QuerySingleOrDefaultAsync<int?>(
+                                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = commit.Author.User.Uuid });
+                            }
+                            if (authorId == null)
+                            {
+                                _logger.LogWarning("Author for commit '{CommitHash}' not found. Skipping commit insert.", commit.Hash);
+                                continue;
+                            }
+
+                            // Find the repository ID
+                            var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
+                                "SELECT Id FROM Repositories WHERE Slug = @RepoSlug", new { RepoSlug = repoSlug });
+                            if (repoId == null)
+                            {
+                                _logger.LogWarning("Repository '{RepoSlug}' not found when inserting commit '{CommitHash}'.", repoSlug, commit.Hash);
+                                continue;
+                            }
+
+                            // Insert the commit
+                            const string insertSql = @"
+                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
+                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
+                                SELECT SCOPE_IDENTITY();
+                            ";
+                            var insertedId = await connection.ExecuteScalarAsync<int?>(insertSql, new
+                            {
+                                commit.Hash,
+                                RepoId = repoId.Value,
+                                AuthorId = authorId.Value,
+                                commit.Date,
+                                commit.Message,
+                                LinesAdded = totalAdded,
+                                LinesRemoved = totalRemoved,
+                                IsMerge = commit.Message?.Trim().StartsWith("Merge branch") ?? false,
+                                CodeLinesAdded = codeAdded,
+                                CodeLinesRemoved = codeRemoved
+                            });
+                            finalCommitId = insertedId;
+                            _logger.LogInformation("Inserted missing commit '{CommitHash}' for PR '{BitbucketPrId}'.", commit.Hash, bitbucketPrId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to fetch/insert missing commit '{CommitHash}' for PR '{BitbucketPrId}'.", commit.Hash, bitbucketPrId);
+                            continue;
+                        }
+                    }
+                    if (finalCommitId.HasValue)
                     {
                         // Associate commit with the PR
                         const string joinSql = @"
@@ -132,11 +195,7 @@ namespace BBIntegration.PullRequests
                                 INSERT INTO PullRequestCommits (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
                             END
                         ";
-                        await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = commitId.Value });
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Commit '{CommitHash}' not found in local DB for PR '{BitbucketPrId}'. Sync commits first.", commit.Hash, bitbucketPrId);
+                        await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = finalCommitId.Value });
                     }
                 }
                 commitNextPageUrl = commitPagedResponse.NextPageUrl;
