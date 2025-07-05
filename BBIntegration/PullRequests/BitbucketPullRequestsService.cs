@@ -189,7 +189,9 @@ namespace BBIntegration.PullRequests
                             }
                             if (authorId == null)
                             {
-                                _logger.LogWarning("Author for commit '{CommitHash}' not found and could not be created. Skipping commit insert.", commit.Hash);
+                                _logger.LogWarning(
+                                    "Author for commit '{CommitHash}' not found and could not be created. Raw: '{Raw}', User UUID: '{Uuid}', DisplayName: '{DisplayName}', Email: '{Email}', BitbucketUserId: '{BitbucketUserId}'. Skipping commit insert.",
+                                    commit.Hash, commit.Author?.Raw, commit.Author?.User?.Uuid, displayName, email, bitbucketUserId);
                                 continue;
                             }
 
