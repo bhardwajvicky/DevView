@@ -51,6 +51,12 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
+                        if (pr.Author?.User?.Uuid == null)
+                        {
+                            _logger.LogWarning("PR '{PrId}' has no author or author UUID. Skipping.", pr.Id);
+                            continue;
+                        }
+
                         // Find the author's internal ID
                         var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
                             "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = pr.Author.User.Uuid });
