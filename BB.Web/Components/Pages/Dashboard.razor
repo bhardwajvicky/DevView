@@ -49,6 +49,12 @@
                             <option value="@repo.Slug">@repo.Name</option>
                         }
                     </select>
+
+                    <!-- Include PRs Switch -->
+                    <div class="mt-3 form-check form-switch fs-5">
+                        <RadzenSwitch @bind-Value="includePR" Change="@RefreshDashboardData" Style="transform: scale(1.2);" />
+                        <label class="form-check-label ms-2" for="includePrSwitch">Include PRs</label>
+                    </div>
                 }
                 else
                 {
@@ -60,7 +66,7 @@
         <!-- Date Range Selection -->
         @if (!string.IsNullOrEmpty(selectedRepoSlug))
         {
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="mb-3">
                     <label class="form-label fw-bold">Date Range</label>
                     <div class="row g-2">
@@ -74,7 +80,9 @@
                         </div>
                     </div>
                     <div class="mt-2">
-                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="30 Days" Click="@(() => SetDateRange(30))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="This Week" Click="@(() => SetDateRange(7, DateRangeType.Week))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 2 Weeks" Click="@(() => SetDateRange(14, DateRangeType.Days))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="30 Days" Click="@(() => SetDateRange(30, DateRangeType.Days))" class="me-1" />
                         <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="3 Months" Click="@(() => SetDateRange(90))" class="me-1" />
                         <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="6 Months" Click="@(() => SetDateRange(180))" class="me-1" />
                         <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Year" Click="@(() => SetDateRange(365))" class="me-1" />
@@ -154,10 +162,13 @@
                         <!-- Chart Controls -->
                         <div class="mt-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
                             <div class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(0)">
+                                <button class="btn btn-sm btn-outline-primary" onclick="toggleDataset(0)">
+                                    🔵 Commits
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(1)">
                                     🟢 Code Added
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(1)">
+                                <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(2)">
                                     🔴 Code Removed
                                 </button>
                             </div>
@@ -452,6 +463,18 @@
                 labels: labels,
                 datasets: [
                     {
+                        label: 'Commits',
+                        data: commitCounts,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        yAxisID: 'y',
+                        hidden: false // Ensure it's visible by default
+                    },
+                    {
                         label: 'Code Lines Added',
                         data: codeAdded,
                         borderColor: 'rgb(34, 197, 94)',
@@ -662,7 +685,8 @@
                             tension: 0.4,
                             pointRadius: 3,
                             pointHoverRadius: 6,
-                            borderWidth: 2
+                            borderWidth: 2,
+                            hidden: false // Ensure it's visible by default
                         },
                         {
                             label: 'Lines Added',
@@ -674,7 +698,7 @@
                             pointRadius: 2,
                             pointHoverRadius: 5,
                             borderWidth: 1.5,
-                            hidden: true
+                            hidden: false // Ensure it's visible by default
                         },
                         {
                             label: 'Lines Removed',
@@ -686,7 +710,7 @@
                             pointRadius: 2,
                             pointHoverRadius: 5,
                             borderWidth: 1.5,
-                            hidden: true
+                            hidden: false // Ensure it's visible by default
                         }
                     ]
                 },
@@ -837,6 +861,13 @@
     private List<CommitDetailDto>? commitDetailsList;
     private string? commitDetailsModalTitle;
     private DotNetObjectReference<Dashboard>? _dotNetRef;
+    private bool includePR = true;
+
+    private enum DateRangeType
+    {
+        Days,
+        Week
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -876,9 +907,8 @@
         {
             Console.WriteLine($"Auto-selecting ALL repositories for workspace: {WorkspaceService.SelectedWorkspace}");
             selectedRepoSlug = "ALL";
-            // Set default date range
-            startDate = new DateTime(2019, 1, 1);
-            endDate = new DateTime(2019, 4, 1);
+            // Set default date range to Last 2 Weeks
+            SetDateRange(14, DateRangeType.Days);
             
             // Load data automatically - pass null for ALL repositories
             await LoadCommitActivity(null, WorkspaceService.SelectedWorkspace!);
@@ -957,7 +987,7 @@
         await RefreshDashboardData();
     }
 
-    private async void OnDateRangeChanged(DateTime? newDate)
+    private async Task OnDateRangeChanged(DateTime? newDate)
     {
         await RefreshDashboardData();
     }
@@ -973,6 +1003,11 @@
             {
                 await InitializeChart();
             }
+            // Ensure contributor charts are also re-initialized
+            if (contributorData != null && contributorData.Any())
+            {
+                await InitializeContributorCharts();
+            }
             StateHasChanged();
         }
         else
@@ -983,12 +1018,21 @@
         }
     }
 
-    private void SetDateRange(int? days)
+    private void SetDateRange(int? value, DateRangeType type = DateRangeType.Days)
     {
-        if (days.HasValue)
+        if (value.HasValue)
         {
             endDate = DateTime.Today;
-            startDate = DateTime.Today.AddDays(-days.Value);
+            if (type == DateRangeType.Week)
+            {
+                // Start of the current week (Monday)
+                int diff = (7 + (DateTime.Today.DayOfWeek - DayOfWeek.Monday)) % 7;
+                startDate = DateTime.Today.AddDays(-1 * diff);
+            }
+            else
+            {
+                startDate = DateTime.Today.AddDays(-value.Value);
+            }
         }
         else
         {
@@ -1032,12 +1076,12 @@
             if (string.IsNullOrEmpty(repoSlug))
             {
                 // ALL repositories - only pass workspace
-                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}";
+                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}&includePR={includePR.ToString().ToLower()}";
             }
             else
             {
                 // Specific repository
-                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}";
+                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}";
             }
             
             // Add date range parameters if specified

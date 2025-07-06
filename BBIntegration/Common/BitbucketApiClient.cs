@@ -48,9 +48,51 @@ namespace BBIntegration.Common
         private async Task<string> SendRequestAsync(string url)
         {
             await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            int maxRetries = 3;
+            int retryCount = 0;
+            TimeSpan delay = TimeSpan.FromSeconds(1); // Initial delay
+
+            while (retryCount <= maxRetries)
+            {
+                try
+                {
+                    var response = await _httpClient.GetAsync(url);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return await response.Content.ReadAsStringAsync();
+                    }
+                    else if (response.StatusCode == (System.Net.HttpStatusCode)429) // Too Many Requests
+                    {
+                        if (response.Headers.RetryAfter != null && response.Headers.RetryAfter.Delta.HasValue)
+                        {
+                            delay = response.Headers.RetryAfter.Delta.Value;
+                        }
+                        else
+                        {
+                            delay = TimeSpan.FromSeconds(Math.Pow(2, retryCount)); // Exponential backoff
+                        }
+                        Console.WriteLine($"Rate limit hit. Retrying in {delay.TotalSeconds} seconds...");
+                        await Task.Delay(delay);
+                        retryCount++;
+                    }
+                    else
+                    {
+                        response.EnsureSuccessStatusCode(); // Throw for other HTTP errors
+                    }
+                }
+                catch (HttpRequestException ex)
+                {
+                    if (retryCount == maxRetries)
+                    {
+                        throw; // Re-throw if max retries reached
+                    }
+
+                    Console.WriteLine($"HTTP request failed: {ex.Message}. Retrying...");
+                    await Task.Delay(delay);
+                    retryCount++;
+                }
+            }
+            throw new Exception("Failed to send request after multiple retries."); // Should not be reached
         }
 
         public async Task<string> GetCurrentUserAsync()

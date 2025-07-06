@@ -80,33 +80,7 @@ namespace BBIntegration.Commits
                         
                         if (existingCommit.Id > 0 && existingCommit.CodeLinesAdded.HasValue)
                         {
-                            // Commit exists and is complete, but check if flags need updating
-                            bool needsUpdate = false;
-                            var updateFields = new List<string>();
-                            var updateParams = new Dictionary<string, object> { { "Id", existingCommit.Id } };
-                            
-                            if (existingCommit.IsMerge != isMergeCommit)
-                            {
-                                updateFields.Add("IsMerge = @IsMerge");
-                                updateParams["IsMerge"] = isMergeCommit;
-                                needsUpdate = true;
-                            }
-                            
-                            // Update IsPRMergeCommit based on merge status
-                            if (existingCommit.IsPRMergeCommit != isPRMergeCommit)
-                            {
-                                updateFields.Add("IsPRMergeCommit = @IsPRMergeCommit");
-                                updateParams["IsPRMergeCommit"] = isPRMergeCommit;
-                                needsUpdate = true;
-                            }
-                            
-                            if (needsUpdate)
-                            {
-                                var updateSql = $"UPDATE Commits SET {string.Join(", ", updateFields)} WHERE Id = @Id";
-                                await connection.ExecuteAsync(updateSql, updateParams);
-                                _logger.LogInformation("Updated flags for existing complete commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
-                                    commit.Hash, isMergeCommit, isPRMergeCommit);
-                            }
+                            // Commit exists and is complete, skip further processing
                             continue;
                         }
 

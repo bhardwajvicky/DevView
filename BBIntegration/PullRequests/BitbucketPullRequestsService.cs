@@ -135,7 +135,17 @@ namespace BBIntegration.PullRequests
                     
                     if (existingCommitInfo.Id.HasValue)
                     {
-                        // Commit exists - check if we need to update IsPRMergeCommit or IsMerge flags
+                        // Commit exists, check if it's complete
+                        var existingCompleteCommit = await connection.QuerySingleOrDefaultAsync<int?>(
+                            "SELECT Id FROM Commits WHERE BitbucketCommitHash = @Hash AND CodeLinesAdded IS NOT NULL", new { commit.Hash });
+
+                        if (existingCompleteCommit.HasValue)
+                        {
+                            // Commit exists and is complete, skip further processing
+                            continue;
+                        }
+
+                        // Commit exists but is incomplete, proceed to update (from the previous logic)
                         bool needsUpdate = false;
                         var updateFields = new List<string>();
                         var updateParams = new Dictionary<string, object> { { "Id", existingCommitInfo.Id.Value } };
