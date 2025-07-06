@@ -7,6 +7,7 @@
 @inject IJSRuntime JS
 @using BB.Web.Services
 @inject WorkspaceService WorkspaceService
+@rendermode InteractiveServer
 
 @code {
     [Parameter]
@@ -46,6 +47,7 @@
 
     private async Task LoadCommits()
     {
+        Console.WriteLine($"LoadCommits called - currentPage: {currentPage}, includePR: {includePR}");
         isLoading = true;
         errorMessage = null;
         try
@@ -54,29 +56,49 @@
             if (!string.IsNullOrEmpty(selectedUserId)) url += $"&userId={selectedUserId}";
             if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
             if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
+            Console.WriteLine($"API URL: {url}");
             var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
             if (response != null)
             {
+                Console.WriteLine($"Received {response.Commits.Count} commits, totalPages: {response.TotalPages}");
                 commits = response.Commits;
                 totalPages = response.TotalPages;
             }
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
+            Console.WriteLine($"Repository not found error: {ex.Message}");
             errorMessage = $"Repository '{RepoSlug}' not found. Please check the repository slug or sync repositories.";
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"LoadCommits error: {ex.Message}");
             errorMessage = $"Error loading commits: {ex.Message}";
         }
         isLoading = false;
+        Console.WriteLine("LoadCommits completed, calling StateHasChanged");
+        StateHasChanged();
     }
 
-    private void GoToPage(int page)
+    private async Task GoToPage(int page)
     {
-        if (page < 1 || page > totalPages) return;
+        Console.WriteLine($"GoToPage called with page: {page}, totalPages: {totalPages}");
+        if (page < 1 || page > totalPages) 
+        {
+            Console.WriteLine($"Page {page} is out of bounds (1-{totalPages}), returning early");
+            return;
+        }
+        Console.WriteLine($"Setting currentPage from {currentPage} to {page}");
         currentPage = page;
-        LoadCommits();
+        Console.WriteLine("About to call LoadCommits from GoToPage");
+        await LoadCommits();
+        Console.WriteLine("LoadCommits completed from GoToPage");
+    }
+
+    private async Task GoToPageWithLog(int page)
+    {
+        Console.WriteLine($"Button clicked: displaying {page}, calling GoToPage({page})");
+        await GoToPage(page);
     }
 
     private void OpenBitbucketPopup(string hash)
@@ -88,16 +110,41 @@
 
     private async Task OnIncludePRChanged(ChangeEventArgs e)
     {
+        Console.WriteLine($"OnIncludePRChanged called with value: {e.Value}");
+        var oldValue = includePR;
         includePR = (bool)e.Value;
+        Console.WriteLine($"includePR changed from {oldValue} to {includePR}");
+        Console.WriteLine($"Setting currentPage from {currentPage} to 1");
         currentPage = 1;
+        Console.WriteLine("About to call LoadCommits from OnIncludePRChanged");
         await LoadCommits();
+        Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
+    }
+
+    public class CommitListItemDto
+    {
+        public string Hash { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string AuthorName { get; set; } = string.Empty;
+        public DateTime Date { get; set; }
+        public bool IsMerge { get; set; }
+        public bool IsPRMergeCommit { get; set; }
+        public int LinesAdded { get; set; }
+        public int LinesRemoved { get; set; }
+        public int CodeLinesAdded { get; set; }
+        public int CodeLinesRemoved { get; set; }
+    }
+    public class PaginatedCommitsResponse
+    {
+        public List<CommitListItemDto> Commits { get; set; } = new();
+        public int TotalPages { get; set; }
     }
 }
 
 <h3>Commits for @RepoSlug</h3>
 <div class="mb-3">
     <label class="form-check-label me-2">
-        <input type="checkbox" class="form-check-input" @bind="includePR" @bind:event="onchange" /> Include PRs
+        <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
     </label>
 </div>
 @if (isLoading)
@@ -165,38 +212,54 @@ else
     <nav>
         <ul class="pagination justify-content-center">
             <li class="page-item @(currentPage == 1 ? "disabled" : null)">
-                <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">Previous</button>
+                <button class="page-link" @onclick="async () => await GoToPage(currentPage - 1)" disabled="@(currentPage == 1)">Previous</button>
             </li>
-            @for (int i = 1; i <= totalPages; i++)
+            
+            @if (currentPage > 3)
             {
+                <li class="page-item">
+                    <button class="page-link" @onclick="async () => await GoToPage(1)">1</button>
+                </li>
+                @if (currentPage > 4)
+                {
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                }
+            }
+            
+            @{
+                var startPage = Math.Max(1, currentPage - 2);
+                var endPage = Math.Min(totalPages, currentPage + 2);
+                Console.WriteLine($"Pagination: currentPage={currentPage}, totalPages={totalPages}, showing pages {startPage}-{endPage}");
+            }
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                var pageNum = i; // Capture the loop variable
                 <li class="page-item @(i == currentPage ? "active" : null)">
-                    <button class="page-link" @onclick="() => GoToPage(i)">@i</button>
+                    <button class="page-link" @onclick="@(async () => await GoToPageWithLog(pageNum))" @onclick:preventDefault="true">@i</button>
                 </li>
             }
+            
+            @if (currentPage < totalPages - 2)
+            {
+                @if (currentPage < totalPages - 3)
+                {
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                }
+                <li class="page-item">
+                    <button class="page-link" @onclick="async () => await GoToPage(totalPages)">@totalPages</button>
+                </li>
+            }
+            
             <li class="page-item @(currentPage == totalPages ? "disabled" : null)">
-                <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">Next</button>
+                <button class="page-link" @onclick="async () => await GoToPage(currentPage + 1)" disabled="@(currentPage == totalPages)">Next</button>
             </li>
         </ul>
+        <div class="text-center mt-2">
+            <small class="text-muted">Page @currentPage of @totalPages</small>
+        </div>
     </nav>
-}
-
-@code {
-    public class CommitListItemDto
-    {
-        public string Hash { get; set; } = string.Empty;
-        public string Message { get; set; } = string.Empty;
-        public string AuthorName { get; set; } = string.Empty;
-        public DateTime Date { get; set; }
-        public bool IsMerge { get; set; }
-        public bool IsPRMergeCommit { get; set; }
-        public int LinesAdded { get; set; }
-        public int LinesRemoved { get; set; }
-        public int CodeLinesAdded { get; set; }
-        public int CodeLinesRemoved { get; set; }
-    }
-    public class PaginatedCommitsResponse
-    {
-        public List<CommitListItemDto> Commits { get; set; } = new();
-        public int TotalPages { get; set; }
-    }
 } 
