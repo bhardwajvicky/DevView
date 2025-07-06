@@ -41,6 +41,16 @@
                 </div>
             </div>
 
+            <div class="mb-3">
+                <label for="workspaceSelect" class="form-label fw-bold">Select Workspace</label>
+                <select id="workspaceSelect" class="form-select" @onchange="OnWorkspaceChanged" value="@selectedWorkspace">
+                    @foreach (var ws in allWorkspaces)
+                    {
+                        <option value="@ws">@ws</option>
+                    }
+                </select>
+            </div>
+
             @if (!string.IsNullOrEmpty(message))
             {
                 <div class="alert @(messageType == "success" ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
@@ -136,10 +146,22 @@
     private bool isSyncing = false;
     private string message = "";
     private string messageType = "";
+    private string selectedWorkspace = string.Empty;
+    private List<string> allWorkspaces = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadRepositories();
+        allWorkspaces = repositories?.Select(r => r.Workspace).Distinct().OrderBy(w => w).ToList() ?? new List<string>();
+        if (string.IsNullOrEmpty(WorkspaceService.SelectedWorkspace) && allWorkspaces.Any())
+        {
+            selectedWorkspace = allWorkspaces.First();
+            WorkspaceService.SelectedWorkspace = selectedWorkspace;
+        }
+        else
+        {
+            selectedWorkspace = WorkspaceService.SelectedWorkspace ?? string.Empty;
+        }
     }
 
     private async Task LoadRepositories()
@@ -211,5 +233,13 @@
     private void NavigateToPRs(RepositorySummaryDto repo)
     {
         Navigation.NavigateTo($"/repositories/{repo.Slug}/pullrequests");
+    }
+
+    private async Task OnWorkspaceChanged(ChangeEventArgs e)
+    {
+        selectedWorkspace = e.Value?.ToString() ?? string.Empty;
+        WorkspaceService.SelectedWorkspace = selectedWorkspace;
+        await LoadRepositories();
+        StateHasChanged();
     }
 } 

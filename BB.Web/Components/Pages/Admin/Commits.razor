@@ -24,12 +24,16 @@
         errorMessage = null;
         try
         {
-            var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>($"/api/commits/{RepoSlug}?page={currentPage}&pageSize={pageSize}");
+            var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>($"/api/commits/{RepoSlug.ToLower()}?page={currentPage}&pageSize={pageSize}");
             if (response != null)
             {
                 commits = response.Commits;
                 totalPages = response.TotalPages;
             }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            errorMessage = $"Repository '{RepoSlug}' not found. Please check the repository slug or sync repositories.";
         }
         catch (Exception ex)
         {

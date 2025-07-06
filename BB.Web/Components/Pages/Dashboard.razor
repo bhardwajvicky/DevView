@@ -42,16 +42,13 @@
                 }
                 else if (repositories != null && repositories.Any())
                 {
-                    <InputSelect id="repoSelect" class="form-select" 
-                                Value="@selectedRepoSlug" 
-                                ValueChanged="@((string value) => OnRepositorySelectionChanged(value))"
-                                ValueExpression="@(() => selectedRepoSlug)">
+                    <select id="repoSelect" class="form-select" @onchange="OnRepositoryDropdownChanged" value="@selectedRepoSlug">
                         <option value="ALL">📊 ALL Repositories (@repositories.Count())</option>
                         @foreach (var repo in repositories)
                         {
                             <option value="@repo.Slug">@repo.Name</option>
                         }
-                    </InputSelect>
+                    </select>
                 }
                 else
                 {
@@ -959,50 +956,34 @@
         }
     }
 
-    private void OnRepositorySelectionChanged(string? newRepoSlug)
+    private async Task OnRepositoryDropdownChanged(ChangeEventArgs e)
     {
-        Console.WriteLine($"Repository selection changed to: {newRepoSlug}");
-        Logger.LogInformation("Repository selection changed to: {RepoSlug}", newRepoSlug);
-        
+        var newRepoSlug = e.Value?.ToString() ?? "ALL";
         selectedRepoSlug = newRepoSlug;
-        chartInitialized = false; // Reset chart flag when repo changes
-        contributorChartsInitialized = false; // Reset contributor charts flag when repo changes
-        
-        // Set default date range when selecting a repo/ALL for the first time
-        if (!string.IsNullOrEmpty(selectedRepoSlug) && !startDate.HasValue && !endDate.HasValue)
-        {
-            startDate = new DateTime(2019, 1, 1);
-            endDate = new DateTime(2019, 4, 1);
-        }
-        
+        chartInitialized = false;
+        contributorChartsInitialized = false;
+        // Do NOT reset or change startDate/endDate when changing repo
+        await RefreshDashboardData();
+    }
+
+    private async void OnDateRangeChanged(DateTime? newDate)
+    {
+        await RefreshDashboardData();
+    }
+
+    private async Task RefreshDashboardData()
+    {
         if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
         {
-            Console.WriteLine($"Loading commit activity for: {selectedRepoSlug}");
-            Logger.LogInformation("Loading commit activity for: {RepoSlug}", selectedRepoSlug);
-            
-            // Pass the repo slug directly - API will handle "ALL" as null for repoSlug
             var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
-            InvokeAsync(async () => await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!));
+            await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!);
+            StateHasChanged();
         }
         else
         {
             commitActivity = null;
             contributorData = null;
-            startDate = null;
-            endDate = null;
             StateHasChanged();
-        }
-    }
-
-    private void OnDateRangeChanged(DateTime? newDate)
-    {
-        // Reload commit activity when date range changes
-        if (!string.IsNullOrEmpty(selectedRepoSlug) && startDate.HasValue && endDate.HasValue && WorkspaceService.HasSelectedWorkspace)
-        {
-            chartInitialized = false; // Reset main chart flag
-            contributorChartsInitialized = false; // Reset contributor charts flag
-            var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
-            InvokeAsync(async () => await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!));
         }
     }
 
