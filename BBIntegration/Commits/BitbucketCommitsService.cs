@@ -70,30 +70,40 @@ namespace BBIntegration.Commits
                         if (commit.Date > endDate) continue;
 
                         // Check if the commit already exists
-                        var existingCommit = await connection.QuerySingleOrDefaultAsync<(int Id, int? CodeLinesAdded, bool? IsMerge)>(
-                            "SELECT Id, CodeLinesAdded, IsMerge FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
+                        var existingCommit = await connection.QuerySingleOrDefaultAsync<(int Id, int? CodeLinesAdded, bool? IsMerge, bool? IsPRMergeCommit)>(
+                            "SELECT Id, CodeLinesAdded, IsMerge, IsPRMergeCommit FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
                         
                         // Determine if this is a merge commit using the new parents logic
                         bool isMergeCommit = commit.Parents != null && commit.Parents.Count >= 2;
                         
                         if (existingCommit.Id > 0 && existingCommit.CodeLinesAdded.HasValue)
                         {
-                            // Commit exists and is complete, but check if IsMerge flag needs updating
+                            // Commit exists and is complete, but check if flags need updating
+                            bool needsUpdate = false;
+                            var updateFields = new List<string>();
+                            var updateParams = new Dictionary<string, object> { { "Id", existingCommit.Id } };
+                            
                             if (existingCommit.IsMerge != isMergeCommit)
                             {
-                                // Update only the IsMerge flag for complete commits
-                                const string updateMergeSql = @"
-                                    UPDATE Commits 
-                                    SET IsMerge = @IsMerge
-                                    WHERE Id = @Id;
-                                ";
-                                await connection.ExecuteAsync(updateMergeSql, new 
-                                {
-                                    Id = existingCommit.Id,
-                                    IsMerge = isMergeCommit
-                                });
-                                _logger.LogInformation("Updated IsMerge flag for existing commit: {CommitHash} (was {OldValue}, now {NewValue})", 
-                                    commit.Hash, existingCommit.IsMerge, isMergeCommit);
+                                updateFields.Add("IsMerge = @IsMerge");
+                                updateParams["IsMerge"] = isMergeCommit;
+                                needsUpdate = true;
+                            }
+                            
+                            // For commit sync, we don't know about PRs yet, so only reset IsPRMergeCommit to false if it was incorrectly set to true
+                            if (existingCommit.IsPRMergeCommit == true)
+                            {
+                                updateFields.Add("IsPRMergeCommit = @IsPRMergeCommit");
+                                updateParams["IsPRMergeCommit"] = false;
+                                needsUpdate = true;
+                            }
+                            
+                            if (needsUpdate)
+                            {
+                                var updateSql = $"UPDATE Commits SET {string.Join(", ", updateFields)} WHERE Id = @Id";
+                                await connection.ExecuteAsync(updateSql, updateParams);
+                                _logger.LogInformation("Updated flags for existing complete commit: {CommitHash} (IsMerge: {IsMerge})", 
+                                    commit.Hash, isMergeCommit);
                             }
                             continue;
                         }
@@ -107,7 +117,7 @@ namespace BBIntegration.Commits
                             // UPDATE the existing, incomplete commit
                             const string updateSql = @"
                                 UPDATE Commits 
-                                SET LinesAdded = @LinesAdded, LinesRemoved = @LinesRemoved, CodeLinesAdded = @CodeLinesAdded, CodeLinesRemoved = @CodeLinesRemoved, IsMerge = @IsMerge
+                                SET LinesAdded = @LinesAdded, LinesRemoved = @LinesRemoved, CodeLinesAdded = @CodeLinesAdded, CodeLinesRemoved = @CodeLinesRemoved, IsMerge = @IsMerge, IsPRMergeCommit = @IsPRMergeCommit
                                 WHERE Id = @Id;
                             ";
                             await connection.ExecuteAsync(updateSql, new 
@@ -117,7 +127,8 @@ namespace BBIntegration.Commits
                                 LinesRemoved = totalRemoved,
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved,
-                                IsMerge = isMergeCommit
+                                IsMerge = isMergeCommit,
+                                IsPRMergeCommit = false  // Commit sync doesn't know about PRs yet
                             });
                             _logger.LogInformation("Updated commit: {CommitHash}", commit.Hash);
                         }
@@ -191,8 +202,8 @@ namespace BBIntegration.Commits
                             }
                             // Use the pre-calculated merge flag
                             const string insertSql = @"
-                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
-                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
+                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved, IsPRMergeCommit)
+                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved, @IsPRMergeCommit);
                             ";
                             await connection.ExecuteAsync(insertSql, new
                             {
@@ -205,7 +216,8 @@ namespace BBIntegration.Commits
                                 LinesRemoved = totalRemoved,
                                 IsMerge = isMergeCommit,
                                 CodeLinesAdded = codeAdded,
-                                CodeLinesRemoved = codeRemoved
+                                CodeLinesRemoved = codeRemoved,
+                                IsPRMergeCommit = false  // Commit sync doesn't know about PRs yet
                             });
                             _logger.LogInformation("Added commit: {CommitHash}", commit.Hash);
                         }
