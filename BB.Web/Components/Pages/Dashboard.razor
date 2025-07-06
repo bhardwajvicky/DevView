@@ -871,33 +871,26 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Console.WriteLine($"Dashboard OnInitializedAsync - WorkspaceService.HasSelectedWorkspace: {WorkspaceService.HasSelectedWorkspace}");
-        Console.WriteLine($"Dashboard OnInitializedAsync - WorkspaceService.SelectedWorkspace: '{WorkspaceService.SelectedWorkspace}'");
-        
         await LoadRepositories();
         
         // If no workspace is selected but we have repositories, auto-select the first workspace
         if (!WorkspaceService.HasSelectedWorkspace && repositories != null && repositories.Any())
         {
             var firstWorkspace = repositories.First().Workspace;
-            Console.WriteLine($"Auto-selecting first available workspace: {firstWorkspace}");
             WorkspaceService.SelectedWorkspace = firstWorkspace;
             
             // Re-filter repositories for the selected workspace
             repositories = repositories.Where(r => r.Workspace == firstWorkspace).ToArray();
-            Console.WriteLine($"Filtered to {repositories.Length} repositories for workspace '{firstWorkspace}'");
         }
         else if (WorkspaceService.HasSelectedWorkspace && repositories != null && repositories.Any())
         {
             // Filter repositories for the already selected workspace
             repositories = repositories.Where(r => r.Workspace == WorkspaceService.SelectedWorkspace).ToArray();
-            Console.WriteLine($"Filtered to {repositories.Length} repositories for existing workspace '{WorkspaceService.SelectedWorkspace}'");
         }
         
         // Check if workspace is selected, redirect to Settings if still not available
         if (!WorkspaceService.HasSelectedWorkspace)
         {
-            Console.WriteLine("No workspace available, redirecting to settings");
             Navigation.NavigateTo("/admin/settings");
             return;
         }
@@ -905,17 +898,12 @@
         // Auto-select ALL and load data if repositories are available and workspace is set
         if (repositories != null && repositories.Any() && string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
         {
-            Console.WriteLine($"Auto-selecting ALL repositories for workspace: {WorkspaceService.SelectedWorkspace}");
             selectedRepoSlug = "ALL";
             // Set default date range to Last 2 Weeks
             SetDateRange(14, DateRangeType.Days);
             
             // Load data automatically - pass null for ALL repositories
             await LoadCommitActivity(null, WorkspaceService.SelectedWorkspace!);
-        }
-        else
-        {
-            Console.WriteLine($"Not auto-loading data - repositories: {repositories?.Count() ?? 0}, selectedRepoSlug: '{selectedRepoSlug}', hasWorkspace: {WorkspaceService.HasSelectedWorkspace}");
         }
     }
 
@@ -943,28 +931,20 @@
     {
         try
         {
-            Console.WriteLine($"LoadRepositories started - WorkspaceService.HasSelectedWorkspace: {WorkspaceService.HasSelectedWorkspace}");
-            Console.WriteLine($"LoadRepositories started - WorkspaceService.SelectedWorkspace: '{WorkspaceService.SelectedWorkspace}'");
-            
             isLoadingRepos = true;
             var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("http://localhost:5000/api/analytics/repositories");
-            
-            Console.WriteLine($"Loaded {allRepositories?.Length ?? 0} total repositories from API");
             
             if (allRepositories != null && allRepositories.Any())
             {
                 repositories = allRepositories;
-                Console.WriteLine($"Set repositories to all {repositories.Length} repositories initially");
             }
             else
             {
                 repositories = Array.Empty<RepositorySummaryDto>();
-                Console.WriteLine("No repositories available from API");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error in LoadRepositories: {ex.Message}");
             errorMessage = $"Error loading repositories: {ex.Message}";
         }
         finally
@@ -1060,12 +1040,10 @@
             if (string.IsNullOrEmpty(workspace))
             {
                 errorMessage = "No workspace selected. Please configure workspace in Settings.";
-                Console.WriteLine("LoadCommitActivity: No workspace provided");
                 Logger.LogWarning("LoadCommitActivity: No workspace provided");
                 return;
             }
 
-            Console.WriteLine($"LoadCommitActivity started for: {repoSlug ?? "ALL"}, workspace: {workspace}");
             Logger.LogInformation("LoadCommitActivity started for: {RepoSlug}, workspace: {Workspace}", repoSlug ?? "ALL", workspace);
             
             isLoadingCommits = true;
@@ -1094,12 +1072,10 @@
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
             
-            Console.WriteLine($"Making API call to: {url}");
             Logger.LogInformation("Making API call to: {Url}", url);
             
             commitActivity = await Http.GetFromJsonAsync<CommitActivityDto[]>(url);
             
-            Console.WriteLine($"Received {commitActivity?.Length ?? 0} commit activity records");
             Logger.LogInformation("Received {Count} commit activity records", commitActivity?.Length ?? 0);
             
             // Also load contributor data
@@ -1112,7 +1088,6 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading commit activity: {ex.Message}");
             Logger.LogError(ex, "Error loading commit activity: {Message}", ex.Message);
             errorMessage = $"Error loading commit activity: {ex.Message}";
         }
@@ -1138,7 +1113,6 @@
                 totalLinesRemoved = c.TotalLinesRemoved
             }).ToArray();
             
-            Console.WriteLine($"Preparing chart data: {chartData.Length} items");
             Logger.LogInformation("Preparing chart data: {Count} items", chartData.Length);
             
             // Add delay to ensure DOM is rendered
@@ -1149,11 +1123,9 @@
                 // Pass as individual parameters to ensure proper serialization
                 await JSRuntime.InvokeVoidAsync("initializeChart", new object[] { chartData });
                 chartInitialized = true;
-                Console.WriteLine("Chart initialized successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error initializing chart: {ex.Message}");
                 Logger.LogError(ex, "Error initializing chart: {Message}", ex.Message);
                 
                 // Retry after longer delay
@@ -1162,11 +1134,9 @@
                 {
                     await JSRuntime.InvokeVoidAsync("initializeChart", new object[] { chartData });
                     chartInitialized = true;
-                    Console.WriteLine("Chart initialized successfully on retry");
                 }
                 catch (Exception retryEx)
                 {
-                    Console.WriteLine($"Failed to initialize chart after retry: {retryEx.Message}");
                     Logger.LogError(retryEx, "Failed to initialize chart after retry: {Message}", retryEx.Message);
                 }
             }
@@ -1178,7 +1148,6 @@
     public static void HandleChartClick(object dataPoint)
     {
         // Handle chart click events from JavaScript
-        Console.WriteLine($"Chart clicked: {JsonSerializer.Serialize(dataPoint)}");
     }
 
     private void OnRowRender(RowRenderEventArgs<CommitActivityDto> args)
@@ -1213,12 +1182,10 @@
             // Validate that we have a workspace
             if (string.IsNullOrEmpty(workspace))
             {
-                Console.WriteLine("LoadContributorActivity: No workspace provided");
                 Logger.LogWarning("LoadContributorActivity: No workspace provided");
                 return;
             }
 
-            Console.WriteLine($"LoadContributorActivity started for: {repoSlug ?? "ALL"}, workspace: {workspace}");
             Logger.LogInformation("LoadContributorActivity started for: {RepoSlug}, workspace: {Workspace}", repoSlug ?? "ALL", workspace);
             
             isLoadingContributors = true;
@@ -1229,12 +1196,12 @@
             if (string.IsNullOrEmpty(repoSlug))
             {
                 // ALL repositories - only pass workspace
-                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}";
+                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}&includePR={includePR.ToString().ToLower()}";
             }
             else
             {
                 // Specific repository
-                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}";
+                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}";
             }
             
             // Add date range parameters if specified
@@ -1247,24 +1214,20 @@
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
             
-            Console.WriteLine($"Making contributor API call to: {url}");
             Logger.LogInformation("Making contributor API call to: {Url}", url);
             
             contributorData = await Http.GetFromJsonAsync<ContributorActivityDto[]>(url);
             
-            Console.WriteLine($"Received {contributorData?.Length ?? 0} contributor activity records");
             Logger.LogInformation("Received {Count} contributor activity records", contributorData?.Length ?? 0);
             
             if (contributorData != null && contributorData.Any())
             {
                 var uniqueContributors = contributorData.GroupBy(c => c.UserId).Select(g => g.First()).ToArray();
-                Console.WriteLine($"Found {uniqueContributors.Length} unique contributors: {string.Join(", ", uniqueContributors.Select(c => c.DisplayName))}");
                 Logger.LogInformation("Found {Count} unique contributors: {Names}", uniqueContributors.Length, string.Join(", ", uniqueContributors.Select(c => c.DisplayName)));
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading contributor activity: {ex.Message}");
             Logger.LogError(ex, "Error loading contributor activity: {Message}", ex.Message);
             // Don't set error message for contributor data - it's not critical
         }
@@ -1291,7 +1254,6 @@
                 totalLinesRemoved = c.TotalLinesRemoved
             }).ToArray();
             
-            Console.WriteLine($"Preparing contributor chart data: {chartData.Length} items");
             Logger.LogInformation("Preparing contributor chart data: {Count} items", chartData.Length);
             
             // Add delay to ensure DOM is rendered
@@ -1301,11 +1263,9 @@
             {
                 await JSRuntime.InvokeVoidAsync("initializeContributorCharts", new object[] { chartData });
                 contributorChartsInitialized = true;
-                Console.WriteLine("Contributor charts initialized successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error initializing contributor charts: {ex.Message}");
                 Logger.LogError(ex, "Error initializing contributor charts: {Message}", ex.Message);
                 
                 // Retry after longer delay
@@ -1314,11 +1274,9 @@
                 {
                     await JSRuntime.InvokeVoidAsync("initializeContributorCharts", new object[] { chartData });
                     contributorChartsInitialized = true;
-                    Console.WriteLine("Contributor charts initialized successfully on retry");
                 }
                 catch (Exception retryEx)
                 {
-                    Console.WriteLine($"Failed to initialize contributor charts after retry: {retryEx.Message}");
                     Logger.LogError(retryEx, "Failed to initialize contributor charts after retry: {Message}", retryEx.Message);
                 }
             }
@@ -1358,8 +1316,6 @@
     [JSInvokable]
     public void NavigateToUserCommits(int userId, string displayName, string? date, string? repoSlug)
     {
-        Console.WriteLine($"NavigateToUserCommits called with userId={userId}, displayName={displayName}, date={date}, repoSlug={repoSlug}");
-        
         // Build URL with query parameters
         var url = $"/user/{userId}/commits?UserName={Uri.EscapeDataString(displayName)}";
         
@@ -1389,14 +1345,12 @@
             url += $"&RepoSlug={Uri.EscapeDataString(repoSlug)}";
         }
         
-        Console.WriteLine($"Navigating to: {url}");
         Navigation.NavigateTo(url);
     }
 
     [JSInvokable]
     public async Task ShowCommitDetailsModal(int userId, string displayName, string date, string? repoSlug)
     {
-        Console.WriteLine($"ShowCommitDetailsModal called with userId={userId}, displayName={displayName}, date={date}, repoSlug={repoSlug}");
         Logger.LogInformation("ShowCommitDetailsModal called with userId={UserId}, displayName={DisplayName}, date={Date}, repoSlug={RepoSlug}", userId, displayName, date, repoSlug);
         showCommitDetailsModal = true;
         isLoadingCommitDetails = true;
@@ -1411,24 +1365,20 @@
             {
                 commitDetailsError = "No workspace selected.";
                 isLoadingCommitDetails = false;
-                Console.WriteLine("ShowCommitDetailsModal: No workspace selected");
                 Logger.LogWarning("ShowCommitDetailsModal: No workspace selected");
                 return;
             }
             var url = $"api/analytics/commits/details?workspace={workspace}&userId={userId}&date={date}";
             if (!string.IsNullOrEmpty(repoSlug) && repoSlug != "ALL")
                 url += $"&repoSlug={repoSlug}";
-            Console.WriteLine($"ShowCommitDetailsModal: Fetching {url}");
             Logger.LogInformation("ShowCommitDetailsModal: Fetching {Url}", url);
             var result = await Http.GetFromJsonAsync<List<CommitDetailDto>>(url);
             commitDetailsList = result;
-            Console.WriteLine($"ShowCommitDetailsModal: Received {result?.Count ?? 0} commits");
             Logger.LogInformation("ShowCommitDetailsModal: Received {Count} commits", result?.Count ?? 0);
         }
         catch (Exception ex)
         {
             commitDetailsError = $"Error loading commit details: {ex.Message}";
-            Console.WriteLine($"ShowCommitDetailsModal: Exception: {ex}");
             Logger.LogError(ex, "ShowCommitDetailsModal: Exception: {Message}", ex.Message);
         }
         finally
