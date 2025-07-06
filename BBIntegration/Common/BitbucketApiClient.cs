@@ -13,6 +13,10 @@ namespace BBIntegration.Common
         private readonly HttpClient _httpClient;
         private readonly BitbucketConfig _config;
         private string _accessToken;
+        
+        // Global rate limiting state
+        private static DateTime _globalRateLimitResetTime = DateTime.MinValue;
+        private static readonly object _rateLimitLock = new object();
 
         public BitbucketApiClient(BitbucketConfig config)
         {
@@ -45,12 +49,66 @@ namespace BBIntegration.Common
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         }
 
+        private async Task WaitForRateLimitResetAsync()
+        {
+            lock (_rateLimitLock)
+            {
+                if (DateTime.UtcNow < _globalRateLimitResetTime)
+                {
+                    var waitTime = _globalRateLimitResetTime - DateTime.UtcNow;
+                    Console.WriteLine($"Global rate limit active. Waiting {waitTime.TotalSeconds:F1} seconds before making API calls...");
+                }
+            }
+            
+            // Wait outside the lock to avoid blocking other threads
+            while (DateTime.UtcNow < _globalRateLimitResetTime)
+            {
+                await Task.Delay(1000); // Check every second
+            }
+        }
+        
+        private void SetGlobalRateLimit(TimeSpan delay)
+        {
+            lock (_rateLimitLock)
+            {
+                var newResetTime = DateTime.UtcNow.Add(delay);
+                if (newResetTime > _globalRateLimitResetTime)
+                {
+                    _globalRateLimitResetTime = newResetTime;
+                    Console.WriteLine($"Global rate limit set. All API calls will pause until {_globalRateLimitResetTime:HH:mm:ss} UTC");
+                }
+            }
+        }
+        
+        public static bool IsRateLimited()
+        {
+            lock (_rateLimitLock)
+            {
+                return DateTime.UtcNow < _globalRateLimitResetTime;
+            }
+        }
+        
+        public static TimeSpan? GetRateLimitWaitTime()
+        {
+            lock (_rateLimitLock)
+            {
+                if (DateTime.UtcNow < _globalRateLimitResetTime)
+                {
+                    return _globalRateLimitResetTime - DateTime.UtcNow;
+                }
+                return null;
+            }
+        }
+
         private async Task<string> SendRequestAsync(string url)
         {
             await EnsureAuthenticatedAsync();
+            
+            // Wait if we're in a global rate limit period
+            await WaitForRateLimitResetAsync();
+            
             int maxRetries = 3;
             int retryCount = 0;
-            TimeSpan delay = TimeSpan.FromSeconds(1); // Initial delay
 
             while (retryCount <= maxRetries)
             {
@@ -63,16 +121,25 @@ namespace BBIntegration.Common
                     }
                     else if (response.StatusCode == (System.Net.HttpStatusCode)429) // Too Many Requests
                     {
+                        TimeSpan delay;
                         if (response.Headers.RetryAfter != null && response.Headers.RetryAfter.Delta.HasValue)
                         {
                             delay = response.Headers.RetryAfter.Delta.Value;
                         }
                         else
                         {
-                            delay = TimeSpan.FromSeconds(Math.Pow(2, retryCount)); // Exponential backoff
+                            // Use exponential backoff with minimum 60 seconds for rate limits
+                            delay = TimeSpan.FromSeconds(Math.Max(60, Math.Pow(2, retryCount + 4)));
                         }
-                        Console.WriteLine($"Rate limit hit. Retrying in {delay.TotalSeconds} seconds...");
-                        await Task.Delay(delay);
+                        
+                        // Set global rate limit to pause ALL API calls
+                        SetGlobalRateLimit(delay);
+                        
+                        Console.WriteLine($"Rate limit hit for URL: {url}. Global pause set for {delay.TotalSeconds} seconds...");
+                        
+                        // Wait for the global rate limit to reset
+                        await WaitForRateLimitResetAsync();
+                        
                         retryCount++;
                     }
                     else
@@ -87,36 +154,27 @@ namespace BBIntegration.Common
                         throw; // Re-throw if max retries reached
                     }
 
-                    Console.WriteLine($"HTTP request failed: {ex.Message}. Retrying...");
-                    await Task.Delay(delay);
+                    Console.WriteLine($"HTTP request failed for {url}: {ex.Message}. Retrying...");
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)));
                     retryCount++;
                 }
             }
-            throw new Exception("Failed to send request after multiple retries."); // Should not be reached
+            throw new Exception($"Failed to send request to {url} after multiple retries."); // Should not be reached
         }
 
         public async Task<string> GetCurrentUserAsync()
         {
-            await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync("user");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync("user");
         }
 
         public async Task<string> GetWorkspaceUsersAsync(string workspace)
         {
-            await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync($"workspaces/{workspace}/members");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync($"workspaces/{workspace}/members");
         }
 
         public async Task<string> GetWorkspaceRepositoriesAsync(string workspace)
         {
-            await EnsureAuthenticatedAsync();
-            var response = await _httpClient.GetAsync($"repositories/{workspace}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            return await SendRequestAsync($"repositories/{workspace}");
         }
 
         public async Task<string> GetUsersAsync(string workspace, string nextPageUrl = null)

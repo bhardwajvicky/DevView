@@ -31,6 +31,14 @@ namespace BBIntegration.PullRequests
         public async Task SyncPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
         {
             _logger.LogInformation("Starting PR sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
+            
+            // Check if we're currently rate limited
+            if (BitbucketApiClient.IsRateLimited())
+            {
+                var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                _logger.LogWarning("API is currently rate limited. PR sync will wait {WaitTime} seconds before starting.", waitTime?.TotalSeconds ?? 0);
+            }
+            
             await using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
@@ -48,6 +56,13 @@ namespace BBIntegration.PullRequests
             {
                 do
                 {
+                    // Check for rate limiting before each API call
+                    if (BitbucketApiClient.IsRateLimited())
+                    {
+                        var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                        _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching pull requests...", waitTime?.TotalSeconds ?? 0);
+                    }
+                    
                     var prsJson = await _apiClient.GetPullRequestsAsync(workspace, repoSlug, startDate, endDate, nextPageUrl);
                     //_logger.LogInformation("Raw PRs JSON: {Json}", prsJson);
                     var prPagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<PullRequestDto>>(prsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -116,6 +131,13 @@ namespace BBIntegration.PullRequests
             string commitNextPageUrl = null;
             do
             {
+                // Check for rate limiting before each API call
+                if (BitbucketApiClient.IsRateLimited())
+                {
+                    var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                    _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching PR commits for PR {PrId}...", waitTime?.TotalSeconds ?? 0, bitbucketPrId);
+                }
+                
                 var commitsJson = await _apiClient.GetPullRequestCommitsAsync(workspace, repoSlug, bitbucketPrId, commitNextPageUrl);
                 var commitPagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<CommitDto>>(commitsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
@@ -177,6 +199,13 @@ namespace BBIntegration.PullRequests
                         // Try to fetch and insert the commit
                         try
                         {
+                            // Check for rate limiting before diff API call
+                            if (BitbucketApiClient.IsRateLimited())
+                            {
+                                var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                                _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching diff for PR commit {CommitHash}...", waitTime?.TotalSeconds ?? 0, commit.Hash);
+                            }
+                            
                             // Fetch raw diff and parse it
                             var diffContent = await _apiClient.GetCommitDiffAsync(workspace, repoSlug, commit.Hash);
                             var (totalAdded, totalRemoved, codeAdded, codeRemoved) = _diffParser.ParseDiff(diffContent);

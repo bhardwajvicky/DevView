@@ -32,6 +32,14 @@ namespace BBIntegration.Commits
         public async Task SyncCommitsAsync(string workspace, string repoSlug, DateTime startDate, DateTime endDate)
         {
             _logger.LogInformation("Starting commit sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
+            
+            // Check if we're currently rate limited
+            if (BitbucketApiClient.IsRateLimited())
+            {
+                var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                _logger.LogWarning("API is currently rate limited. Sync will wait {WaitTime} seconds before starting.", waitTime?.TotalSeconds ?? 0);
+            }
+            
             await using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
             
@@ -52,6 +60,13 @@ namespace BBIntegration.Commits
             {
                 while (keepFetching)
                 {
+                    // Check for rate limiting before each API call
+                    if (BitbucketApiClient.IsRateLimited())
+                    {
+                        var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                        _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching commits...", waitTime?.TotalSeconds ?? 0);
+                    }
+                    
                     var commitsJson = await _apiClient.GetCommitsAsync(workspace, repoSlug, nextPageUrl);
                     var pagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<CommitDto>>(commitsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
@@ -84,6 +99,13 @@ namespace BBIntegration.Commits
                             continue;
                         }
 
+                        // Check for rate limiting before diff API call
+                        if (BitbucketApiClient.IsRateLimited())
+                        {
+                            var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                            _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching diff for commit {CommitHash}...", waitTime?.TotalSeconds ?? 0, commit.Hash);
+                        }
+                        
                         // Fetch raw diff and parse it
                         var diffContent = await _apiClient.GetCommitDiffAsync(workspace, repoSlug, commit.Hash);
                         var (totalAdded, totalRemoved, codeAdded, codeRemoved) = _diffParser.ParseDiff(diffContent);
