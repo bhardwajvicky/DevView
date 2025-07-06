@@ -123,12 +123,46 @@ namespace BBIntegration.PullRequests
                 
                 foreach (var commit in commitPagedResponse.Values)
                 {
-                    // Find the internal ID of the commit
-                    var commitId = await connection.QuerySingleOrDefaultAsync<int?>(
-                        "SELECT Id FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
+                    // Find the internal ID of the commit and check if it needs IsPRMergeCommit update
+                    var existingCommitInfo = await connection.QuerySingleOrDefaultAsync<(int? Id, bool? IsPRMergeCommit, bool? IsMerge)>(
+                        "SELECT Id, IsPRMergeCommit, IsMerge FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
                     
-                    int? finalCommitId = commitId;
-                    if (!commitId.HasValue)
+                    // Determine if this should be marked as a PR merge commit
+                    bool isMergeCommit = commit.Parents != null && commit.Parents.Count >= 2;
+                    bool shouldBePRMergeCommit = isMergeCommit; // PR commits that are merge commits are PR merge commits
+                    
+                    int? finalCommitId = existingCommitInfo.Id;
+                    
+                    if (existingCommitInfo.Id.HasValue)
+                    {
+                        // Commit exists - check if we need to update IsPRMergeCommit or IsMerge flags
+                        bool needsUpdate = false;
+                        var updateFields = new List<string>();
+                        var updateParams = new Dictionary<string, object> { { "Id", existingCommitInfo.Id.Value } };
+                        
+                        if (existingCommitInfo.IsPRMergeCommit != shouldBePRMergeCommit)
+                        {
+                            updateFields.Add("IsPRMergeCommit = @IsPRMergeCommit");
+                            updateParams["IsPRMergeCommit"] = shouldBePRMergeCommit;
+                            needsUpdate = true;
+                        }
+                        
+                        if (existingCommitInfo.IsMerge != isMergeCommit)
+                        {
+                            updateFields.Add("IsMerge = @IsMerge");
+                            updateParams["IsMerge"] = isMergeCommit;
+                            needsUpdate = true;
+                        }
+                        
+                        if (needsUpdate)
+                        {
+                            var updateSql = $"UPDATE Commits SET {string.Join(", ", updateFields)} WHERE Id = @Id";
+                            await connection.ExecuteAsync(updateSql, updateParams);
+                            _logger.LogInformation("Updated flags for existing commit in PR: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
+                                commit.Hash, isMergeCommit, shouldBePRMergeCommit);
+                        }
+                    }
+                    else
                     {
                         // Try to fetch and insert the commit
                         try
@@ -212,14 +246,7 @@ namespace BBIntegration.PullRequests
                                 continue;
                             }
 
-                            // Insert the commit
-                            bool isMerge = commit.Message != null && commit.Message.Trim().ToLower().StartsWith("merge");
-                            bool isPRMergeCommit = false;
-                            // If this commit is the merge_commit for the PR, set the flag
-                            if (prDbId > 0 && commit.Message != null && commit.Message.Trim().StartsWith("Merge branch"))
-                            {
-                                isPRMergeCommit = true;
-                            }
+                            // Insert the commit using the pre-calculated flags
                             const string insertSql = @"
                                 INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved, IsPRMergeCommit)
                                 VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved, @IsPRMergeCommit);
@@ -234,10 +261,10 @@ namespace BBIntegration.PullRequests
                                 commit.Message,
                                 LinesAdded = totalAdded,
                                 LinesRemoved = totalRemoved,
-                                IsMerge = isMerge,
+                                IsMerge = isMergeCommit,
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved,
-                                IsPRMergeCommit = isPRMergeCommit
+                                IsPRMergeCommit = shouldBePRMergeCommit
                             });
                             finalCommitId = insertedId;
                             _logger.LogInformation("Inserted missing commit '{CommitHash}' for PR '{BitbucketPrId}'.", commit.Hash, bitbucketPrId);

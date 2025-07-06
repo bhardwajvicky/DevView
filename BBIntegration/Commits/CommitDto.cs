@@ -17,6 +17,15 @@ namespace BBIntegration.Commits
 
         [JsonPropertyName("author")]
         public CommitAuthorDto Author { get; set; }
+
+        [JsonPropertyName("parents")]
+        public List<CommitParentDto> Parents { get; set; } = new();
+    }
+
+    public class CommitParentDto
+    {
+        [JsonPropertyName("hash")]
+        public string Hash { get; set; }
     }
 
     public class CommitAuthorDto

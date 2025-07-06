@@ -69,13 +69,32 @@ namespace BBIntegration.Commits
                         // Skip if the commit is outside our desired date range
                         if (commit.Date > endDate) continue;
 
-                        // Check if the commit already exists and if it's incomplete
-                        var existingCommit = await connection.QuerySingleOrDefaultAsync<(int Id, int? CodeLinesAdded)>(
-                            "SELECT Id, CodeLinesAdded FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
+                        // Check if the commit already exists
+                        var existingCommit = await connection.QuerySingleOrDefaultAsync<(int Id, int? CodeLinesAdded, bool? IsMerge)>(
+                            "SELECT Id, CodeLinesAdded, IsMerge FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
+                        
+                        // Determine if this is a merge commit using the new parents logic
+                        bool isMergeCommit = commit.Parents != null && commit.Parents.Count >= 2;
                         
                         if (existingCommit.Id > 0 && existingCommit.CodeLinesAdded.HasValue)
                         {
-                            // Commit exists and is complete, so skip it
+                            // Commit exists and is complete, but check if IsMerge flag needs updating
+                            if (existingCommit.IsMerge != isMergeCommit)
+                            {
+                                // Update only the IsMerge flag for complete commits
+                                const string updateMergeSql = @"
+                                    UPDATE Commits 
+                                    SET IsMerge = @IsMerge
+                                    WHERE Id = @Id;
+                                ";
+                                await connection.ExecuteAsync(updateMergeSql, new 
+                                {
+                                    Id = existingCommit.Id,
+                                    IsMerge = isMergeCommit
+                                });
+                                _logger.LogInformation("Updated IsMerge flag for existing commit: {CommitHash} (was {OldValue}, now {NewValue})", 
+                                    commit.Hash, existingCommit.IsMerge, isMergeCommit);
+                            }
                             continue;
                         }
 
@@ -98,7 +117,7 @@ namespace BBIntegration.Commits
                                 LinesRemoved = totalRemoved,
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved,
-                                IsMerge = commit.Message.Trim().StartsWith("Merge branch")
+                                IsMerge = isMergeCommit
                             });
                             _logger.LogInformation("Updated commit: {CommitHash}", commit.Hash);
                         }
@@ -170,7 +189,7 @@ namespace BBIntegration.Commits
                                     commit.Hash, commit.Author?.Raw, commit.Author?.User?.Uuid, displayName, email, bitbucketUserId);
                                 continue;
                             }
-                            bool isMerge = commit.Message != null && commit.Message.Trim().ToLower().StartsWith("merge");
+                            // Use the pre-calculated merge flag
                             const string insertSql = @"
                                 INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved)
                                 VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved);
@@ -184,7 +203,7 @@ namespace BBIntegration.Commits
                                 commit.Message,
                                 LinesAdded = totalAdded,
                                 LinesRemoved = totalRemoved,
-                                IsMerge = isMerge,
+                                IsMerge = isMergeCommit,
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved
                             });
