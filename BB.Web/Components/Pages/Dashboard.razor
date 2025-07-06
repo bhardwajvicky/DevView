@@ -973,10 +973,15 @@
 
     private async Task RefreshDashboardData()
     {
+        chartInitialized = false;
         if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
         {
             var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
             await LoadCommitActivity(repoForApi, WorkspaceService.SelectedWorkspace!);
+            if (commitActivity != null && commitActivity.Any())
+            {
+                await InitializeChart();
+            }
             StateHasChanged();
         }
         else
@@ -1015,6 +1020,7 @@
     {
         try
         {
+            chartInitialized = false;
             // Validate that we have a workspace
             if (string.IsNullOrEmpty(workspace))
             {
@@ -1044,11 +1050,11 @@
             }
             
             // Add date range parameters if specified
-            if (startDate.HasValue)
+            if (startDate != null)
             {
                 url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             }
-            if (endDate.HasValue)
+            if (endDate != null)
             {
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
@@ -1063,6 +1069,11 @@
             
             // Also load contributor data
             await LoadContributorActivity(repoSlug, workspace);
+
+            if (commitActivity != null && commitActivity.Any())
+            {
+                await InitializeChart();
+            }
         }
         catch (Exception ex)
         {
@@ -1192,11 +1203,11 @@
             }
             
             // Add date range parameters if specified
-            if (startDate.HasValue)
+            if (startDate != null)
             {
                 url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             }
-            if (endDate.HasValue)
+            if (endDate != null)
             {
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
