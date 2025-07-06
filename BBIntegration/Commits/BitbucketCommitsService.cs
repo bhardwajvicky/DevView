@@ -75,6 +75,8 @@ namespace BBIntegration.Commits
                         
                         // Determine if this is a merge commit using the new parents logic
                         bool isMergeCommit = commit.Parents != null && commit.Parents.Count >= 2;
+                        // Most merge commits are PR merge commits, so set both flags to true for merge commits
+                        bool isPRMergeCommit = isMergeCommit;
                         
                         if (existingCommit.Id > 0 && existingCommit.CodeLinesAdded.HasValue)
                         {
@@ -90,11 +92,11 @@ namespace BBIntegration.Commits
                                 needsUpdate = true;
                             }
                             
-                            // For commit sync, we don't know about PRs yet, so only reset IsPRMergeCommit to false if it was incorrectly set to true
-                            if (existingCommit.IsPRMergeCommit == true)
+                            // Update IsPRMergeCommit based on merge status
+                            if (existingCommit.IsPRMergeCommit != isPRMergeCommit)
                             {
                                 updateFields.Add("IsPRMergeCommit = @IsPRMergeCommit");
-                                updateParams["IsPRMergeCommit"] = false;
+                                updateParams["IsPRMergeCommit"] = isPRMergeCommit;
                                 needsUpdate = true;
                             }
                             
@@ -102,8 +104,8 @@ namespace BBIntegration.Commits
                             {
                                 var updateSql = $"UPDATE Commits SET {string.Join(", ", updateFields)} WHERE Id = @Id";
                                 await connection.ExecuteAsync(updateSql, updateParams);
-                                _logger.LogInformation("Updated flags for existing complete commit: {CommitHash} (IsMerge: {IsMerge})", 
-                                    commit.Hash, isMergeCommit);
+                                _logger.LogInformation("Updated flags for existing complete commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
+                                    commit.Hash, isMergeCommit, isPRMergeCommit);
                             }
                             continue;
                         }
@@ -128,9 +130,10 @@ namespace BBIntegration.Commits
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved,
                                 IsMerge = isMergeCommit,
-                                IsPRMergeCommit = false  // Commit sync doesn't know about PRs yet
+                                IsPRMergeCommit = isPRMergeCommit
                             });
-                            _logger.LogInformation("Updated commit: {CommitHash}", commit.Hash);
+                            _logger.LogInformation("Updated commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
+                                commit.Hash, isMergeCommit, isPRMergeCommit);
                         }
                         else
                         {
@@ -217,9 +220,10 @@ namespace BBIntegration.Commits
                                 IsMerge = isMergeCommit,
                                 CodeLinesAdded = codeAdded,
                                 CodeLinesRemoved = codeRemoved,
-                                IsPRMergeCommit = false  // Commit sync doesn't know about PRs yet
+                                IsPRMergeCommit = isPRMergeCommit
                             });
-                            _logger.LogInformation("Added commit: {CommitHash}", commit.Hash);
+                            _logger.LogInformation("Added commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
+                                commit.Hash, isMergeCommit, isPRMergeCommit);
                         }
                     }
 
