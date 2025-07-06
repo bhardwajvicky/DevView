@@ -283,8 +283,12 @@
                                                 @contributor.DisplayName.Substring(0, Math.Min(2, contributor.DisplayName.Length)).ToUpper()
                                             </div>
                                         </div>
-                                        <div>
-                                            <h6 class="card-title mb-0">@contributor.DisplayName</h6>
+                                        <div class="flex-grow-1">
+                                            <button type="button" class="btn btn-link p-0 text-start text-decoration-none" 
+                                                    @onclick="() => NavigateToUserCommits(contributor.UserId, contributor.DisplayName, null, selectedRepoSlug)"
+                                                    style="border: none; background: none; color: inherit;">
+                                                <h6 class="card-title mb-0 text-primary">@contributor.DisplayName</h6>
+                                            </button>
                                             <small class="text-muted">@GetContributorStats(contributor.UserId)</small>
                                         </div>
                                     </div>
@@ -763,24 +767,7 @@
                         intersect: false,
                         mode: 'index'
                     },
-                    onClick: async (event, elements) => {
-                        if (elements.length > 0) {
-                            const dataIndex = elements[0].index;
-                            const item = contributor.data[dataIndex];
-                            const date = item.date.split('T')[0];
-                            const repoSlug = window.selectedRepoSlug || null;
-                            try {
-                                if (window.dashboardComponent.dotNetRef) {
-                                    await window.dashboardComponent.dotNetRef.invokeMethodAsync('ShowCommitDetailsModal',
-                                        item.userId, contributor.displayName, date, repoSlug);
-                                } else {
-                                    console.error('DotNetObjectReference not set for dashboardComponent');
-                                }
-                            } catch (err) {
-                                console.error('Error calling ShowCommitDetailsModal:', err);
-                            }
-                        }
-                    }
+                    // Chart click disabled - use name button to navigate to user commits
                 }
             });
             
@@ -962,6 +949,10 @@
         selectedRepoSlug = newRepoSlug;
         chartInitialized = false;
         contributorChartsInitialized = false;
+        
+        // Store selected repository in JavaScript for chart interactions
+        await JSRuntime.InvokeVoidAsync("eval", $"window.selectedRepoSlug = '{selectedRepoSlug}';");
+        
         // Do NOT reset or change startDate/endDate when changing repo
         await RefreshDashboardData();
     }
@@ -1318,6 +1309,44 @@
         commitDetailsList = null;
         commitDetailsError = null;
         isLoadingCommitDetails = false;
+    }
+
+    [JSInvokable]
+    public void NavigateToUserCommits(int userId, string displayName, string? date, string? repoSlug)
+    {
+        Console.WriteLine($"NavigateToUserCommits called with userId={userId}, displayName={displayName}, date={date}, repoSlug={repoSlug}");
+        
+        // Build URL with query parameters
+        var url = $"/user/{userId}/commits?UserName={Uri.EscapeDataString(displayName)}";
+        
+        // Add date range
+        if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out var clickedDate))
+        {
+            // Specific date clicked - use that date as end date and 30 days before as start date
+            var startDate = clickedDate.AddDays(-30);
+            url += $"&StartDate={startDate:yyyy-MM-dd}&EndDate={clickedDate:yyyy-MM-dd}";
+        }
+        else if (startDate.HasValue && endDate.HasValue)
+        {
+            // No specific date, but we have dashboard date range - use that
+            url += $"&StartDate={startDate.Value:yyyy-MM-dd}&EndDate={endDate.Value:yyyy-MM-dd}";
+        }
+        else
+        {
+            // No date specified, use last 90 days as default
+            var defaultEndDate = DateTime.Today;
+            var defaultStartDate = DateTime.Today.AddDays(-90);
+            url += $"&StartDate={defaultStartDate:yyyy-MM-dd}&EndDate={defaultEndDate:yyyy-MM-dd}";
+        }
+        
+        // Add repository if specified
+        if (!string.IsNullOrEmpty(repoSlug) && repoSlug != "ALL")
+        {
+            url += $"&RepoSlug={Uri.EscapeDataString(repoSlug)}";
+        }
+        
+        Console.WriteLine($"Navigating to: {url}");
+        Navigation.NavigateTo(url);
     }
 
     [JSInvokable]

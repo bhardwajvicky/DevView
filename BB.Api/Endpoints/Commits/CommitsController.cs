@@ -37,14 +37,21 @@ namespace BB.Api.Endpoints.Commits
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            // Get repo ID
-            var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
-                "SELECT Id FROM Repositories WHERE Slug = @repoSlug", new { repoSlug });
-            if (repoId == null)
-                return NotFound($"Repository '{repoSlug}' not found.");
+            // Handle "all" repositories case
+            int? repoId = null;
+            if (!string.Equals(repoSlug, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                // Get specific repo ID
+                repoId = await connection.QuerySingleOrDefaultAsync<int?>(
+                    "SELECT Id FROM Repositories WHERE Slug = @repoSlug", new { repoSlug });
+                if (repoId == null)
+                    return NotFound($"Repository '{repoSlug}' not found.");
+            }
 
             // Build WHERE clause
-            var where = "WHERE c.RepositoryId = @repoId";
+            var where = "WHERE 1=1";
+            if (repoId.HasValue)
+                where += " AND c.RepositoryId = @repoId";
             if (!includePR)
                 where += " AND c.IsPRMergeCommit = 0";
             if (userId.HasValue)
@@ -55,16 +62,17 @@ namespace BB.Api.Endpoints.Commits
                 where += " AND c.Date <= @endDate";
 
             // Count total commits
-            var countSql = $"SELECT COUNT(*) FROM Commits c {where}";
+            var countSql = $"SELECT COUNT(*) FROM Commits c JOIN Repositories r ON c.RepositoryId = r.Id {where}";
             var totalCount = await connection.QuerySingleAsync<int>(countSql, new { repoId, userId, startDate, endDate });
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-            // Query paginated commits with author info
+            // Query paginated commits with author info and repository info
             var sql = $@"
                 SELECT c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
-                       c.LinesAdded, c.LinesRemoved, c.CodeLinesAdded, c.CodeLinesRemoved
+                       c.LinesAdded, c.LinesRemoved, c.CodeLinesAdded, c.CodeLinesRemoved, r.Name AS RepositoryName, r.Slug AS RepositorySlug
                 FROM Commits c
                 JOIN Users u ON c.AuthorId = u.Id
+                JOIN Repositories r ON c.RepositoryId = r.Id
                 {where}
                 ORDER BY c.Date DESC
                 OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -99,6 +107,8 @@ namespace BB.Api.Endpoints.Commits
             public int LinesRemoved { get; set; }
             public int CodeLinesAdded { get; set; }
             public int CodeLinesRemoved { get; set; }
+            public string? RepositoryName { get; set; }
+            public string? RepositorySlug { get; set; }
         }
         public class PaginatedCommitsResponse
         {
