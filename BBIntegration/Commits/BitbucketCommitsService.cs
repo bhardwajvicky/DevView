@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using BBIntegration.Commits; // Add this if not present
 
 namespace BBIntegration.Commits
 {
@@ -114,166 +115,17 @@ namespace BBIntegration.Commits
                         var (totalAdded, totalRemoved, codeAdded, codeRemoved) = 
                             (diffSummary.TotalAdded, diffSummary.TotalRemoved, diffSummary.CodeAdded, diffSummary.CodeRemoved);
 
-                        if (existingCommit.Id > 0)
-                        {
-                            // UPDATE the existing, incomplete commit
-                            const string updateSql = @"
-                                UPDATE Commits 
-                                SET LinesAdded = @LinesAdded, LinesRemoved = @LinesRemoved, 
-                                    CodeLinesAdded = @CodeLinesAdded, CodeLinesRemoved = @CodeLinesRemoved,
-                                    DataLinesAdded = @DataLinesAdded, DataLinesRemoved = @DataLinesRemoved,
-                                    ConfigLinesAdded = @ConfigLinesAdded, ConfigLinesRemoved = @ConfigLinesRemoved,
-                                    DocsLinesAdded = @DocsLinesAdded, DocsLinesRemoved = @DocsLinesRemoved,
-                                    IsMerge = @IsMerge, IsPRMergeCommit = @IsPRMergeCommit
-                                WHERE Id = @Id;
-                            ";
-                            await connection.ExecuteAsync(updateSql, new 
-                            {
-                                Id = existingCommit.Id,
-                                LinesAdded = totalAdded,
-                                LinesRemoved = totalRemoved,
-                                CodeLinesAdded = codeAdded,
-                                CodeLinesRemoved = codeRemoved,
-                                DataLinesAdded = diffSummary.DataAdded,
-                                DataLinesRemoved = diffSummary.DataRemoved,
-                                ConfigLinesAdded = diffSummary.ConfigAdded,
-                                ConfigLinesRemoved = diffSummary.ConfigRemoved,
-                                DocsLinesAdded = diffSummary.DocsAdded,
-                                DocsLinesRemoved = diffSummary.DocsRemoved,
-                                IsMerge = isMergeCommit,
-                                IsPRMergeCommit = isPRMergeCommit
-                            });
-                            _logger.LogInformation("Updated commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
-                                commit.Hash, isMergeCommit, isPRMergeCommit);
-                        }
-                        else
-                        {
-                            // INSERT the new commit
-                            // Find or insert the author's internal ID
-                            int? authorId = null;
-                            string displayName = null, email = null, bitbucketUserId = null;
-                            if (commit.Author?.User?.Uuid != null)
-                            {
-                                bitbucketUserId = commit.Author.User.Uuid;
-                                authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = bitbucketUserId });
-                            }
-                            if (authorId == null)
-                            {
-                                // Try to parse from raw
-                                var raw = commit.Author?.Raw;
-                                if (!string.IsNullOrEmpty(raw))
-                                {
-                                    var match = Regex.Match(raw, @"^(.*?)\s*<(.+?)>$");
-                                    if (match.Success)
-                                    {
-                                        displayName = match.Groups[1].Value;
-                                        email = match.Groups[2].Value;
-                                    }
-                                    else
-                                    {
-                                        displayName = raw;
-                                    }
-                                }
-                                if (string.IsNullOrEmpty(bitbucketUserId) && !string.IsNullOrEmpty(email))
-                                {
-                                    bitbucketUserId = $"synthetic:{email}";
-                                }
-                                if (string.IsNullOrEmpty(bitbucketUserId))
-                                {
-                                    // Fallback: use commit hash as synthetic user ID
-                                    bitbucketUserId = $"synthetic:unknown:{commit.Hash}";
-                                }
-                                if (string.IsNullOrEmpty(displayName))
-                                {
-                                    displayName = "Unknown";
-                                }
-                                if (!string.IsNullOrEmpty(bitbucketUserId))
-                                {
-                                    // Insert user if not exists
-                                    const string insertUserSql = @"
-                                        IF NOT EXISTS (SELECT 1 FROM Users WHERE BitbucketUserId = @BitbucketUserId)
-                                        BEGIN
-                                            INSERT INTO Users (BitbucketUserId, DisplayName, AvatarUrl, CreatedOn)
-                                            VALUES (@BitbucketUserId, @DisplayName, NULL, @CreatedOn);
-                                        END
-                                        SELECT Id FROM Users WHERE BitbucketUserId = @BitbucketUserId;
-                                    ";
-                                    authorId = await connection.QuerySingleOrDefaultAsync<int?>(insertUserSql, new
-                                    {
-                                        BitbucketUserId = bitbucketUserId,
-                                        DisplayName = displayName,
-                                        CreatedOn = commit.Date
-                                    });
-                                }
-                            }
-                            if (authorId == null)
-                            {
-                                _logger.LogWarning(
-                                    "Author for commit '{CommitHash}' not found and could not be created. Raw: '{Raw}', User UUID: '{Uuid}', DisplayName: '{DisplayName}', Email: '{Email}', BitbucketUserId: '{BitbucketUserId}'. Skipping commit insert.",
-                                    commit.Hash, commit.Author?.Raw, commit.Author?.User?.Uuid, displayName, email, bitbucketUserId);
-                                continue;
-                            }
-                            // Use the pre-calculated merge flag and file classification data
-                            const string insertSql = @"
-                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, 
-                                                   LinesAdded, LinesRemoved, IsMerge, 
-                                                   CodeLinesAdded, CodeLinesRemoved,
-                                                   DataLinesAdded, DataLinesRemoved,
-                                                   ConfigLinesAdded, ConfigLinesRemoved,
-                                                   DocsLinesAdded, DocsLinesRemoved,
-                                                   IsPRMergeCommit)
-                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, 
-                                        @LinesAdded, @LinesRemoved, @IsMerge, 
-                                        @CodeLinesAdded, @CodeLinesRemoved,
-                                        @DataLinesAdded, @DataLinesRemoved,
-                                        @ConfigLinesAdded, @ConfigLinesRemoved,
-                                        @DocsLinesAdded, @DocsLinesRemoved,
-                                        @IsPRMergeCommit);
-                            ";
-                            
-                            var insertedCommitId = await connection.QuerySingleAsync<int>(@"
-                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, 
-                                                   LinesAdded, LinesRemoved, IsMerge, 
-                                                   CodeLinesAdded, CodeLinesRemoved,
-                                                   DataLinesAdded, DataLinesRemoved,
-                                                   ConfigLinesAdded, ConfigLinesRemoved,
-                                                   DocsLinesAdded, DocsLinesRemoved,
-                                                   IsPRMergeCommit)
-                                OUTPUT INSERTED.Id
-                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, 
-                                        @LinesAdded, @LinesRemoved, @IsMerge, 
-                                        @CodeLinesAdded, @CodeLinesRemoved,
-                                        @DataLinesAdded, @DataLinesRemoved,
-                                        @ConfigLinesAdded, @ConfigLinesRemoved,
-                                        @DocsLinesAdded, @DocsLinesRemoved,
-                                        @IsPRMergeCommit);
-                            ", new
-                            {
-                                commit.Hash,
-                                RepoId = repoId.Value,
-                                AuthorId = authorId.Value,
-                                commit.Date,
-                                commit.Message,
-                                LinesAdded = totalAdded,
-                                LinesRemoved = totalRemoved,
-                                IsMerge = isMergeCommit,
-                                CodeLinesAdded = codeAdded,
-                                CodeLinesRemoved = codeRemoved,
-                                DataLinesAdded = diffSummary.DataAdded,
-                                DataLinesRemoved = diffSummary.DataRemoved,
-                                ConfigLinesAdded = diffSummary.ConfigAdded,
-                                ConfigLinesRemoved = diffSummary.ConfigRemoved,
-                                DocsLinesAdded = diffSummary.DocsAdded,
-                                DocsLinesRemoved = diffSummary.DocsRemoved,
-                                IsPRMergeCommit = isPRMergeCommit
-                            });
-                            
-                            // Insert file-level details
-                            await InsertCommitFilesAsync(connection, insertedCommitId, diffSummary.FileChanges);
-                            _logger.LogInformation("Added commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
-                                commit.Hash, isMergeCommit, isPRMergeCommit);
-                        }
+                        int commitId = await CommitCrudHelper.UpsertCommitAndFilesAsync(
+                            connection,
+                            commit,
+                            repoId.Value,
+                            workspace,
+                            repoSlug,
+                            _apiClient,
+                            _diffParser,
+                            _logger
+                        );
+                        if (commitId < 0) continue;
                     }
 
                     // Prepare for the next page
@@ -288,33 +140,6 @@ namespace BBIntegration.Commits
                 _logger.LogError(ex, "An error occurred during commit sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
                 throw;
             }
-        }
-
-        private async Task InsertCommitFilesAsync(SqlConnection connection, int commitId, List<FileChangeDetail> fileChanges)
-        {
-            if (!fileChanges.Any()) return;
-
-            const string insertFilesSql = @"
-                INSERT INTO CommitFiles (CommitId, FilePath, FileType, ChangeStatus, LinesAdded, LinesRemoved, FileExtension, CreatedOn)
-                VALUES (@CommitId, @FilePath, @FileType, @ChangeStatus, @LinesAdded, @LinesRemoved, @FileExtension, @CreatedOn);
-            ";
-
-            var fileRecords = fileChanges.Select(fc => new
-            {
-                CommitId = commitId,
-                FilePath = fc.FilePath,
-                FileType = fc.FileType.ToString().ToLower(),
-                ChangeStatus = fc.ChangeStatus,
-                LinesAdded = fc.LinesAdded,
-                LinesRemoved = fc.LinesRemoved,
-                FileExtension = fc.FileExtension,
-                CreatedOn = DateTime.UtcNow
-            }).ToArray();
-
-            await connection.ExecuteAsync(insertFilesSql, fileRecords);
-            
-            _logger.LogDebug("Inserted {FileCount} file change records for commit {CommitId}", 
-                fileChanges.Count, commitId);
         }
     }
 }

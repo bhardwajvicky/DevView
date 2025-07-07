@@ -155,186 +155,34 @@ namespace BBIntegration.PullRequests
                 
                 foreach (var commit in commitPagedResponse.Values)
                 {
-                    // Find the internal ID of the commit and check if it needs IsPRMergeCommit update
-                    var existingCommitInfo = await connection.QuerySingleOrDefaultAsync<(int? Id, bool? IsPRMergeCommit, bool? IsMerge)>(
-                        "SELECT Id, IsPRMergeCommit, IsMerge FROM Commits WHERE BitbucketCommitHash = @Hash", new { commit.Hash });
-                    
-                    // Determine if this should be marked as a PR merge commit
-                    bool isMergeCommit = commit.Parents != null && commit.Parents.Count >= 2;
-                    bool shouldBePRMergeCommit = isMergeCommit; // PR commits that are merge commits are PR merge commits
-                    
-                    int? finalCommitId = existingCommitInfo.Id;
-                    
-                    if (existingCommitInfo.Id.HasValue)
-                    {
-                        // Commit exists, check if it's complete
-                        var existingCompleteCommit = await connection.QuerySingleOrDefaultAsync<int?>(
-                            "SELECT Id FROM Commits WHERE BitbucketCommitHash = @Hash AND CodeLinesAdded IS NOT NULL", new { commit.Hash });
-
-                        if (existingCompleteCommit.HasValue)
-                        {
-                            // Commit exists and is complete, skip further processing
-                            continue;
-                        }
-
-                        // Commit exists but is incomplete, proceed to update (from the previous logic)
-                        bool needsUpdate = false;
-                        var updateFields = new List<string>();
-                        var updateParams = new Dictionary<string, object> { { "Id", existingCommitInfo.Id.Value } };
-                        
-                        if (existingCommitInfo.IsPRMergeCommit != shouldBePRMergeCommit)
-                        {
-                            updateFields.Add("IsPRMergeCommit = @IsPRMergeCommit");
-                            updateParams["IsPRMergeCommit"] = shouldBePRMergeCommit;
-                            needsUpdate = true;
-                        }
-                        
-                        if (existingCommitInfo.IsMerge != isMergeCommit)
-                        {
-                            updateFields.Add("IsMerge = @IsMerge");
-                            updateParams["IsMerge"] = isMergeCommit;
-                            needsUpdate = true;
-                        }
-                        
-                        if (needsUpdate)
-                        {
-                            var updateSql = $"UPDATE Commits SET {string.Join(", ", updateFields)} WHERE Id = @Id";
-                            await connection.ExecuteAsync(updateSql, updateParams);
-                            _logger.LogInformation("Updated flags for existing commit in PR: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", 
-                                commit.Hash, isMergeCommit, shouldBePRMergeCommit);
-                        }
+                    // Find the repository ID (if not already available)
+                    var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
+                        "SELECT Id FROM Repositories WHERE Slug = @RepoSlug", new { RepoSlug = repoSlug });
+                    if (repoId == null) {
+                        _logger.LogWarning("Repository '{RepoSlug}' not found when inserting commit '{CommitHash}'.", repoSlug, commit.Hash);
+                        continue;
                     }
-                    else
-                    {
-                        // Try to fetch and insert the commit
-                        try
-                        {
-                            // Check for rate limiting before diff API call
-                            if (BitbucketApiClient.IsRateLimited())
-                            {
-                                var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
-                                _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching diff for PR commit {CommitHash}...", waitTime?.TotalSeconds ?? 0, commit.Hash);
-                            }
-                            
-                            // Fetch raw diff and parse it
-                            var diffContent = await _apiClient.GetCommitDiffAsync(workspace, repoSlug, commit.Hash);
-                            var (totalAdded, totalRemoved, codeAdded, codeRemoved) = _diffParser.ParseDiff(diffContent);
 
-                            // Find or insert the author's internal ID
-                            int? authorId = null;
-                            string displayName = null, email = null, bitbucketUserId = null;
-                            if (commit.Author?.User?.Uuid != null)
-                            {
-                                bitbucketUserId = commit.Author.User.Uuid;
-                                authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = bitbucketUserId });
-                            }
-                            if (authorId == null)
-                            {
-                                // Try to parse from raw
-                                var raw = commit.Author?.Raw;
-                                if (!string.IsNullOrEmpty(raw))
-                                {
-                                    var match = Regex.Match(raw, @"^(.*?)\s*<(.+?)>$");
-                                    if (match.Success)
-                                    {
-                                        displayName = match.Groups[1].Value;
-                                        email = match.Groups[2].Value;
-                                    }
-                                    else
-                                    {
-                                        displayName = raw;
-                                    }
-                                }
-                                if (string.IsNullOrEmpty(bitbucketUserId) && !string.IsNullOrEmpty(email))
-                                {
-                                    bitbucketUserId = $"synthetic:{email}";
-                                }
-                                if (string.IsNullOrEmpty(bitbucketUserId))
-                                {
-                                    // Fallback: use commit hash as synthetic user ID
-                                    bitbucketUserId = $"synthetic:unknown:{commit.Hash}";
-                                }
-                                if (string.IsNullOrEmpty(displayName))
-                                {
-                                    displayName = "Unknown";
-                                }
-                                if (!string.IsNullOrEmpty(bitbucketUserId))
-                                {
-                                    // Insert user if not exists
-                                    const string insertUserSql = @"
-                                        IF NOT EXISTS (SELECT 1 FROM Users WHERE BitbucketUserId = @BitbucketUserId)
-                                        BEGIN
-                                            INSERT INTO Users (BitbucketUserId, DisplayName, AvatarUrl, CreatedOn)
-                                            VALUES (@BitbucketUserId, @DisplayName, NULL, @CreatedOn);
-                                        END
-                                        SELECT Id FROM Users WHERE BitbucketUserId = @BitbucketUserId;
-                                    ";
-                                    authorId = await connection.QuerySingleOrDefaultAsync<int?>(insertUserSql, new
-                                    {
-                                        BitbucketUserId = bitbucketUserId,
-                                        DisplayName = displayName,
-                                        CreatedOn = commit.Date
-                                    });
-                                }
-                            }
-                            if (authorId == null)
-                            {
-                                _logger.LogWarning(
-                                    "Author for commit '{CommitHash}' not found and could not be created. Raw: '{Raw}', User UUID: '{Uuid}', DisplayName: '{DisplayName}', Email: '{Email}', BitbucketUserId: '{BitbucketUserId}'. Skipping commit insert.",
-                                    commit.Hash, commit.Author?.Raw, commit.Author?.User?.Uuid, displayName, email, bitbucketUserId);
-                                continue;
-                            }
+                    int commitId = await CommitCrudHelper.UpsertCommitAndFilesAsync(
+                        connection,
+                        commit,
+                        repoId.Value,
+                        workspace,
+                        repoSlug,
+                        _apiClient,
+                        _diffParser,
+                        _logger
+                    );
+                    if (commitId < 0) continue;
 
-                            // Find the repository ID
-                            var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
-                                "SELECT Id FROM Repositories WHERE Slug = @RepoSlug", new { RepoSlug = repoSlug });
-                            if (repoId == null)
-                            {
-                                _logger.LogWarning("Repository '{RepoSlug}' not found when inserting commit '{CommitHash}'.", repoSlug, commit.Hash);
-                                continue;
-                            }
-
-                            // Insert the commit using the pre-calculated flags
-                            const string insertSql = @"
-                                INSERT INTO Commits (BitbucketCommitHash, RepositoryId, AuthorId, Date, Message, LinesAdded, LinesRemoved, IsMerge, CodeLinesAdded, CodeLinesRemoved, IsPRMergeCommit)
-                                VALUES (@Hash, @RepoId, @AuthorId, @Date, @Message, @LinesAdded, @LinesRemoved, @IsMerge, @CodeLinesAdded, @CodeLinesRemoved, @IsPRMergeCommit);
-                                SELECT SCOPE_IDENTITY();
-                            ";
-                            var insertedId = await connection.ExecuteScalarAsync<int?>(insertSql, new
-                            {
-                                commit.Hash,
-                                RepoId = repoId.Value,
-                                AuthorId = authorId.Value,
-                                commit.Date,
-                                commit.Message,
-                                LinesAdded = totalAdded,
-                                LinesRemoved = totalRemoved,
-                                IsMerge = isMergeCommit,
-                                CodeLinesAdded = codeAdded,
-                                CodeLinesRemoved = codeRemoved,
-                                IsPRMergeCommit = shouldBePRMergeCommit
-                            });
-                            finalCommitId = insertedId;
-                            _logger.LogInformation("Inserted missing commit '{CommitHash}' for PR '{BitbucketPrId}'.", commit.Hash, bitbucketPrId);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Failed to fetch/insert missing commit '{CommitHash}' for PR '{BitbucketPrId}'.", commit.Hash, bitbucketPrId);
-                            continue;
-                        }
-                    }
-                    if (finalCommitId.HasValue)
-                    {
-                        // Associate commit with the PR
-                        const string joinSql = @"
-                            IF NOT EXISTS (SELECT 1 FROM PullRequestCommits WHERE PullRequestId = @PrDbId AND CommitId = @CommitId)
-                            BEGIN
-                                INSERT INTO PullRequestCommits (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
-                            END
-                        ";
-                        await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = finalCommitId.Value });
-                    }
+                    // Associate commit with the PR
+                    const string joinSql = @"
+                        IF NOT EXISTS (SELECT 1 FROM PullRequestCommits WHERE PullRequestId = @PrDbId AND CommitId = @CommitId)
+                        BEGIN
+                            INSERT INTO PullRequestCommits (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
+                        END
+                    ";
+                    await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = commitId });
                 }
                 commitNextPageUrl = commitPagedResponse.NextPageUrl;
             } while (!string.IsNullOrEmpty(commitNextPageUrl));
