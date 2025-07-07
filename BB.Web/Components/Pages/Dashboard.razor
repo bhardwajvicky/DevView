@@ -176,28 +176,28 @@
                                     🔵 Commits
                                 </button>
                                 <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(1)">
-                                    🟢 Total Added
+                                    🟢 Total ++
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(2)">
-                                    🔴 Total Removed
+                                    🔴 Total --
                                 </button>
                                 <button class="btn btn-sm btn-outline-info" onclick="toggleDataset(3)">
-                                    💚 Code Added
+                                    🧑‍💻 Code ++
                                 </button>
                                 <button class="btn btn-sm btn-outline-warning" onclick="toggleDataset(4)">
-                                    ❤️ Code Removed
+                                    🧑‍💻 Code --
                                 </button>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="toggleDataset(5)">
-                                    💜 Data Added
+                                    🗄️ Data ++
                                 </button>
                                 <button class="btn btn-sm btn-outline-dark" onclick="toggleDataset(6)">
-                                    🖤 Data Removed
+                                    🗄️ Data --
                                 </button>
                                 <button class="btn btn-sm btn-outline-primary" onclick="toggleDataset(7)">
-                                    🧡 Config Added
+                                    🛠️ Config ++
                                 </button>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="toggleDataset(8)">
-                                    🤎 Config Removed
+                                    🛠️ Config --
                                 </button>
                             </div>
                             <div>
@@ -245,14 +245,14 @@
                                             <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
                                         </Template>
                                     </RadzenDataGridColumn>
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code +" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code -" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesAdded" Title="Data +" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesRemoved" Title="Data -" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesAdded" Title="Config +" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesRemoved" Title="Config -" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total ++" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total --" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesAdded" Title="Data ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesRemoved" Title="Data --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesAdded" Title="Config ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesRemoved" Title="Config --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
                                     <RadzenDataGridColumn TItem="CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
                                         <Template Context="data">
                                             @{
@@ -511,7 +511,7 @@
                         hidden: false // Ensure it's visible by default
                     },
                     {
-                        label: 'Total Lines Added',
+                        label: 'Total ++',
                         data: totalAdded,
                         borderColor: 'rgb(34, 197, 94)',
                         backgroundColor: 'rgba(34, 197, 94, 0.2)',
@@ -522,7 +522,7 @@
                         yAxisID: 'y'
                     },
                     {
-                        label: 'Total Lines Removed',
+                        label: 'Total --',
                         data: totalRemoved,
                         borderColor: 'rgb(239, 68, 68)',
                         backgroundColor: 'rgba(239, 68, 68, 0.2)',
@@ -533,7 +533,7 @@
                         yAxisID: 'y'
                     },
                     {
-                        label: 'Code Lines Added',
+                        label: 'Code ++',
                         data: codeAdded,
                         borderColor: 'rgb(22, 163, 74)',
                         backgroundColor: 'rgba(22, 163, 74, 0.1)',
@@ -545,7 +545,7 @@
                         hidden: true
                     },
                     {
-                        label: 'Code Lines Removed',
+                        label: 'Code --',
                         data: codeRemoved,
                         borderColor: 'rgb(220, 38, 38)',
                         backgroundColor: 'rgba(220, 38, 38, 0.1)',
@@ -557,7 +557,7 @@
                         hidden: true
                     },
                     {
-                        label: 'Data Lines Added',
+                        label: 'Data ++',
                         data: dataAdded,
                         borderColor: 'rgb(147, 51, 234)',
                         backgroundColor: 'rgba(147, 51, 234, 0.1)',
@@ -569,7 +569,7 @@
                         hidden: true
                     },
                     {
-                        label: 'Data Lines Removed',
+                        label: 'Data --',
                         data: dataRemoved,
                         borderColor: 'rgb(126, 34, 206)',
                         backgroundColor: 'rgba(126, 34, 206, 0.1)',
@@ -581,7 +581,7 @@
                         hidden: true
                     },
                     {
-                        label: 'Config Lines Added',
+                        label: 'Config ++',
                         data: configAdded,
                         borderColor: 'rgb(245, 158, 11)',
                         backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -593,7 +593,7 @@
                         hidden: true
                     },
                     {
-                        label: 'Config Lines Removed',
+                        label: 'Config --',
                         data: configRemoved,
                         borderColor: 'rgb(217, 119, 6)',
                         backgroundColor: 'rgba(217, 119, 6, 0.1)',
@@ -650,22 +650,22 @@
                                 switch(label) {
                                     case 'Commits':
                                         return `📝 Commits: ${item.commitCount}`;
-                                    case 'Total Lines Added':
-                                        return `➕ Total Added: ${item.totalLinesAdded.toLocaleString()} lines`;
-                                    case 'Total Lines Removed':
-                                        return `➖ Total Removed: ${item.totalLinesRemoved.toLocaleString()} lines`;
-                                    case 'Code Lines Added':
-                                        return `💚 Code Added: ${item.codeLinesAdded.toLocaleString()} lines`;
-                                    case 'Code Lines Removed':
-                                        return `❤️ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`;
-                                    case 'Data Lines Added':
-                                        return `💜 Data Added: ${item.dataLinesAdded.toLocaleString()} lines`;
-                                    case 'Data Lines Removed':
-                                        return `🖤 Data Removed: ${item.dataLinesRemoved.toLocaleString()} lines`;
-                                    case 'Config Lines Added':
-                                        return `🧡 Config Added: ${item.configLinesAdded.toLocaleString()} lines`;
-                                    case 'Config Lines Removed':
-                                        return `🤎 Config Removed: ${item.configLinesRemoved.toLocaleString()} lines`;
+                                    case 'Total ++':
+                                        return `➕ Total ++: ${item.totalLinesAdded.toLocaleString()} lines`;
+                                    case 'Total --':
+                                        return `➖ Total --: ${item.totalLinesRemoved.toLocaleString()} lines`;
+                                    case '🧑‍💻 Code ++':
+                                        return `🧑‍💻 Code ++: ${item.codeLinesAdded.toLocaleString()} lines`;
+                                    case '🧑‍💻 Code --':
+                                        return `🧑‍💻 Code --: ${item.codeLinesRemoved.toLocaleString()} lines`;
+                                    case '🗄️ Data ++':
+                                        return `🗄️ Data ++: ${item.dataLinesAdded.toLocaleString()} lines`;
+                                    case '🗄️ Data --':
+                                        return `🗄️ Data --: ${item.dataLinesRemoved.toLocaleString()} lines`;
+                                    case '🛠️ Config ++':
+                                        return `🛠️ Config ++: ${item.configLinesAdded.toLocaleString()} lines`;
+                                    case '🛠️ Config --':
+                                        return `🛠️ Config --: ${item.configLinesRemoved.toLocaleString()} lines`;
                                     default:
                                         return `${label}: ${context.parsed.y.toLocaleString()}`;
                                 }
@@ -746,8 +746,6 @@
     
     // Initialize contributor charts
     window.initializeContributorCharts = (contributorData) => {
-        console.log('initializeContributorCharts called with data:', contributorData);
-        console.log('Data type:', typeof contributorData, 'Length:', contributorData?.length);
         
         if (!Array.isArray(contributorData) || contributorData.length === 0) {
             console.warn('No contributor data provided or data is empty');
@@ -815,7 +813,7 @@
                             hidden: false // Ensure it's visible by default
                         },
                         {
-                            label: 'Lines Added',
+                            label: 'Total ++',
                             data: totalAdded,
                             borderColor: 'rgb(34, 197, 94)',
                             backgroundColor: 'rgba(34, 197, 94, 0.1)',
@@ -827,7 +825,7 @@
                             hidden: false // Ensure it's visible by default
                         },
                         {
-                            label: 'Lines Removed',
+                            label: 'Total --',
                             data: totalRemoved,
                             borderColor: 'rgb(239, 68, 68)',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -837,6 +835,78 @@
                             pointHoverRadius: 5,
                             borderWidth: 1.5,
                             hidden: false // Ensure it's visible by default
+                        },
+                        {
+                            label: '🧑‍💻 Code ++',
+                            data: codeAdded,
+                            borderColor: 'rgb(22, 163, 74)',
+                            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        },
+                        {
+                            label: '🧑‍💻 Code --',
+                            data: codeRemoved,
+                            borderColor: 'rgb(220, 38, 38)',
+                            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        },
+                        {
+                            label: '🗄️ Data ++',
+                            data: dataAdded,
+                            borderColor: 'rgb(147, 51, 234)',
+                            backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        },
+                        {
+                            label: '🗄️ Data --',
+                            data: dataRemoved,
+                            borderColor: 'rgb(126, 34, 206)',
+                            backgroundColor: 'rgba(126, 34, 206, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        },
+                        {
+                            label: '🛠️ Config ++',
+                            data: configAdded,
+                            borderColor: 'rgb(245, 158, 11)',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
+                        },
+                        {
+                            label: '🛠️ Config --',
+                            data: configRemoved,
+                            borderColor: 'rgb(217, 119, 6)',
+                            backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 1.5,
+                            hidden: true
                         }
                     ]
                 },
@@ -878,14 +948,29 @@
                                 label: function(context) {
                                     const dataIndex = context.dataIndex;
                                     const item = contributor.data[dataIndex];
-                                    return [
-                                        `📝 Commits: ${item.commitCount}`,
-                                        `➕ Total Added: ${item.totalLinesAdded.toLocaleString()} lines`,
-                                        `➖ Total Removed: ${item.totalLinesRemoved.toLocaleString()} lines`,
-                                        `💚 Code: +${item.codeLinesAdded.toLocaleString()} / -${item.codeLinesRemoved.toLocaleString()}`,
-                                        `💜 Data: +${item.dataLinesAdded.toLocaleString()} / -${item.dataLinesRemoved.toLocaleString()}`,
-                                        `🧡 Config: +${item.configLinesAdded.toLocaleString()} / -${item.configLinesRemoved.toLocaleString()}`
-                                    ];
+                                    const label = context.dataset.label;
+                                    switch(label) {
+                                        case 'Commits':
+                                            return `📝 Commits: ${item.commitCount}`;
+                                        case 'Total ++':
+                                            return `➕ Total ++: ${item.totalLinesAdded.toLocaleString()} lines`;
+                                        case 'Total --':
+                                            return `➖ Total --: ${item.totalLinesRemoved.toLocaleString()} lines`;
+                                        case '🧑‍💻 Code ++':
+                                            return `🧑‍💻 Code ++: ${item.codeLinesAdded.toLocaleString()} lines`;
+                                        case '🧑‍💻 Code --':
+                                            return `🧑‍💻 Code --: ${item.codeLinesRemoved.toLocaleString()} lines`;
+                                        case '🗄️ Data ++':
+                                            return `🗄️ Data ++: ${item.dataLinesAdded.toLocaleString()} lines`;
+                                        case '🗄️ Data --':
+                                            return `🗄️ Data --: ${item.dataLinesRemoved.toLocaleString()} lines`;
+                                        case '🛠️ Config ++':
+                                            return `🛠️ Config ++: ${item.configLinesAdded.toLocaleString()} lines`;
+                                        case '🛠️ Config --':
+                                            return `🛠️ Config --: ${item.configLinesRemoved.toLocaleString()} lines`;
+                                        default:
+                                            return `${label}: ${context.parsed.y.toLocaleString()}`;
+                                    }
                                 }
                             }
                         }

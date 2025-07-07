@@ -19,8 +19,6 @@
     private string? startDateString;
     private string? endDateString;
     private bool includePR = false;
-    private bool includeData = true;
-    private bool includeConfig = true;
     private int currentPage = 1;
     private int totalPages = 1;
     private int pageSize = 25;
@@ -55,7 +53,7 @@
         errorMessage = null;
         try
         {
-            var url = $"/api/commits/{RepoSlug.ToLower()}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+            var url = $"/api/commits/{RepoSlug.ToLower()}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}";
             if (!string.IsNullOrEmpty(selectedUserId)) url += $"&userId={selectedUserId}";
             if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
             if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
@@ -162,26 +160,6 @@
         Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
     }
 
-    private async Task OnIncludeDataChanged(ChangeEventArgs e)
-    {
-        Console.WriteLine($"OnIncludeDataChanged called with value: {e.Value}");
-        var oldValue = includeData;
-        includeData = (bool)e.Value;
-        Console.WriteLine($"includeData changed from {oldValue} to {includeData}");
-        currentPage = 1;
-        await LoadCommits();
-    }
-
-    private async Task OnIncludeConfigChanged(ChangeEventArgs e)
-    {
-        Console.WriteLine($"OnIncludeConfigChanged called with value: {e.Value}");
-        var oldValue = includeConfig;
-        includeConfig = (bool)e.Value;
-        Console.WriteLine($"includeConfig changed from {oldValue} to {includeConfig}");
-        currentPage = 1;
-        await LoadCommits();
-    }
-
     public class CommitListItemDto
     {
         public string Hash { get; set; } = string.Empty;
@@ -221,12 +199,6 @@
 <div class="mb-3">
     <label class="form-check-label me-3">
         <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
-    </label>
-    <label class="form-check-label me-3">
-        <input type="checkbox" class="form-check-input" checked="@includeData" @onchange="OnIncludeDataChanged" /> Include Data
-    </label>
-    <label class="form-check-label me-3">
-        <input type="checkbox" class="form-check-input" checked="@includeConfig" @onchange="OnIncludeConfigChanged" /> Include Config
     </label>
 </div>
 @if (isLoading)
@@ -281,12 +253,24 @@ else
                                 <span class="text-danger fw-bold ms-2">--@commit.LinesRemoved</span>
                             }
                         </td>
-                        <td><span class="text-success fw-bold">@commit.CodeLinesAdded</span></td>
-                        <td><span class="text-danger fw-bold">@commit.CodeLinesRemoved</span></td>
-                        <td><span class="text-success fw-bold">@commit.DataLinesAdded</span></td>
-                        <td><span class="text-danger fw-bold">@commit.DataLinesRemoved</span></td>
-                        <td><span class="text-success fw-bold">@commit.ConfigLinesAdded</span></td>
-                        <td><span class="text-danger fw-bold">@commit.ConfigLinesRemoved</span></td>
+                        <td>
+                            @(commit.CodeLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.CodeLinesAdded}</span>" : "")
+                        </td>
+                        <td>
+                            @(commit.CodeLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.CodeLinesRemoved}</span>" : "")
+                        </td>
+                        <td>
+                            @(commit.DataLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.DataLinesAdded}</span>" : "")
+                        </td>
+                        <td>
+                            @(commit.DataLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.DataLinesRemoved}</span>" : "")
+                        </td>
+                        <td>
+                            @(commit.ConfigLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.ConfigLinesAdded}</span>" : "")
+                        </td>
+                        <td>
+                            @(commit.ConfigLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.ConfigLinesRemoved}</span>" : "")
+                        </td>
                         <td>
                             @if (commit.IsPRMergeCommit)
                             {
@@ -296,6 +280,38 @@ else
                         </td>
                     </tr>
                 }
+                <tr class="table-secondary fw-bold">
+                    <td colspan="3" class="text-end">Total:</td>
+                    <td>
+                        @if (commits.Sum(c => c.LinesAdded) > 0)
+                        {
+                            <span class="text-success fw-bold">++@commits.Sum(c => c.LinesAdded)</span>
+                        }
+                        @if (commits.Sum(c => c.LinesRemoved) > 0)
+                        {
+                            <span class="text-danger fw-bold ms-2">--@commits.Sum(c => c.LinesRemoved)</span>
+                        }
+                    </td>
+                    <td>
+                        @(commits.Sum(c => c.CodeLinesAdded) > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commits.Sum(c => c.CodeLinesAdded)}</span>" : "")
+                    </td>
+                    <td>
+                        @(commits.Sum(c => c.CodeLinesRemoved) > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commits.Sum(c => c.CodeLinesRemoved)}</span>" : "")
+                    </td>
+                    <td>
+                        @(commits.Sum(c => c.DataLinesAdded) > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commits.Sum(c => c.DataLinesAdded)}</span>" : "")
+                    </td>
+                    <td>
+                        @(commits.Sum(c => c.DataLinesRemoved) > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commits.Sum(c => c.DataLinesRemoved)}</span>" : "")
+                    </td>
+                    <td>
+                        @(commits.Sum(c => c.ConfigLinesAdded) > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commits.Sum(c => c.ConfigLinesAdded)}</span>" : "")
+                    </td>
+                    <td>
+                        @(commits.Sum(c => c.ConfigLinesRemoved) > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commits.Sum(c => c.ConfigLinesRemoved)}</span>" : "")
+                    </td>
+                    <td></td>
+                </tr>
             </tbody>
         </table>
     </div>

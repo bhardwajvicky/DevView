@@ -35,8 +35,6 @@
     private string? startDateString;
     private string? endDateString;
     private bool includePR = false; // Default unchecked as requested
-    private bool includeData = true;
-    private bool includeConfig = true;
     private int currentPage = 1;
     private int totalPages = 1;
     private int pageSize = 25;
@@ -90,7 +88,7 @@
         try
         {
             // Use the existing commits API endpoint with userId filter
-            var url = $"/api/commits/{RepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&userId={UserId}";
+            var url = $"/api/commits/{RepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&userId={UserId}";
             
             if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
             if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
@@ -193,26 +191,6 @@
         Console.WriteLine("About to call LoadCommits from OnIncludePRChanged");
         await LoadCommits();
         Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
-    }
-
-    private async Task OnIncludeDataChanged(ChangeEventArgs e)
-    {
-        Console.WriteLine($"OnIncludeDataChanged called with value: {e.Value}");
-        var oldValue = includeData;
-        includeData = (bool)e.Value;
-        Console.WriteLine($"includeData changed from {oldValue} to {includeData}");
-        currentPage = 1;
-        await LoadCommits();
-    }
-
-    private async Task OnIncludeConfigChanged(ChangeEventArgs e)
-    {
-        Console.WriteLine($"OnIncludeConfigChanged called with value: {e.Value}");
-        var oldValue = includeConfig;
-        includeConfig = (bool)e.Value;
-        Console.WriteLine($"includeConfig changed from {oldValue} to {includeConfig}");
-        currentPage = 1;
-        await LoadCommits();
     }
 
     private void NavigateBack()
@@ -325,15 +303,11 @@
             <div class="mb-3">
                 <label class="form-label fw-bold">Filters</label>
                 <div>
-                    <label class="form-check-label me-3">
-                        <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
-                    </label>
-                    <label class="form-check-label me-3">
-                        <input type="checkbox" class="form-check-input" checked="@includeData" @onchange="OnIncludeDataChanged" /> Include Data
-                    </label>
-                    <label class="form-check-label me-3">
-                        <input type="checkbox" class="form-check-input" checked="@includeConfig" @onchange="OnIncludeConfigChanged" /> Include Config
-                    </label>
+                    <div class="mb-3">
+                        <label class="form-check-label">
+                            <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -445,12 +419,24 @@
                                     <span class="text-danger fw-bold ms-2">--@commit.LinesRemoved</span>
                                 }
                             </td>
-                            <td><span class="text-success fw-bold">@commit.CodeLinesAdded</span></td>
-                            <td><span class="text-danger fw-bold">@commit.CodeLinesRemoved</span></td>
-                            <td><span class="text-success fw-bold">@commit.DataLinesAdded</span></td>
-                            <td><span class="text-danger fw-bold">@commit.DataLinesRemoved</span></td>
-                            <td><span class="text-success fw-bold">@commit.ConfigLinesAdded</span></td>
-                            <td><span class="text-danger fw-bold">@commit.ConfigLinesRemoved</span></td>
+                            <td>
+                                @(commit.CodeLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.CodeLinesAdded}</span>" : "")
+                            </td>
+                            <td>
+                                @(commit.CodeLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.CodeLinesRemoved}</span>" : "")
+                            </td>
+                            <td>
+                                @(commit.DataLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.DataLinesAdded}</span>" : "")
+                            </td>
+                            <td>
+                                @(commit.DataLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.DataLinesRemoved}</span>" : "")
+                            </td>
+                            <td>
+                                @(commit.ConfigLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.ConfigLinesAdded}</span>" : "")
+                            </td>
+                            <td>
+                                @(commit.ConfigLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.ConfigLinesRemoved}</span>" : "")
+                            </td>
                             <td>
                                 @if (commit.IsPRMergeCommit)
                                 {
