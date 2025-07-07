@@ -412,30 +412,30 @@
                             <td>
                                 @if (commit.LinesAdded > 0)
                                 {
-                                    <span class="text-success fw-bold">++@commit.LinesAdded</span>
+                                    @((MarkupString)$"<span class='text-success fw-bold'>++{commit.LinesAdded}</span>")
                                 }
                                 @if (commit.LinesRemoved > 0)
                                 {
-                                    <span class="text-danger fw-bold ms-2">--@commit.LinesRemoved</span>
+                                    @((MarkupString)$"<span class='text-danger fw-bold ms-2'>--{commit.LinesRemoved}</span>")
                                 }
                             </td>
                             <td>
-                                @(commit.CodeLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.CodeLinesAdded}</span>" : "")
+                                @(commit.CodeLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.CodeLinesAdded}</span>" : (MarkupString)string.Empty)
                             </td>
                             <td>
-                                @(commit.CodeLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.CodeLinesRemoved}</span>" : "")
+                                @(commit.CodeLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.CodeLinesRemoved}</span>" : (MarkupString)string.Empty)
                             </td>
                             <td>
-                                @(commit.DataLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.DataLinesAdded}</span>" : "")
+                                @(commit.DataLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.DataLinesAdded}</span>" : (MarkupString)string.Empty)
                             </td>
                             <td>
-                                @(commit.DataLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.DataLinesRemoved}</span>" : "")
+                                @(commit.DataLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.DataLinesRemoved}</span>" : (MarkupString)string.Empty)
                             </td>
                             <td>
-                                @(commit.ConfigLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.ConfigLinesAdded}</span>" : "")
+                                @(commit.ConfigLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.ConfigLinesAdded}</span>" : (MarkupString)string.Empty)
                             </td>
                             <td>
-                                @(commit.ConfigLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.ConfigLinesRemoved}</span>" : "")
+                                @(commit.ConfigLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.ConfigLinesRemoved}</span>" : (MarkupString)string.Empty)
                             </td>
                             <td>
                                 @if (commit.IsPRMergeCommit)
