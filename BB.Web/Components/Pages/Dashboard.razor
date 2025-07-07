@@ -794,6 +794,13 @@
             const totalAdded = contributor.data.map(item => item.totalLinesAdded);
             const totalRemoved = contributor.data.map(item => item.totalLinesRemoved);
             
+            const codeAdded = contributor.data.map(item => item.codeLinesAdded);
+            const codeRemoved = contributor.data.map(item => item.codeLinesRemoved);
+            const dataAdded = contributor.data.map(item => item.dataLinesAdded);
+            const dataRemoved = contributor.data.map(item => item.dataLinesRemoved);
+            const configAdded = contributor.data.map(item => item.configLinesAdded);
+            const configRemoved = contributor.data.map(item => item.configLinesRemoved);
+            
             // Create chart
             window[`contributorChart_${userId}`] = new Chart(ctx, {
                 type: 'line',
@@ -1134,10 +1141,10 @@
         {
             await InitializeChart();
         }
-        
         // Initialize contributor charts after render if we have data but no charts yet
         if (!firstRender && contributorData != null && contributorData.Any() && !contributorChartsInitialized)
         {
+            await Task.Delay(200); // Ensure DOM is ready
             await InitializeContributorCharts();
         }
     }
