@@ -35,6 +35,8 @@
     private string? startDateString;
     private string? endDateString;
     private bool includePR = false; // Default unchecked as requested
+    private bool includeData = true;
+    private bool includeConfig = true;
     private int currentPage = 1;
     private int totalPages = 1;
     private int pageSize = 25;
@@ -88,7 +90,7 @@
         try
         {
             // Use the existing commits API endpoint with userId filter
-            var url = $"/api/commits/{RepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&userId={UserId}";
+            var url = $"/api/commits/{RepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&userId={UserId}";
             
             if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
             if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
@@ -193,6 +195,26 @@
         Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
     }
 
+    private async Task OnIncludeDataChanged(ChangeEventArgs e)
+    {
+        Console.WriteLine($"OnIncludeDataChanged called with value: {e.Value}");
+        var oldValue = includeData;
+        includeData = (bool)e.Value;
+        Console.WriteLine($"includeData changed from {oldValue} to {includeData}");
+        currentPage = 1;
+        await LoadCommits();
+    }
+
+    private async Task OnIncludeConfigChanged(ChangeEventArgs e)
+    {
+        Console.WriteLine($"OnIncludeConfigChanged called with value: {e.Value}");
+        var oldValue = includeConfig;
+        includeConfig = (bool)e.Value;
+        Console.WriteLine($"includeConfig changed from {oldValue} to {includeConfig}");
+        currentPage = 1;
+        await LoadCommits();
+    }
+
     private void NavigateBack()
     {
         if (!string.IsNullOrEmpty(RepoSlug))
@@ -217,6 +239,12 @@
         public int LinesRemoved { get; set; }
         public int CodeLinesAdded { get; set; }
         public int CodeLinesRemoved { get; set; }
+        public int DataLinesAdded { get; set; }
+        public int DataLinesRemoved { get; set; }
+        public int ConfigLinesAdded { get; set; }
+        public int ConfigLinesRemoved { get; set; }
+        public int DocsLinesAdded { get; set; }
+        public int DocsLinesRemoved { get; set; }
         public string? RepositoryName { get; set; }
         public string? RepositorySlug { get; set; }
     }
@@ -297,8 +325,14 @@
             <div class="mb-3">
                 <label class="form-label fw-bold">Filters</label>
                 <div>
-                    <label class="form-check-label">
+                    <label class="form-check-label me-3">
                         <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
+                    </label>
+                    <label class="form-check-label me-3">
+                        <input type="checkbox" class="form-check-input" checked="@includeData" @onchange="OnIncludeDataChanged" /> Include Data
+                    </label>
+                    <label class="form-check-label me-3">
+                        <input type="checkbox" class="form-check-input" checked="@includeConfig" @onchange="OnIncludeConfigChanged" /> Include Config
                     </label>
                 </div>
             </div>
@@ -345,16 +379,16 @@
                             <small class="text-muted">Commits (Page @currentPage of @totalPages)</small>
                         </div>
                         <div class="col-md-3">
-                            <h5 class="mb-1 text-success">+@commits.Sum(c => c.CodeLinesAdded)</h5>
-                            <small class="text-muted">Code Lines Added</small>
+                            <h5 class="mb-1 text-success">+@commits.Sum(c => c.LinesAdded)</h5>
+                            <small class="text-muted">Total Lines Added</small>
                         </div>
                         <div class="col-md-3">
-                            <h5 class="mb-1 text-danger">-@commits.Sum(c => c.CodeLinesRemoved)</h5>
-                            <small class="text-muted">Code Lines Removed</small>
+                            <h5 class="mb-1 text-danger">-@commits.Sum(c => c.LinesRemoved)</h5>
+                            <small class="text-muted">Total Lines Removed</small>
                         </div>
                         <div class="col-md-3">
                             @{
-                                var netChange = commits.Sum(c => c.CodeLinesAdded) - commits.Sum(c => c.CodeLinesRemoved);
+                                var netChange = commits.Sum(c => c.LinesAdded) - commits.Sum(c => c.LinesRemoved);
                                 var netClass = netChange >= 0 ? "text-success" : "text-danger";
                                 var netSign = netChange >= 0 ? "+" : "";
                             }
@@ -378,9 +412,13 @@
                         }
                         <th>Date Time</th>
                         <th>Total Lines</th>
-                        <th>Code ++</th>
-                        <th>Code --</th>
-                        <th style="width:40%">Message</th>
+                        <th><span class="text-success">Code ++</span></th>
+                        <th><span class="text-danger">Code --</span></th>
+                        <th><span class="text-success">Data ++</span></th>
+                        <th><span class="text-danger">Data --</span></th>
+                        <th><span class="text-success">Config ++</span></th>
+                        <th><span class="text-danger">Config --</span></th>
+                        <th style="width:30%">Message</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -409,6 +447,10 @@
                             </td>
                             <td><span class="text-success fw-bold">@commit.CodeLinesAdded</span></td>
                             <td><span class="text-danger fw-bold">@commit.CodeLinesRemoved</span></td>
+                            <td><span class="text-success fw-bold">@commit.DataLinesAdded</span></td>
+                            <td><span class="text-danger fw-bold">@commit.DataLinesRemoved</span></td>
+                            <td><span class="text-success fw-bold">@commit.ConfigLinesAdded</span></td>
+                            <td><span class="text-danger fw-bold">@commit.ConfigLinesRemoved</span></td>
                             <td>
                                 @if (commit.IsPRMergeCommit)
                                 {

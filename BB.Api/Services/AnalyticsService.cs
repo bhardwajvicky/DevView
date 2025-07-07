@@ -17,12 +17,12 @@ namespace BB.Api.Services
             _connectionString = config.DbConnectionString;
         }
 
-        private static string GetFilterClause()
+        private static string GetFilterClause(bool includePR = true)
         {
-            return @"
+            var prFilter = includePR ? "" : "c.IsPRMergeCommit = 0 AND ";
+            return $@"
                 WHERE 
-                    c.IsMerge = 0
-                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    {prFilter}(@RepoSlug IS NULL OR r.Slug = @RepoSlug)
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@UserId IS NULL OR c.AuthorId = @UserId)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
@@ -31,7 +31,8 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId)
+            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, 
+            bool includePR = true, bool includeData = true, bool includeConfig = true)
         {
             using var connection = new SqlConnection(_connectionString);
             
@@ -57,10 +58,16 @@ namespace BB.Api.Services
                     SUM(c.LinesAdded) AS TotalLinesAdded,
                     SUM(c.LinesRemoved) AS TotalLinesRemoved,
                     SUM(c.CodeLinesAdded) AS CodeLinesAdded,
-                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved
+                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
+                    SUM(c.DataLinesAdded) AS DataLinesAdded,
+                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
+                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
+                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
+                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
+                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
-                {GetFilterClause()}
+                {GetFilterClause(includePR)}
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
                 ORDER BY Date;
             ";
@@ -69,7 +76,8 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<ContributorActivityDto>> GetContributorActivityAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId)
+            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId,
+            bool includePR = true, bool includeData = true, bool includeConfig = true)
         {
             using var connection = new SqlConnection(_connectionString);
 
@@ -97,11 +105,17 @@ namespace BB.Api.Services
                     SUM(c.LinesAdded) AS TotalLinesAdded,
                     SUM(c.LinesRemoved) AS TotalLinesRemoved,
                     SUM(c.CodeLinesAdded) AS CodeLinesAdded,
-                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved
+                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
+                    SUM(c.DataLinesAdded) AS DataLinesAdded,
+                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
+                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
+                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
+                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
+                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 JOIN Users u ON c.AuthorId = u.Id
-                {GetFilterClause()}
+                {GetFilterClause(includePR)}
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE), u.Id, u.DisplayName
                 ORDER BY Date, DisplayName;
             ";
@@ -110,18 +124,18 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<CommitPunchcardDto>> GetCommitPunchcardAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, int? userId)
+            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, int? userId, bool includePR = true)
         {
             using var connection = new SqlConnection(_connectionString);
 
-            const string sql = @"
+            var sql = $@"
                 SELECT 
                     DATEPART(weekday, c.Date) - 1 AS DayOfWeek,
                     DATEPART(hour, c.Date) AS Hour,
                     COUNT(c.Id) AS CommitCount
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
-                {GetFilterClause()}
+                {GetFilterClause(includePR)}
                 GROUP BY DATEPART(weekday, c.Date), DATEPART(hour, c.Date)
                 ORDER BY DayOfWeek, Hour;
             ";
@@ -161,6 +175,12 @@ namespace BB.Api.Services
                     c.LinesRemoved,
                     c.CodeLinesAdded,
                     c.CodeLinesRemoved,
+                    c.DataLinesAdded,
+                    c.DataLinesRemoved,
+                    c.ConfigLinesAdded,
+                    c.ConfigLinesRemoved,
+                    c.DocsLinesAdded,
+                    c.DocsLinesRemoved,
                     c.IsMerge
                 FROM Commits c
                 JOIN Users u ON c.AuthorId = u.Id
@@ -175,6 +195,130 @@ namespace BB.Api.Services
             ";
 
             return await connection.QueryAsync<CommitDetailDto>(sql, new { repoSlug, workspace, userId, date, startDate, endDate });
+        }
+
+        public async Task<FileClassificationSummaryDto> GetFileClassificationSummaryAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, int? userId, bool includePR = true)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = $@"
+                SELECT 
+                    COUNT(c.Id) AS TotalCommits,
+                    SUM(c.LinesAdded) AS TotalLinesAdded,
+                    SUM(c.LinesRemoved) AS TotalLinesRemoved,
+                    
+                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
+                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
+                    COUNT(CASE WHEN c.CodeLinesAdded > 0 OR c.CodeLinesRemoved > 0 THEN 1 END) AS CodeCommits,
+                    
+                    SUM(c.DataLinesAdded) AS DataLinesAdded,
+                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
+                    COUNT(CASE WHEN c.DataLinesAdded > 0 OR c.DataLinesRemoved > 0 THEN 1 END) AS DataCommits,
+                    
+                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
+                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
+                    COUNT(CASE WHEN c.ConfigLinesAdded > 0 OR c.ConfigLinesRemoved > 0 THEN 1 END) AS ConfigCommits,
+                    
+                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
+                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved,
+                    COUNT(CASE WHEN c.DocsLinesAdded > 0 OR c.DocsLinesRemoved > 0 THEN 1 END) AS DocsCommits
+                FROM Commits c
+                JOIN Repositories r ON c.RepositoryId = r.Id
+                {GetFilterClause(includePR)}
+            ";
+
+            var result = await connection.QuerySingleOrDefaultAsync<FileClassificationSummaryDto>(sql, 
+                new { repoSlug, workspace, startDate, endDate, userId });
+            
+            return result ?? new FileClassificationSummaryDto();
+        }
+
+        public async Task<IEnumerable<FileTypeActivityDto>> GetFileTypeActivityAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, bool includePR = true)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            string dateTrunc;
+            switch (groupBy)
+            {
+                case GroupingType.Day:
+                    dateTrunc = "day";
+                    break;
+                case GroupingType.Month:
+                    dateTrunc = "month";
+                    break;
+                case GroupingType.Week:
+                default:
+                    dateTrunc = "week";
+                    break;
+            }
+
+            var sql = $@"
+                WITH FileTypeData AS (
+                    SELECT 
+                        CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
+                        'code' AS FileType,
+                        COUNT(CASE WHEN c.CodeLinesAdded > 0 OR c.CodeLinesRemoved > 0 THEN 1 END) AS CommitCount,
+                        SUM(c.CodeLinesAdded) AS LinesAdded,
+                        SUM(c.CodeLinesRemoved) AS LinesRemoved
+                    FROM Commits c
+                    JOIN Repositories r ON c.RepositoryId = r.Id
+                    {GetFilterClause(includePR)}
+                    GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
+                        'data' AS FileType,
+                        COUNT(CASE WHEN c.DataLinesAdded > 0 OR c.DataLinesRemoved > 0 THEN 1 END) AS CommitCount,
+                        SUM(c.DataLinesAdded) AS LinesAdded,
+                        SUM(c.DataLinesRemoved) AS LinesRemoved
+                    FROM Commits c
+                    JOIN Repositories r ON c.RepositoryId = r.Id
+                    {GetFilterClause(includePR)}
+                    GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
+                        'config' AS FileType,
+                        COUNT(CASE WHEN c.ConfigLinesAdded > 0 OR c.ConfigLinesRemoved > 0 THEN 1 END) AS CommitCount,
+                        SUM(c.ConfigLinesAdded) AS LinesAdded,
+                        SUM(c.ConfigLinesRemoved) AS LinesRemoved
+                    FROM Commits c
+                    JOIN Repositories r ON c.RepositoryId = r.Id
+                    {GetFilterClause(includePR)}
+                    GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
+                        'docs' AS FileType,
+                        COUNT(CASE WHEN c.DocsLinesAdded > 0 OR c.DocsLinesRemoved > 0 THEN 1 END) AS CommitCount,
+                        SUM(c.DocsLinesAdded) AS LinesAdded,
+                        SUM(c.DocsLinesRemoved) AS LinesRemoved
+                    FROM Commits c
+                    JOIN Repositories r ON c.RepositoryId = r.Id
+                    {GetFilterClause(includePR)}
+                    GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
+                )
+                SELECT 
+                    Date,
+                    FileType,
+                    CommitCount,
+                    LinesAdded,
+                    LinesRemoved,
+                    (LinesAdded - LinesRemoved) AS NetLinesChanged
+                FROM FileTypeData
+                WHERE CommitCount > 0
+                ORDER BY Date, FileType;
+            ";
+
+            return await connection.QueryAsync<FileTypeActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
         }
     }
 } 

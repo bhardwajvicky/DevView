@@ -12,5 +12,11 @@ namespace BB.Web.DTOs
         public int TotalLinesRemoved { get; set; }
         public int CodeLinesAdded { get; set; }
         public int CodeLinesRemoved { get; set; }
+        public int DataLinesAdded { get; set; }
+        public int DataLinesRemoved { get; set; }
+        public int ConfigLinesAdded { get; set; }
+        public int ConfigLinesRemoved { get; set; }
+        public int DocsLinesAdded { get; set; }
+        public int DocsLinesRemoved { get; set; }
     }
 } 

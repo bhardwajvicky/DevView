@@ -18,7 +18,9 @@
     private string? selectedUserId;
     private string? startDateString;
     private string? endDateString;
-    private bool includePR = true;
+    private bool includePR = false;
+    private bool includeData = true;
+    private bool includeConfig = true;
     private int currentPage = 1;
     private int totalPages = 1;
     private int pageSize = 25;
@@ -53,7 +55,7 @@
         errorMessage = null;
         try
         {
-            var url = $"/api/commits/{RepoSlug.ToLower()}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}";
+            var url = $"/api/commits/{RepoSlug.ToLower()}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             if (!string.IsNullOrEmpty(selectedUserId)) url += $"&userId={selectedUserId}";
             if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
             if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
@@ -160,6 +162,26 @@
         Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
     }
 
+    private async Task OnIncludeDataChanged(ChangeEventArgs e)
+    {
+        Console.WriteLine($"OnIncludeDataChanged called with value: {e.Value}");
+        var oldValue = includeData;
+        includeData = (bool)e.Value;
+        Console.WriteLine($"includeData changed from {oldValue} to {includeData}");
+        currentPage = 1;
+        await LoadCommits();
+    }
+
+    private async Task OnIncludeConfigChanged(ChangeEventArgs e)
+    {
+        Console.WriteLine($"OnIncludeConfigChanged called with value: {e.Value}");
+        var oldValue = includeConfig;
+        includeConfig = (bool)e.Value;
+        Console.WriteLine($"includeConfig changed from {oldValue} to {includeConfig}");
+        currentPage = 1;
+        await LoadCommits();
+    }
+
     public class CommitListItemDto
     {
         public string Hash { get; set; } = string.Empty;
@@ -172,6 +194,12 @@
         public int LinesRemoved { get; set; }
         public int CodeLinesAdded { get; set; }
         public int CodeLinesRemoved { get; set; }
+        public int DataLinesAdded { get; set; }
+        public int DataLinesRemoved { get; set; }
+        public int ConfigLinesAdded { get; set; }
+        public int ConfigLinesRemoved { get; set; }
+        public int DocsLinesAdded { get; set; }
+        public int DocsLinesRemoved { get; set; }
         public string? RepositoryName { get; set; }
         public string? RepositorySlug { get; set; }
     }
@@ -191,8 +219,14 @@
 
 <h3>Commits for @RepoSlug</h3>
 <div class="mb-3">
-    <label class="form-check-label me-2">
+    <label class="form-check-label me-3">
         <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
+    </label>
+    <label class="form-check-label me-3">
+        <input type="checkbox" class="form-check-input" checked="@includeData" @onchange="OnIncludeDataChanged" /> Include Data
+    </label>
+    <label class="form-check-label me-3">
+        <input type="checkbox" class="form-check-input" checked="@includeConfig" @onchange="OnIncludeConfigChanged" /> Include Config
     </label>
 </div>
 @if (isLoading)
@@ -219,9 +253,13 @@ else
                     <th>Author</th>
                     <th>Date Time</th>
                     <th>Total Lines</th>
-                    <th>Code ++</th>
-                    <th>Code --</th>
-                    <th style="width:40%">Message</th>
+                    <th><span class="text-success">Code ++</span></th>
+                    <th><span class="text-danger">Code --</span></th>
+                    <th><span class="text-success">Data ++</span></th>
+                    <th><span class="text-danger">Data --</span></th>
+                    <th><span class="text-success">Config ++</span></th>
+                    <th><span class="text-danger">Config --</span></th>
+                    <th style="width:30%">Message</th>
                 </tr>
             </thead>
             <tbody>
@@ -245,6 +283,10 @@ else
                         </td>
                         <td><span class="text-success fw-bold">@commit.CodeLinesAdded</span></td>
                         <td><span class="text-danger fw-bold">@commit.CodeLinesRemoved</span></td>
+                        <td><span class="text-success fw-bold">@commit.DataLinesAdded</span></td>
+                        <td><span class="text-danger fw-bold">@commit.DataLinesRemoved</span></td>
+                        <td><span class="text-success fw-bold">@commit.ConfigLinesAdded</span></td>
+                        <td><span class="text-danger fw-bold">@commit.ConfigLinesRemoved</span></td>
                         <td>
                             @if (commit.IsPRMergeCommit)
                             {

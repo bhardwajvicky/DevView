@@ -26,6 +26,7 @@ builder.Services.AddScoped<BitbucketRepositoriesService>();
 builder.Services.AddScoped<BitbucketCommitsService>();
 builder.Services.AddScoped<BitbucketPullRequestsService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<FileClassificationService>();
 builder.Services.AddScoped<DiffParserService>();
 
 // Add CORS for Blazor web app

@@ -32,6 +32,12 @@ CREATE TABLE Commits (
     IsMerge BIT NOT NULL DEFAULT 0,
     CodeLinesAdded INT,
     CodeLinesRemoved INT,
+    DataLinesAdded INT NOT NULL DEFAULT 0,
+    DataLinesRemoved INT NOT NULL DEFAULT 0,
+    ConfigLinesAdded INT NOT NULL DEFAULT 0,
+    ConfigLinesRemoved INT NOT NULL DEFAULT 0,
+    DocsLinesAdded INT NOT NULL DEFAULT 0,
+    DocsLinesRemoved INT NOT NULL DEFAULT 0,
     IsPRMergeCommit BIT NOT NULL DEFAULT 0,
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
     FOREIGN KEY (AuthorId) REFERENCES Users(Id)
@@ -57,9 +63,16 @@ CREATE INDEX IX_Commits_RepositoryId ON Commits(RepositoryId);
 CREATE INDEX IX_Commits_AuthorId ON Commits(AuthorId);
 CREATE INDEX IX_Commits_Date ON Commits(Date);
 CREATE INDEX IX_Commits_BitbucketCommitHash ON Commits(BitbucketCommitHash);
+CREATE INDEX IX_Commits_DataLines ON Commits(DataLinesAdded, DataLinesRemoved);
+CREATE INDEX IX_Commits_ConfigLines ON Commits(ConfigLinesAdded, ConfigLinesRemoved);
+CREATE INDEX IX_Commits_DocsLines ON Commits(DocsLinesAdded, DocsLinesRemoved);
 CREATE INDEX IX_PullRequests_RepositoryId ON PullRequests(RepositoryId);
 CREATE INDEX IX_PullRequests_AuthorId ON PullRequests(AuthorId);
 CREATE INDEX IX_PullRequests_State ON PullRequests(State);
+CREATE INDEX IX_CommitFiles_CommitId ON CommitFiles(CommitId);
+CREATE INDEX IX_CommitFiles_FileType ON CommitFiles(FileType);
+CREATE INDEX IX_CommitFiles_ChangeStatus ON CommitFiles(ChangeStatus);
+CREATE INDEX IX_CommitFiles_FileExtension ON CommitFiles(FileExtension);
 
 -- PullRequestCommits join table
 CREATE TABLE PullRequestCommits (
@@ -71,6 +84,20 @@ CREATE TABLE PullRequestCommits (
 );
 CREATE INDEX IX_PullRequestCommits_PullRequestId ON PullRequestCommits(PullRequestId);
 CREATE INDEX IX_PullRequestCommits_CommitId ON PullRequestCommits(CommitId);
+
+-- CommitFiles table for detailed file-level tracking
+CREATE TABLE CommitFiles (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    CommitId INT NOT NULL,
+    FilePath NVARCHAR(500) NOT NULL,
+    FileType NVARCHAR(20) NOT NULL, -- 'code', 'data', 'config', 'docs', 'other'
+    ChangeStatus NVARCHAR(20) NOT NULL, -- 'added', 'modified', 'removed'
+    LinesAdded INT NOT NULL DEFAULT 0,
+    LinesRemoved INT NOT NULL DEFAULT 0,
+    FileExtension NVARCHAR(50),
+    CreatedOn DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    FOREIGN KEY (CommitId) REFERENCES Commits(Id) ON DELETE CASCADE
+);
 
 -- Update script for existing DB
 -- Add the new column

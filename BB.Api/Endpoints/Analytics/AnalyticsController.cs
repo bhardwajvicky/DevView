@@ -23,14 +23,17 @@ namespace BB.Api.Endpoints.Analytics
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
-            [FromQuery] int? userId = null)
+            [FromQuery] int? userId = null,
+            [FromQuery] bool includePR = true,
+            [FromQuery] bool includeData = true,
+            [FromQuery] bool includeConfig = true)
         {
             if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
             {
                 return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
             }
 
-            var result = await _analyticsService.GetCommitActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId);
+            var result = await _analyticsService.GetCommitActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, includePR, includeData, includeConfig);
             return Ok(result);
         }
 
@@ -41,14 +44,17 @@ namespace BB.Api.Endpoints.Analytics
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
-            [FromQuery] int? userId = null)
+            [FromQuery] int? userId = null,
+            [FromQuery] bool includePR = true,
+            [FromQuery] bool includeData = true,
+            [FromQuery] bool includeConfig = true)
         {
             if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
             {
                 return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
             }
 
-            var result = await _analyticsService.GetContributorActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId);
+            var result = await _analyticsService.GetContributorActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, includePR, includeData, includeConfig);
             return Ok(result);
         }
 
@@ -103,6 +109,41 @@ namespace BB.Api.Endpoints.Analytics
             }
 
             var result = await _analyticsService.GetCommitDetailsAsync(repoSlug, workspace, userId, date, startDate, endDate);
+            return Ok(result);
+        }
+
+        [HttpGet("commits/file-classification")]
+        public async Task<IActionResult> GetFileClassificationSummary(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] int? userId = null)
+        {
+            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetFileClassificationSummaryAsync(repoSlug, workspace, startDate, endDate, userId);
+            return Ok(result);
+        }
+
+        [HttpGet("commits/file-types/activity")]
+        public async Task<IActionResult> GetFileTypeActivity(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] GroupingType groupBy = GroupingType.Day,
+            [FromQuery] int? userId = null)
+        {
+            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetFileTypeActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId);
             return Ok(result);
         }
     }

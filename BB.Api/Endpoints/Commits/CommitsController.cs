@@ -27,6 +27,8 @@ namespace BB.Api.Endpoints.Commits
             int page = 1,
             int pageSize = DefaultPageSize,
             bool includePR = true,
+            bool includeData = true,
+            bool includeConfig = true,
             int? userId = null,
             DateTime? startDate = null,
             DateTime? endDate = null)
@@ -69,7 +71,9 @@ namespace BB.Api.Endpoints.Commits
             // Query paginated commits with author info and repository info
             var sql = $@"
                 SELECT c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
-                       c.LinesAdded, c.LinesRemoved, c.CodeLinesAdded, c.CodeLinesRemoved, r.Name AS RepositoryName, r.Slug AS RepositorySlug
+                       c.LinesAdded, c.LinesRemoved, c.CodeLinesAdded, c.CodeLinesRemoved, 
+                       c.DataLinesAdded, c.DataLinesRemoved, c.ConfigLinesAdded, c.ConfigLinesRemoved,
+                       c.DocsLinesAdded, c.DocsLinesRemoved, r.Name AS RepositoryName, r.Slug AS RepositorySlug
                 FROM Commits c
                 JOIN Users u ON c.AuthorId = u.Id
                 JOIN Repositories r ON c.RepositoryId = r.Id
@@ -107,6 +111,12 @@ namespace BB.Api.Endpoints.Commits
             public int LinesRemoved { get; set; }
             public int CodeLinesAdded { get; set; }
             public int CodeLinesRemoved { get; set; }
+            public int DataLinesAdded { get; set; }
+            public int DataLinesRemoved { get; set; }
+            public int ConfigLinesAdded { get; set; }
+            public int ConfigLinesRemoved { get; set; }
+            public int DocsLinesAdded { get; set; }
+            public int DocsLinesRemoved { get; set; }
             public string? RepositoryName { get; set; }
             public string? RepositorySlug { get; set; }
         }

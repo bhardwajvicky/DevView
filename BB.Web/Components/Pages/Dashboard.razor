@@ -50,10 +50,20 @@
                         }
                     </select>
 
-                    <!-- Include PRs Switch -->
-                    <div class="mt-3 form-check form-switch fs-5">
-                        <RadzenSwitch @bind-Value="includePR" Change="@RefreshDashboardData" Style="transform: scale(1.2);" />
-                        <label class="form-check-label ms-2" for="includePrSwitch">Include PRs</label>
+                    <!-- File Type Filters -->
+                    <div class="mt-3">
+                        <div class="form-check form-switch fs-6 mb-2">
+                            <RadzenSwitch @bind-Value="includePR" Change="@RefreshDashboardData" Style="transform: scale(1.0);" />
+                            <label class="form-check-label ms-2">Include PRs</label>
+                        </div>
+                        <div class="form-check form-switch fs-6 mb-2">
+                            <RadzenSwitch @bind-Value="includeData" Change="@RefreshDashboardData" Style="transform: scale(1.0);" />
+                            <label class="form-check-label ms-2">Include Data</label>
+                        </div>
+                        <div class="form-check form-switch fs-6">
+                            <RadzenSwitch @bind-Value="includeConfig" Change="@RefreshDashboardData" Style="transform: scale(1.0);" />
+                            <label class="form-check-label ms-2">Include Config</label>
+                        </div>
                     </div>
                 }
                 else
@@ -161,15 +171,33 @@
                         
                         <!-- Chart Controls -->
                         <div class="mt-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
-                            <div class="d-flex flex-wrap gap-2">
+                            <div class="d-flex flex-wrap gap-1">
                                 <button class="btn btn-sm btn-outline-primary" onclick="toggleDataset(0)">
                                     🔵 Commits
                                 </button>
                                 <button class="btn btn-sm btn-outline-success" onclick="toggleDataset(1)">
-                                    🟢 Code Added
+                                    🟢 Total Added
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger" onclick="toggleDataset(2)">
-                                    🔴 Code Removed
+                                    🔴 Total Removed
+                                </button>
+                                <button class="btn btn-sm btn-outline-info" onclick="toggleDataset(3)">
+                                    💚 Code Added
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="toggleDataset(4)">
+                                    ❤️ Code Removed
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleDataset(5)">
+                                    💜 Data Added
+                                </button>
+                                <button class="btn btn-sm btn-outline-dark" onclick="toggleDataset(6)">
+                                    🖤 Data Removed
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="toggleDataset(7)">
+                                    🧡 Config Added
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleDataset(8)">
+                                    🤎 Config Removed
                                 </button>
                             </div>
                             <div>
@@ -217,14 +245,18 @@
                                             <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
                                         </Template>
                                     </RadzenDataGridColumn>
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
                                     <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total +" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
                                     <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total -" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code +" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code -" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesAdded" Title="Data +" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesRemoved" Title="Data -" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesAdded" Title="Config +" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                    <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesRemoved" Title="Config -" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
                                     <RadzenDataGridColumn TItem="CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
                                         <Template Context="data">
                                             @{
-                                                var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
+                                                var netChange = data.TotalLinesAdded - data.TotalLinesRemoved;
                                                 var badgeStyle = netChange > 0 ? BadgeStyle.Success : netChange < 0 ? BadgeStyle.Danger : BadgeStyle.Secondary;
                                                 var sign = netChange > 0 ? "+" : "";
                                             }
@@ -392,7 +424,6 @@
 <script>
     // Use window scope to avoid variable redeclaration issues
     window.initializeChart = (data) => {
-        console.log('initializeChart called with data:', data);
         
         // Validate data is an array
         if (!Array.isArray(data)) {
@@ -434,7 +465,6 @@
         
         // Destroy existing chart if it exists
         if (window.commitChart) {
-            console.log('Existing chart found:', typeof window.commitChart, window.commitChart);
             if (typeof window.commitChart.destroy === 'function') {
                 console.log('Destroying existing chart');
                 window.commitChart.destroy();
@@ -454,9 +484,15 @@
         const commitCounts = data.map(item => item.commitCount);
         const codeAdded = data.map(item => item.codeLinesAdded);
         const codeRemoved = data.map(item => item.codeLinesRemoved);
-        const netChange = data.map(item => item.codeLinesAdded - item.codeLinesRemoved);
+        const dataAdded = data.map(item => item.dataLinesAdded || 0);
+        const dataRemoved = data.map(item => item.dataLinesRemoved || 0);
+        const configAdded = data.map(item => item.configLinesAdded || 0);
+        const configRemoved = data.map(item => item.configLinesRemoved || 0);
+        const docsAdded = data.map(item => item.docsLinesAdded || 0);
+        const docsRemoved = data.map(item => item.docsLinesRemoved || 0);
+        const totalAdded = data.map(item => item.totalLinesAdded);
+        const totalRemoved = data.map(item => item.totalLinesRemoved);
         
-        console.log('Creating new Chart.js chart');
         window.commitChart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -475,8 +511,8 @@
                         hidden: false // Ensure it's visible by default
                     },
                     {
-                        label: 'Code Lines Added',
-                        data: codeAdded,
+                        label: 'Total Lines Added',
+                        data: totalAdded,
                         borderColor: 'rgb(34, 197, 94)',
                         backgroundColor: 'rgba(34, 197, 94, 0.2)',
                         fill: true,
@@ -486,8 +522,8 @@
                         yAxisID: 'y'
                     },
                     {
-                        label: 'Code Lines Removed',
-                        data: codeRemoved,
+                        label: 'Total Lines Removed',
+                        data: totalRemoved,
                         borderColor: 'rgb(239, 68, 68)',
                         backgroundColor: 'rgba(239, 68, 68, 0.2)',
                         fill: true,
@@ -495,6 +531,78 @@
                         pointRadius: 5,
                         pointHoverRadius: 8,
                         yAxisID: 'y'
+                    },
+                    {
+                        label: 'Code Lines Added',
+                        data: codeAdded,
+                        borderColor: 'rgb(22, 163, 74)',
+                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y',
+                        hidden: true
+                    },
+                    {
+                        label: 'Code Lines Removed',
+                        data: codeRemoved,
+                        borderColor: 'rgb(220, 38, 38)',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y',
+                        hidden: true
+                    },
+                    {
+                        label: 'Data Lines Added',
+                        data: dataAdded,
+                        borderColor: 'rgb(147, 51, 234)',
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y',
+                        hidden: true
+                    },
+                    {
+                        label: 'Data Lines Removed',
+                        data: dataRemoved,
+                        borderColor: 'rgb(126, 34, 206)',
+                        backgroundColor: 'rgba(126, 34, 206, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y',
+                        hidden: true
+                    },
+                    {
+                        label: 'Config Lines Added',
+                        data: configAdded,
+                        borderColor: 'rgb(245, 158, 11)',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y',
+                        hidden: true
+                    },
+                    {
+                        label: 'Config Lines Removed',
+                        data: configRemoved,
+                        borderColor: 'rgb(217, 119, 6)',
+                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y',
+                        hidden: true
                     }
                 ]
             },
@@ -537,26 +645,48 @@
                             label: function(context) {
                                 const dataIndex = context.dataIndex;
                                 const item = data[dataIndex];
+                                const label = context.dataset.label;
                                 
-                                if (context.dataset.label === 'Code Lines Added') {
-                                    return `➕ Code Added: ${item.codeLinesAdded.toLocaleString()} lines`;
-                                } else if (context.dataset.label === 'Code Lines Removed') {
-                                    return `➖ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`;
+                                switch(label) {
+                                    case 'Commits':
+                                        return `📝 Commits: ${item.commitCount}`;
+                                    case 'Total Lines Added':
+                                        return `➕ Total Added: ${item.totalLinesAdded.toLocaleString()} lines`;
+                                    case 'Total Lines Removed':
+                                        return `➖ Total Removed: ${item.totalLinesRemoved.toLocaleString()} lines`;
+                                    case 'Code Lines Added':
+                                        return `💚 Code Added: ${item.codeLinesAdded.toLocaleString()} lines`;
+                                    case 'Code Lines Removed':
+                                        return `❤️ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`;
+                                    case 'Data Lines Added':
+                                        return `💜 Data Added: ${item.dataLinesAdded.toLocaleString()} lines`;
+                                    case 'Data Lines Removed':
+                                        return `🖤 Data Removed: ${item.dataLinesRemoved.toLocaleString()} lines`;
+                                    case 'Config Lines Added':
+                                        return `🧡 Config Added: ${item.configLinesAdded.toLocaleString()} lines`;
+                                    case 'Config Lines Removed':
+                                        return `🤎 Config Removed: ${item.configLinesRemoved.toLocaleString()} lines`;
+                                    default:
+                                        return `${label}: ${context.parsed.y.toLocaleString()}`;
                                 }
                             },
                             afterBody: function(context) {
                                 if (context.length > 0) {
                                     const dataIndex = context[0].dataIndex;
                                     const item = data[dataIndex];
-                                    const net = item.codeLinesAdded - item.codeLinesRemoved;
-                                    const sign = net > 0 ? '+' : '';
+                                    const totalNet = item.totalLinesAdded - item.totalLinesRemoved;
+                                    const codeNet = item.codeLinesAdded - item.codeLinesRemoved;
+                                    const dataNet = item.dataLinesAdded - item.dataLinesRemoved;
+                                    const configNet = item.configLinesAdded - item.configLinesRemoved;
+                                    const totalSign = totalNet > 0 ? '+' : '';
                                     return [
                                         '',
                                         `📝 Commits: ${item.commitCount}`,
-                                        `📊 Net Change: ${sign}${net.toLocaleString()} lines`,
+                                        `📊 Total Net: ${totalSign}${totalNet.toLocaleString()} lines`,
                                         '',
-                                        `📄 Total Lines Added: ${item.totalLinesAdded.toLocaleString()}`,
-                                        `📄 Total Lines Removed: ${item.totalLinesRemoved.toLocaleString()}`
+                                        `💚 Code: +${item.codeLinesAdded.toLocaleString()} / -${item.codeLinesRemoved.toLocaleString()} (net: ${codeNet >= 0 ? '+' : ''}${codeNet.toLocaleString()})`,
+                                        `💜 Data: +${item.dataLinesAdded.toLocaleString()} / -${item.dataLinesRemoved.toLocaleString()} (net: ${dataNet >= 0 ? '+' : ''}${dataNet.toLocaleString()})`,
+                                        `🧡 Config: +${item.configLinesAdded.toLocaleString()} / -${item.configLinesRemoved.toLocaleString()} (net: ${configNet >= 0 ? '+' : ''}${configNet.toLocaleString()})`
                                     ];
                                 }
                             }
@@ -607,7 +737,6 @@
             }
         });
         
-        console.log('Chart created successfully:', window.commitChart);
     };
     
     window.dashboardComponent = { dotNetRef: null };
@@ -642,7 +771,6 @@
             const contributor = contributorGroups[userId];
             const canvasId = `contributorChart_${userId}`;
             
-            console.log(`Looking for canvas: ${canvasId}`);
             const canvas = document.getElementById(canvasId);
             
             if (!canvas) {
@@ -650,9 +778,7 @@
                     Array.from(document.querySelectorAll('canvas')).map(c => c.id));
                 return;
             }
-            
-            console.log(`Found canvas ${canvasId}, creating chart for ${contributor.displayName}`);
-            
+        
             const ctx = canvas.getContext('2d');
             
             // Destroy existing chart if it exists
@@ -667,8 +793,8 @@
             });
             
             const commitCounts = contributor.data.map(item => item.commitCount);
-            const codeAdded = contributor.data.map(item => item.codeLinesAdded);
-            const codeRemoved = contributor.data.map(item => item.codeLinesRemoved);
+            const totalAdded = contributor.data.map(item => item.totalLinesAdded);
+            const totalRemoved = contributor.data.map(item => item.totalLinesRemoved);
             
             // Create chart
             window[`contributorChart_${userId}`] = new Chart(ctx, {
@@ -690,7 +816,7 @@
                         },
                         {
                             label: 'Lines Added',
-                            data: codeAdded,
+                            data: totalAdded,
                             borderColor: 'rgb(34, 197, 94)',
                             backgroundColor: 'rgba(34, 197, 94, 0.1)',
                             fill: false,
@@ -702,7 +828,7 @@
                         },
                         {
                             label: 'Lines Removed',
-                            data: codeRemoved,
+                            data: totalRemoved,
                             borderColor: 'rgb(239, 68, 68)',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
                             fill: false,
@@ -754,8 +880,11 @@
                                     const item = contributor.data[dataIndex];
                                     return [
                                         `📝 Commits: ${item.commitCount}`,
-                                        `➕ Code Added: ${item.codeLinesAdded.toLocaleString()} lines`,
-                                        `➖ Code Removed: ${item.codeLinesRemoved.toLocaleString()} lines`
+                                        `➕ Total Added: ${item.totalLinesAdded.toLocaleString()} lines`,
+                                        `➖ Total Removed: ${item.totalLinesRemoved.toLocaleString()} lines`,
+                                        `💚 Code: +${item.codeLinesAdded.toLocaleString()} / -${item.codeLinesRemoved.toLocaleString()}`,
+                                        `💜 Data: +${item.dataLinesAdded.toLocaleString()} / -${item.dataLinesRemoved.toLocaleString()}`,
+                                        `🧡 Config: +${item.configLinesAdded.toLocaleString()} / -${item.configLinesRemoved.toLocaleString()}`
                                     ];
                                 }
                             }
@@ -795,7 +924,6 @@
                 }
             });
             
-            console.log(`Created contributor chart for ${contributor.displayName}`);
         });
     };
     
@@ -861,7 +989,9 @@
     private List<CommitDetailDto>? commitDetailsList;
     private string? commitDetailsModalTitle;
     private DotNetObjectReference<Dashboard>? _dotNetRef;
-    private bool includePR = true;
+    private bool includePR = false;
+    private bool includeData = true;
+    private bool includeConfig = true;
 
     private enum DateRangeType
     {
@@ -1054,12 +1184,12 @@
             if (string.IsNullOrEmpty(repoSlug))
             {
                 // ALL repositories - only pass workspace
-                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}&includePR={includePR.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             else
             {
                 // Specific repository
-                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             
             // Add date range parameters if specified
@@ -1102,16 +1232,22 @@
     {
         if (commitActivity != null && commitActivity.Any())
         {
-            // Convert data for JavaScript with explicit array serialization
-            var chartData = commitActivity.Select(c => new
-            {
-                date = c.Date.ToString("yyyy-MM-dd"),
-                commitCount = c.CommitCount,
-                codeLinesAdded = c.CodeLinesAdded,
-                codeLinesRemoved = c.CodeLinesRemoved,
-                totalLinesAdded = c.TotalLinesAdded,
-                totalLinesRemoved = c.TotalLinesRemoved
-            }).ToArray();
+                    // Convert data for JavaScript with explicit array serialization
+        var chartData = commitActivity.Select(c => new
+        {
+            date = c.Date.ToString("yyyy-MM-dd"),
+            commitCount = c.CommitCount,
+            codeLinesAdded = c.CodeLinesAdded,
+            codeLinesRemoved = c.CodeLinesRemoved,
+            dataLinesAdded = c.DataLinesAdded,
+            dataLinesRemoved = c.DataLinesRemoved,
+            configLinesAdded = c.ConfigLinesAdded,
+            configLinesRemoved = c.ConfigLinesRemoved,
+            docsLinesAdded = c.DocsLinesAdded,
+            docsLinesRemoved = c.DocsLinesRemoved,
+            totalLinesAdded = c.TotalLinesAdded,
+            totalLinesRemoved = c.TotalLinesRemoved
+        }).ToArray();
             
             Logger.LogInformation("Preparing chart data: {Count} items", chartData.Length);
             
@@ -1153,16 +1289,18 @@
     private void OnRowRender(RowRenderEventArgs<CommitActivityDto> args)
     {
         var data = args.Data;
-        var netChange = data.CodeLinesAdded - data.CodeLinesRemoved;
-        var sign = netChange > 0 ? "+" : "";
+        var totalNetChange = data.TotalLinesAdded - data.TotalLinesRemoved;
+        var codeNetChange = data.CodeLinesAdded - data.CodeLinesRemoved;
+        var dataNetChange = data.DataLinesAdded - data.DataLinesRemoved;
+        var configNetChange = data.ConfigLinesAdded - data.ConfigLinesRemoved;
+        var totalSign = totalNetChange > 0 ? "+" : "";
         
         args.Attributes.Add("title", 
             $"📝 Commits: {data.CommitCount}\n" +
-            $"➕ Code Added: {data.CodeLinesAdded:N0} lines\n" +
-            $"➖ Code Removed: {data.CodeLinesRemoved:N0} lines\n" +
-            $"📊 Total Added: {data.TotalLinesAdded:N0} lines\n" +
-            $"📊 Total Removed: {data.TotalLinesRemoved:N0} lines\n" +
-            $"💡 Net Change: {sign}{netChange:N0} lines");
+            $"📊 Total: +{data.TotalLinesAdded:N0} / -{data.TotalLinesRemoved:N0} (net: {totalSign}{totalNetChange:N0})\n" +
+            $"💚 Code: +{data.CodeLinesAdded:N0} / -{data.CodeLinesRemoved:N0} (net: {(codeNetChange >= 0 ? "+" : "")}{codeNetChange:N0})\n" +
+            $"💜 Data: +{data.DataLinesAdded:N0} / -{data.DataLinesRemoved:N0} (net: {(dataNetChange >= 0 ? "+" : "")}{dataNetChange:N0})\n" +
+            $"🧡 Config: +{data.ConfigLinesAdded:N0} / -{data.ConfigLinesRemoved:N0} (net: {(configNetChange >= 0 ? "+" : "")}{configNetChange:N0})");
     }
 
     private void SelectDataPoint(CommitActivityDto data)
@@ -1196,12 +1334,12 @@
             if (string.IsNullOrEmpty(repoSlug))
             {
                 // ALL repositories - only pass workspace
-                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}&includePR={includePR.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             else
             {
                 // Specific repository
-                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             
             // Add date range parameters if specified
@@ -1250,6 +1388,12 @@
                 commitCount = c.CommitCount,
                 codeLinesAdded = c.CodeLinesAdded,
                 codeLinesRemoved = c.CodeLinesRemoved,
+                dataLinesAdded = c.DataLinesAdded,
+                dataLinesRemoved = c.DataLinesRemoved,
+                configLinesAdded = c.ConfigLinesAdded,
+                configLinesRemoved = c.ConfigLinesRemoved,
+                docsLinesAdded = c.DocsLinesAdded,
+                docsLinesRemoved = c.DocsLinesRemoved,
                 totalLinesAdded = c.TotalLinesAdded,
                 totalLinesRemoved = c.TotalLinesRemoved
             }).ToArray();
@@ -1299,10 +1443,10 @@
         
         var userCommits = contributorData.Where(c => c.UserId == userId);
         var totalCommits = userCommits.Sum(c => c.CommitCount);
-        var codeAdded = userCommits.Sum(c => c.CodeLinesAdded);
-        var codeRemoved = userCommits.Sum(c => c.CodeLinesRemoved);
+        var totalAdded = userCommits.Sum(c => c.TotalLinesAdded);
+        var totalRemoved = userCommits.Sum(c => c.TotalLinesRemoved);
         
-        return $"{totalCommits} commits, {codeAdded:N0}++ {codeRemoved:N0}--";
+        return $"{totalCommits} commits, {totalAdded:N0}++ {totalRemoved:N0}--";
     }
 
     private void CloseCommitDetailsModal()
