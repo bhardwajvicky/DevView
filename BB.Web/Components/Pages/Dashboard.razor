@@ -1294,12 +1294,8 @@
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
             
-            Logger.LogInformation("Making API call to: {Url}", url);
-            
             commitActivity = await Http.GetFromJsonAsync<CommitActivityDto[]>(url);
-            
-            Logger.LogInformation("Received {Count} commit activity records", commitActivity?.Length ?? 0);
-            
+                        
             // Also load contributor data
             await LoadContributorActivity(repoSlug, workspace);
 
@@ -1341,7 +1337,6 @@
             totalLinesRemoved = c.TotalLinesRemoved
         }).ToArray();
             
-            Logger.LogInformation("Preparing chart data: {Count} items", chartData.Length);
             
             // Add delay to ensure DOM is rendered
             await Task.Delay(100);
