@@ -142,6 +142,10 @@ namespace BBIntegration.Common
                         
                         retryCount++;
                     }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        throw new HttpRequestException($"Resource not found (404): {url}", null, response.StatusCode);
+                    }
                     else
                     {
                         response.EnsureSuccessStatusCode(); // Throw for other HTTP errors

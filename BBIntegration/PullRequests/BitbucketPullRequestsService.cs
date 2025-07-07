@@ -112,6 +112,7 @@ namespace BBIntegration.PullRequests
                         });
 
                         // Now, sync commits for this PR
+                        _logger.LogDebug("Starting commit sync for PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug}", pr.Id, pr.Title, workspace, repoSlug);
                         await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
                     }
                     nextPageUrl = prPagedResponse.NextPageUrl;
@@ -128,20 +129,29 @@ namespace BBIntegration.PullRequests
 
         private async Task SyncCommitsForPullRequest(SqlConnection connection, string workspace, string repoSlug, int bitbucketPrId, int prDbId)
         {
-            string commitNextPageUrl = null;
-            do
+            try
             {
-                // Check for rate limiting before each API call
-                if (BitbucketApiClient.IsRateLimited())
+                string commitNextPageUrl = null;
+                do
                 {
-                    var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
-                    _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching PR commits for PR {PrId}...", waitTime?.TotalSeconds ?? 0, bitbucketPrId);
-                }
-                
-                var commitsJson = await _apiClient.GetPullRequestCommitsAsync(workspace, repoSlug, bitbucketPrId, commitNextPageUrl);
-                var commitPagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<CommitDto>>(commitsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    // Check for rate limiting before each API call
+                    if (BitbucketApiClient.IsRateLimited())
+                    {
+                        var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
+                        _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching PR commits for PR {PrId}...", waitTime?.TotalSeconds ?? 0, bitbucketPrId);
+                    }
+                    
+                    var commitsJson = await _apiClient.GetPullRequestCommitsAsync(workspace, repoSlug, bitbucketPrId, commitNextPageUrl);
+                    var commitPagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<CommitDto>>(commitsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                if (commitPagedResponse?.Values == null || !commitPagedResponse.Values.Any()) break;
+                    if (commitPagedResponse?.Values == null || !commitPagedResponse.Values.Any()) 
+                    {
+                        if (string.IsNullOrEmpty(commitNextPageUrl))
+                        {
+                            _logger.LogInformation("PR {PrId} in {Workspace}/{RepoSlug} has no commits. This is normal for empty or draft PRs.", bitbucketPrId, workspace, repoSlug);
+                        }
+                        break;
+                    }
                 
                 foreach (var commit in commitPagedResponse.Values)
                 {
@@ -328,6 +338,19 @@ namespace BBIntegration.PullRequests
                 }
                 commitNextPageUrl = commitPagedResponse.NextPageUrl;
             } while (!string.IsNullOrEmpty(commitNextPageUrl));
+            }
+            catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode") && ex.Data["StatusCode"].Equals(System.Net.HttpStatusCode.NotFound))
+            {
+                _logger.LogWarning("PR {PrId} in {Workspace}/{RepoSlug} has no accessible commits (404 error). This is normal for empty PRs, draft PRs, or PRs with deleted branches. Skipping commit sync for this PR.", bitbucketPrId, workspace, repoSlug);
+            }
+            catch (HttpRequestException ex) when (ex.Message.Contains("404") || ex.Message.Contains("Not Found"))
+            {
+                _logger.LogWarning("PR {PrId} in {Workspace}/{RepoSlug} has no accessible commits (404 error). This is normal for empty PRs, draft PRs, or PRs with deleted branches. Skipping commit sync for this PR.", bitbucketPrId, workspace, repoSlug);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to sync commits for PR {PrId} in {Workspace}/{RepoSlug}. This PR will be skipped.", bitbucketPrId, workspace, repoSlug);
+            }
         }
     }
 }
