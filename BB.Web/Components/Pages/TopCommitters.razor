@@ -192,7 +192,12 @@
                                                         </div>
                                                     }
                                                     <div>
-                                                        <h6 class="mb-0">@committer.DisplayName</h6>
+                                                        <button type="button"
+                                                                class="btn btn-link p-0 text-start text-decoration-none mb-0"
+                                                                style="font-size: 1rem; font-weight: 600; color: #0d6efd; cursor: pointer;"
+                                                                @onclick="() => NavigateToUserCommits(committer)">
+                                                            @committer.DisplayName
+                                                        </button>
                                                         <small class="text-muted">
                                                             @committer.TotalCommits commits, @committer.TotalLinesAdded++ @committer.TotalLinesRemoved--
                                                         </small>
@@ -242,7 +247,12 @@
                                                             </div>
                                                         }
                                                         <div>
-                                                            <h6 class="mb-0">@committer.DisplayName</h6>
+                                                            <button type="button"
+                                                                    class="btn btn-link p-0 text-start text-decoration-none mb-0"
+                                                                    style="font-size: 1rem; font-weight: 600; color: #0d6efd; cursor: pointer;"
+                                                                    @onclick="() => NavigateToUserCommits(committer)">
+                                                                @committer.DisplayName
+                                                            </button>
                                                             <small class="text-muted">
                                                                 @committer.TotalCommits commits, @committer.TotalLinesAdded++ @committer.TotalLinesRemoved--
                                                             </small>
@@ -559,5 +569,29 @@
             Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
             errorMessage = $"Error initializing charts: {ex.Message}";
         }
+    }
+
+    private void NavigateToUserCommits(TopCommittersDto committer)
+    {
+        var url = $"/user/{committer.UserId}/commits?UserName={Uri.EscapeDataString(committer.DisplayName)}";
+        if (startDate.HasValue && endDate.HasValue)
+        {
+            url += $"&StartDate={startDate.Value:yyyy-MM-dd}&EndDate={endDate.Value:yyyy-MM-dd}";
+        }
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+        {
+            url += $"&RepoSlug={Uri.EscapeDataString(selectedRepoSlug)}";
+        }
+        Navigation.NavigateTo(url);
+    }
+
+    private string GetCommitterChartId(TopCommittersDto committer, bool isTop)
+    {
+        return isTop ? $"committerChart_top_{committer.UserId}" : $"committerChart_bottom_{committer.UserId}";
+    }
+
+    private async Task ToggleCommitterDatasetJs(string canvasId, int datasetIndex)
+    {
+        await JSRuntime.InvokeVoidAsync("toggleCommitterDataset", canvasId, datasetIndex);
     }
 } 

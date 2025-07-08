@@ -138,7 +138,14 @@ window.initializeCommitterChart = (canvasId, data, displayName, isTopCommitter) 
                     display: false
                 },
                 legend: {
-                    display: false
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: { size: 12 },
+                        padding: 10
+                    }
                 },
                 tooltip: {
                     callbacks: {
@@ -178,4 +185,15 @@ window.initializeCommitterChart = (canvasId, data, displayName, isTopCommitter) 
             }
         }
     });
+};
+
+window.toggleCommitterDataset = function(canvasId, datasetIndex) {
+    const chart = window.committerCharts[canvasId];
+    if (!chart) {
+        console.warn('No chart found for', canvasId);
+        return;
+    }
+    const dataset = chart.data.datasets[datasetIndex];
+    dataset.hidden = !dataset.hidden;
+    chart.update();
 }; 
