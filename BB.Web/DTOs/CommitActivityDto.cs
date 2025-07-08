@@ -17,4 +17,11 @@ namespace BB.Web.DTOs
         public int DocsLinesAdded { get; set; }
         public int DocsLinesRemoved { get; set; }
     }
+
+    public enum GroupingType
+    {
+        Day,
+        Week,
+        Month
+    }
 } 

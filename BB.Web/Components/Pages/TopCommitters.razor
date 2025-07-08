@@ -1,0 +1,563 @@
+@page "/top-committers"
+@rendermode InteractiveServer
+
+@using Radzen
+@using Radzen.Blazor
+@using BB.Web.DTOs
+@using BB.Web.Services
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Linq
+@inject HttpClient Http
+@inject ILogger<TopCommitters> Logger
+@inject IJSRuntime JSRuntime
+@inject WorkspaceService WorkspaceService
+@inject NavigationManager Navigation
+
+<PageTitle>Top/Bottom Committers</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="bi bi-people"></i> Top/Bottom Committers
+            </h1>
+        </div>
+    </div>
+
+    @if (!WorkspaceService.HasSelectedWorkspace)
+    {
+        <div class="alert alert-warning" role="alert">
+            <h4 class="alert-heading">Workspace Not Configured</h4>
+            <p>Please select a workspace in Settings to view committer statistics.</p>
+            <hr>
+            <button class="btn btn-primary" @onclick="NavigateToSettings">
+                <i class="bi bi-gear-fill me-2"></i>Go to Settings
+            </button>
+        </div>
+    }
+    else
+    {
+        <!-- Repository Selection -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="repoSelect" class="form-label fw-bold">Select Repository</label>
+                    @if (isLoadingRepos)
+                    {
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Loading repositories...</span>
+                        </div>
+                    }
+                    else if (repositories != null && repositories.Any())
+                    {
+                        <select class="form-select" id="repoSelect" @onchange="OnRepositoryDropdownChanged">
+                            <option value="ALL">All Repositories</option>
+                            @foreach (var repo in repositories.OrderBy(r => r.Name))
+                            {
+                                <option value="@repo.Slug">@repo.Name</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            No repositories found. Please check your configuration.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Date Range Selection -->
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Date Range</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <RadzenDatePicker @bind-Value="startDate" DateFormat="MM/dd/yyyy" Placeholder="Start Date" 
+                                            Change="@(() => OnDateRangeChanged(startDate))" class="w-100" />
+                        </div>
+                        <div class="col-md-6">
+                            <RadzenDatePicker @bind-Value="endDate" DateFormat="MM/dd/yyyy" Placeholder="End Date" 
+                                            Change="@(() => OnDateRangeChanged(endDate))" class="w-100" />
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 7 Days" Click="@(() => SetDateRange(7))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 30 Days" Click="@(() => SetDateRange(30))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 90 Days" Click="@(() => SetDateRange(90))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="All Time" Click="@(() => SetDateRange(null))" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Filters</h5>
+                        <div class="d-flex gap-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="includePR" @bind="includePR" @bind:after="OnFilterChanged">
+                                <label class="form-check-label" for="includePR">Include PRs</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="includeData" @bind="includeData" @bind:after="OnFilterChanged">
+                                <label class="form-check-label" for="includeData">Show Data</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="includeConfig" @bind="includeConfig" @bind:after="OnFilterChanged">
+                                <label class="form-check-label" for="includeConfig">Show Config</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Grouping</h5>
+                        <select class="form-select" @onchange="OnGroupingChanged">
+                            <option value="Day">Day</option>
+                            <option value="Week">Week</option>
+                            <option value="Month">Month</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error/Info Messages -->
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert @(errorMessage.StartsWith("Note:") ? "alert-info" : "alert-danger") alert-dismissible fade show" role="alert">
+                @errorMessage
+                <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+            </div>
+        }
+
+        @if (isLoadingCommitters)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading committer data...</span>
+                </div>
+            </RadzenAlert>
+        }
+        else if (topCommittersData?.TopCommitters != null && topCommittersData.TopCommitters.Any())
+        {
+            <!-- Top Committers -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                🏆 Top Committers
+                                @if (selectedRepoSlug == "ALL")
+                                {
+                                    <span class="text-muted">- All Repositories</span>
+                                }
+                                else if (!string.IsNullOrEmpty(selectedRepoSlug))
+                                {
+                                    var selectedRepo = repositories?.FirstOrDefault(r => r.Slug == selectedRepoSlug);
+                                    <span class="text-muted">- @(selectedRepo?.Name ?? selectedRepoSlug)</span>
+                                }
+                            </h5>
+                            <small class="text-muted">Top contributors by lines of code added</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                @foreach (var committer in topCommittersData.TopCommitters)
+                                {
+                                    <div class="col-md-4">
+                                        <div class="card mb-3">
+                                            <div class="card-body">
+                                                <div class="d-flex align-items-center mb-3">
+                                                    @if (!string.IsNullOrEmpty(committer.AvatarUrl))
+                                                    {
+                                                        <img src="@committer.AvatarUrl" alt="@committer.DisplayName" class="rounded-circle me-2" style="width: 40px; height: 40px;" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="rounded-circle bg-secondary me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                            <i class="bi bi-person text-white"></i>
+                                                        </div>
+                                                    }
+                                                    <div>
+                                                        <h6 class="mb-0">@committer.DisplayName</h6>
+                                                        <small class="text-muted">
+                                                            @committer.TotalCommits commits, @committer.TotalLinesAdded++ @committer.TotalLinesRemoved--
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <div style="height: 200px;">
+                                                    <canvas id="committerChart_top_@committer.UserId"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Committers -->
+            @if (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())
+            {
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    📊 Bottom Committers
+                                </h5>
+                                <small class="text-muted">Contributors with fewer code changes</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    @foreach (var committer in topCommittersData.BottomCommitters)
+                                    {
+                                        <div class="col-md-4">
+                                            <div class="card mb-3">
+                                                <div class="card-body">
+                                                    <div class="d-flex align-items-center mb-3">
+                                                        @if (!string.IsNullOrEmpty(committer.AvatarUrl))
+                                                        {
+                                                            <img src="@committer.AvatarUrl" alt="@committer.DisplayName" class="rounded-circle me-2" style="width: 40px; height: 40px;" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="rounded-circle bg-secondary me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                                <i class="bi bi-person text-white"></i>
+                                                            </div>
+                                                        }
+                                                        <div>
+                                                            <h6 class="mb-0">@committer.DisplayName</h6>
+                                                            <small class="text-muted">
+                                                                @committer.TotalCommits commits, @committer.TotalLinesAdded++ @committer.TotalLinesRemoved--
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                    <div style="height: 200px;">
+                                                        <canvas id="committerChart_bottom_@committer.UserId"></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private RepositorySummaryDto[]? repositories;
+    private TopCommittersResponseDto? topCommittersData;
+    private bool isLoadingRepos = true;
+    private bool isLoadingCommitters = false;
+    private string? errorMessage;
+    private string? selectedRepoSlug;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private bool chartInitialized = false;
+    private bool includePR = false;
+    private bool includeData = true;
+    private bool includeConfig = true;
+    private string selectedGrouping = "Day";
+    private DotNetObjectReference<TopCommitters>? _dotNetRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Instead of redirecting, just show a message if no workspace is selected
+            if (!WorkspaceService.HasSelectedWorkspace)
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings first.";
+                return;
+            }
+
+            await LoadRepositories();
+            if (repositories != null && repositories.Any())
+            {
+                selectedRepoSlug = "ALL";
+                await RefreshData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing page: {Message}", ex.Message);
+            errorMessage = $"Error initializing page: {ex.Message}";
+        }
+    }
+
+    // Add a method to handle settings navigation
+    private void NavigateToSettings()
+    {
+        Navigation.NavigateTo("/admin/settings");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setTopCommittersDotNetRef", _dotNetRef);
+            await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
+            await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
+            await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
+        }
+
+        if (!firstRender && topCommittersData != null && !chartInitialized)
+        {
+            try
+            {
+                // Add delay to ensure DOM is rendered
+                await Task.Delay(200);
+                await InitializeCharts();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
+                // Don't retry here - let the next render cycle handle it
+            }
+        }
+    }
+
+    private async Task LoadRepositories()
+    {
+        try
+        {
+            isLoadingRepos = true;
+            var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("http://localhost:5000/api/analytics/repositories");
+            
+            if (allRepositories != null && allRepositories.Any())
+            {
+                repositories = allRepositories;
+            }
+            else
+            {
+                repositories = Array.Empty<RepositorySummaryDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading repositories: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingRepos = false;
+        }
+    }
+
+    private async Task OnRepositoryDropdownChanged(ChangeEventArgs e)
+    {
+        var newRepoSlug = e.Value?.ToString() ?? "ALL";
+        selectedRepoSlug = newRepoSlug;
+        chartInitialized = false;
+        
+        await JSRuntime.InvokeVoidAsync("eval", $"window.selectedRepoSlug = '{selectedRepoSlug}';");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
+        
+        await RefreshData();
+    }
+
+    private async Task OnGroupingChanged(ChangeEventArgs e)
+    {
+        var newGrouping = e.Value?.ToString() ?? "Day";
+        selectedGrouping = newGrouping;
+        chartInitialized = false;
+        
+        await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
+        
+        await RefreshData();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        chartInitialized = false;
+        await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
+        await RefreshData();
+    }
+
+    private async Task SetDateRange(int? days)
+    {
+        if (days.HasValue)
+        {
+            endDate = DateTime.Today;
+            startDate = DateTime.Today.AddDays(-days.Value);
+        }
+        else
+        {
+            startDate = null;
+            endDate = null;
+        }
+        
+        chartInitialized = false;
+        await RefreshData();
+    }
+
+    private async Task OnDateRangeChanged(DateTime? date)
+    {
+        // Only refresh if both dates are set or both are null
+        if ((startDate.HasValue && endDate.HasValue) || (!startDate.HasValue && !endDate.HasValue))
+        {
+            chartInitialized = false;
+            await RefreshData();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
+        {
+            var repoForApi = selectedRepoSlug == "ALL" ? null : selectedRepoSlug;
+            await LoadTopCommittersData(repoForApi, WorkspaceService.SelectedWorkspace!);
+            StateHasChanged();
+        }
+        else
+        {
+            topCommittersData = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTopCommittersData(string? repoSlug, string workspace)
+    {
+        try
+        {
+            chartInitialized = false;
+            if (string.IsNullOrEmpty(workspace))
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                Logger.LogWarning("LoadTopCommittersData: No workspace provided");
+                return;
+            }
+
+            Logger.LogInformation("LoadTopCommittersData started for: {RepoSlug}, workspace: {Workspace}", repoSlug ?? "ALL", workspace);
+            
+            isLoadingCommitters = true;
+            errorMessage = null;
+            StateHasChanged();
+            
+            string url;
+            if (string.IsNullOrEmpty(repoSlug))
+            {
+                url = $"http://localhost:5000/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+            }
+            else
+            {
+                url = $"http://localhost:5000/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+            }
+
+            // Add date range parameters if specified
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+
+            Logger.LogInformation("Making API call to: {Url}", url);
+            
+            var response = await Http.GetFromJsonAsync<TopCommittersResponseDto>(url);
+            
+            // Handle case when there's only one developer
+            if (response?.TopCommitters != null && 
+                response.TopCommitters.Any() && 
+                (response.BottomCommitters == null || !response.BottomCommitters.Any()))
+            {
+                // Show message but don't treat as error
+                errorMessage = "Note: Only one developer found in the selected time range.";
+            }
+
+            topCommittersData = response;
+            
+            if (topCommittersData != null && 
+                ((topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any()) ||
+                 (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())))
+            {
+                await InitializeCharts();
+            }
+            else
+            {
+                errorMessage = "No committer data found for the selected criteria.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading committer data: {Message}", ex.Message);
+            errorMessage = $"Error loading committer data: {ex.Message}";
+            topCommittersData = null;
+        }
+        finally
+        {
+            isLoadingCommitters = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task InitializeCharts()
+    {
+        if (topCommittersData == null) return;
+
+        try
+        {
+            // Add delay to ensure DOM is rendered
+            await Task.Delay(200);
+
+            // Initialize charts for top committers
+            if (topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any())
+            {
+                foreach (var committer in topCommittersData.TopCommitters)
+                {
+                    await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
+                        $"committerChart_top_{committer.UserId}", 
+                        committer.ActivityData,
+                        committer.DisplayName,
+                        true);
+                }
+            }
+
+            // Initialize charts for bottom committers
+            if (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())
+            {
+                foreach (var committer in topCommittersData.BottomCommitters)
+                {
+                    await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
+                        $"committerChart_bottom_{committer.UserId}", 
+                        committer.ActivityData,
+                        committer.DisplayName,
+                        false);
+                }
+            }
+
+            chartInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
+            errorMessage = $"Error initializing charts: {ex.Message}";
+        }
+    }
+} 

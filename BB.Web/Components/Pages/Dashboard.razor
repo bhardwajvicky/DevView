@@ -73,6 +73,21 @@
             </div>
         </div>
         
+        <!-- Data Grouping Selection -->
+        @if (!string.IsNullOrEmpty(selectedRepoSlug))
+        {
+            <div class="col-md-2">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Group By</label>
+                    <select class="form-select" @onchange="OnGroupingChanged" value="@selectedGrouping">
+                        <option value="Day">📅 Day</option>
+                        <option value="Week">📊 Week</option>
+                        <option value="Month">📈 Month</option>
+                    </select>
+                </div>
+            </div>
+        }
+        
         <!-- Date Range Selection -->
         @if (!string.IsNullOrEmpty(selectedRepoSlug))
         {
@@ -131,7 +146,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            📊 Commit Activity Over Time
+                            📊 Commit Activity Over Time (@selectedGrouping)
                             @if (selectedRepoSlug == "ALL")
                             {
                                 <span class="text-muted">- All Repositories</span>
@@ -142,7 +157,7 @@
                                 <span class="text-muted">- @(selectedRepo?.Name ?? selectedRepoSlug)</span>
                             }
                         </h5>
-                        <small class="text-muted">Interactive area chart showing commits, code additions, and deletions</small>
+                        <small class="text-muted">Interactive area chart showing commits, code additions, and deletions (grouped by @selectedGrouping.ToLower())</small>
                     </div>
                     <div class="card-body">
                                 <div style="position: relative; height: 400px;">
@@ -478,7 +493,16 @@
         // Prepare data for Chart.js
         const labels = data.map(item => {
             const date = new Date(item.date);
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            // Format based on grouping type - check if we have grouping info from Blazor
+            const grouping = window.selectedGrouping || 'Day';
+            
+            if (grouping === 'Month') {
+                return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            } else if (grouping === 'Week') {
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } else {
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
         });
         
         const commitCounts = data.map(item => item.commitCount);
@@ -787,7 +811,16 @@
             // Prepare data
             const labels = contributor.data.map(item => {
                 const date = new Date(item.date);
-                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                // Format based on grouping type
+                const grouping = window.selectedGrouping || 'Day';
+                
+                if (grouping === 'Month') {
+                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                } else if (grouping === 'Week') {
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                } else {
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
             });
             
             const commitCounts = contributor.data.map(item => item.commitCount);
@@ -1084,6 +1117,7 @@
     private bool includePR = false;
     private bool includeData = true;
     private bool includeConfig = true;
+    private string selectedGrouping = "Day";
 
     private enum DateRangeType
     {
@@ -1135,6 +1169,8 @@
         {
             _dotNetRef = DotNetObjectReference.Create(this);
             await JSRuntime.InvokeVoidAsync("setDashboardDotNetRef", _dotNetRef);
+            // Initialize JavaScript variables
+            await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
         }
         // Initialize chart after render if we have data but no chart yet
         if (!firstRender && commitActivity != null && commitActivity.Any() && !chartInitialized)
@@ -1184,6 +1220,7 @@
         
         // Store selected repository in JavaScript for chart interactions
         await JSRuntime.InvokeVoidAsync("eval", $"window.selectedRepoSlug = '{selectedRepoSlug}';");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
         
         // Do NOT reset or change startDate/endDate when changing repo
         await RefreshDashboardData();
@@ -1191,6 +1228,19 @@
 
     private async Task OnDateRangeChanged(DateTime? newDate)
     {
+        await RefreshDashboardData();
+    }
+
+    private async Task OnGroupingChanged(ChangeEventArgs e)
+    {
+        var newGrouping = e.Value?.ToString() ?? "Day";
+        selectedGrouping = newGrouping;
+        chartInitialized = false;
+        contributorChartsInitialized = false;
+        
+        // Update JavaScript variable for chart formatting
+        await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
+        
         await RefreshDashboardData();
     }
 
@@ -1276,12 +1326,12 @@
             if (string.IsNullOrEmpty(repoSlug))
             {
                 // ALL repositories - only pass workspace
-                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/commits/activity?workspace={workspace}&groupBy={selectedGrouping}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             else
             {
                 // Specific repository
-                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/commits/activity?repoSlug={repoSlug}&workspace={workspace}&groupBy={selectedGrouping}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             
             // Add date range parameters if specified
@@ -1421,12 +1471,12 @@
             if (string.IsNullOrEmpty(repoSlug))
             {
                 // ALL repositories - only pass workspace
-                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/contributors?workspace={workspace}&groupBy={selectedGrouping}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             else
             {
                 // Specific repository
-                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"http://localhost:5000/api/analytics/contributors?repoSlug={repoSlug}&workspace={workspace}&groupBy={selectedGrouping}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             
             // Add date range parameters if specified

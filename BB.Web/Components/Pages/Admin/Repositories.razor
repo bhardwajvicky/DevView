@@ -99,6 +99,7 @@
                                         <th>Name</th>
                                         <th>Slug</th>
                                         <th>Workspace</th>
+                                        <th>Oldest Commit Date</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -114,6 +115,9 @@
                                             </td>
                                             <td>
                                                 <span class="badge bg-primary">@repo.Workspace</span>
+                                            </td>
+                                            <td>
+                                                @repo.OldestCommitDate?.ToString("yyyy-MM-dd")
                                             </td>
                                             <td>
                                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => NavigateToCommits(repo)">

@@ -89,6 +89,13 @@ namespace BB.Api.Endpoints.Analytics
             return Ok(result);
         }
 
+        [HttpGet("workspaces")]
+        public async Task<IActionResult> GetWorkspaces()
+        {
+            var result = await _analyticsService.GetWorkspacesAsync();
+            return Ok(result);
+        }
+
         [HttpGet("commits/details")]
         public async Task<IActionResult> GetCommitDetails(
             [FromQuery] string? repoSlug,
@@ -144,6 +151,28 @@ namespace BB.Api.Endpoints.Analytics
             }
 
             var result = await _analyticsService.GetFileTypeActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId);
+            return Ok(result);
+        }
+
+        [HttpGet("contributors/top-bottom")]
+        public async Task<IActionResult> GetTopBottomCommitters(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] GroupingType groupBy = GroupingType.Day,
+            [FromQuery] bool includePR = true,
+            [FromQuery] bool includeData = true,
+            [FromQuery] bool includeConfig = true,
+            [FromQuery] int topCount = 3,
+            [FromQuery] int bottomCount = 3)
+        {
+            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetTopBottomCommittersAsync(repoSlug, workspace, startDate, endDate, groupBy, includePR, includeData, includeConfig, topCount, bottomCount);
             return Ok(result);
         }
     }

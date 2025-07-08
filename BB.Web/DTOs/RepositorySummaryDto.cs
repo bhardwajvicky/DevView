@@ -5,5 +5,6 @@ namespace BB.Web.DTOs
         public required string Name { get; set; }
         public required string Slug { get; set; }
         public required string Workspace { get; set; }
+        public DateTime? OldestCommitDate { get; set; }
     }
 } 

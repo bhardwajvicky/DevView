@@ -2,6 +2,7 @@ using BBIntegration.Commits;
 using BBIntegration.PullRequests;
 using BBIntegration.Repositories;
 using BBIntegration.Users;
+using BB.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +20,7 @@ namespace BB.Api.Endpoints.Sync
         private readonly BitbucketRepositoriesService _reposService;
         private readonly BitbucketCommitsService _commitsService;
         private readonly BitbucketPullRequestsService _pullRequestsService;
+        private readonly CommitRefreshService _commitRefreshService;
         private readonly IConfiguration _configuration;
 
         public SyncController(
@@ -26,12 +28,14 @@ namespace BB.Api.Endpoints.Sync
             BitbucketRepositoriesService reposService, 
             BitbucketCommitsService commitsService,
             BitbucketPullRequestsService pullRequestsService,
+            CommitRefreshService commitRefreshService,
             IConfiguration configuration)
         {
             _usersService = usersService;
             _reposService = reposService;
             _commitsService = commitsService;
             _pullRequestsService = pullRequestsService;
+            _commitRefreshService = commitRefreshService;
             _configuration = configuration;
         }
 
@@ -132,6 +136,20 @@ namespace BB.Api.Endpoints.Sync
             catch (Exception ex)
             {
                 return StatusCode(500, $"An error occurred while fixing PR merge flags: {ex.Message}");
+            }
+        }
+
+        [HttpPost("refresh-commit-line-counts")]
+        public async Task<IActionResult> RefreshCommitLineCounts()
+        {
+            try
+            {
+                var updatedCount = await _commitRefreshService.RefreshAllCommitLineCountsAsync();
+                return Ok($"Refreshed line counts for {updatedCount} commits.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while refreshing commit line counts: {ex.Message}");
             }
         }
     }

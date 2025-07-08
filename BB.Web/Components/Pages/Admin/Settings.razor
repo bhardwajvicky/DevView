@@ -48,7 +48,7 @@
                                 }
                                 else if (workspaces.Any())
                                 {
-                                    <select id="workspaceSelect" class="form-select" @bind="selectedWorkspace" @bind:after="OnWorkspaceChanged">
+                                    <select id="workspaceSelect" class="form-select" @bind="selectedWorkspace" @bind:after="() => OnWorkspaceChanged()">
                                         @foreach (var workspace in workspaces)
                                         {
                                             <option value="@workspace">@workspace</option>
@@ -204,7 +204,38 @@
                     </div>
                 </div>
 
-                <!-- Pull Requests Sync -->
+                <!-- Commit Line Count Refresh -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-arrow-clockwise me-2"></i>
+                                Refresh Commit Line Counts
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p>Re-processes all existing commits to update Code, Data, and Config line counts based on the latest file classification rules.</p>
+                            <button class="btn btn-warning w-100" @onclick="RefreshCommitLineCounts" disabled="@isRefreshingCommits">
+                                @if (isRefreshingCommits)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-arrow-clockwise me-2"></i>
+                                }
+                                Refresh All Commit Line Counts
+                            </button>
+                            <div class="form-text text-muted mt-2">
+                                This operation might take a long time depending on the number of commits.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PR Sync Section -->
+            <div class="row">
                 <div class="col-md-6">
                     <div class="card mb-4">
                         <div class="card-header">
@@ -243,7 +274,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <button class="btn btn-info w-100" @onclick="SyncPullRequests" disabled="@(isSyncingPRs || !WorkspaceService.HasSelectedWorkspace || string.IsNullOrWhiteSpace(prRepo))">
+                            <button class="btn btn-success w-100" @onclick="SyncPullRequests" disabled="@(isSyncingPRs || !WorkspaceService.HasSelectedWorkspace || string.IsNullOrWhiteSpace(prRepo))">
                                 @if (isSyncingPRs)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -257,35 +288,60 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Fix PR Merge Flags -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-flag me-2"></i>
+                                Fix PR Merge Flags
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p>Identifies and updates the `IsPRMergeCommit` flag for merge commits that are part of a pull request, ensuring accurate data representation.</p>
+                            <div class="mb-3">
+                                <label for="fixPrRepoSlug" class="form-label">Repository Slug (Optional)</label>
+                                <input type="text" id="fixPrRepoSlug" class="form-control" @bind="fixPrRepoSlug" placeholder="Leave empty for all repositories" />
+                                <div class="form-text">
+                                    Specify a repository slug to fix flags only for that repository, or leave empty to fix for all.
+                                </div>
+                            </div>
+                            <button class="btn btn-info w-100" @onclick="FixPRMergeFlags">
+                                <i class="bi bi-tools me-2"></i>
+                                Fix PR Merge Commits Flags
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
+
         </div>
     </div>
 </div>
 
 @code {
-    private List<string>? workspaces;
-    private string? selectedWorkspace;
+    private IEnumerable<string>? workspaces;
+    private string selectedWorkspace = string.Empty;
     private bool isRefreshing = false;
-
-    // Repository sync - no workspace variable needed, uses WorkspaceService
     private bool isSyncingRepos = false;
 
     // Commits sync - only need repo slug, workspace comes from WorkspaceService
-    private string commitRepo = "";
+    private string commitRepo = string.Empty;
+    private DateTime commitStartDate = DateTime.Now.Date.AddDays(-30);
+    private DateTime commitEndDate = DateTime.Today;
     private bool isSyncingCommits = false;
+    private bool isRefreshingCommits = false; // New field
 
     // PR sync - only need repo slug, workspace comes from WorkspaceService
-    private string prRepo = "";
+    private string prRepo = string.Empty;
+    private DateTime prStartDate = DateTime.Now.Date.AddDays(-30);
+    private DateTime prEndDate = DateTime.Today;
     private bool isSyncingPRs = false;
 
-    private string message = "";
-    private string messageType = "";
-
-    private DateTime commitStartDate = DateTime.Now.Date.AddDays(-30);
-    private DateTime commitEndDate = DateTime.Now.Date;
-
-    private DateTime prStartDate = DateTime.Now.Date.AddDays(-30);
-    private DateTime prEndDate = DateTime.Now.Date;
+    private string message = string.Empty;
+    private string messageType = string.Empty;
+    private string fixPrRepoSlug = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -296,36 +352,16 @@
     {
         try
         {
-            var repositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("/api/analytics/repositories");
-            
-            if (repositories != null && repositories.Any())
+            workspaces = await Http.GetFromJsonAsync<IEnumerable<string>>("http://localhost:5000/api/analytics/workspaces");
+            if (workspaces != null && workspaces.Any() && string.IsNullOrEmpty(selectedWorkspace))
             {
-                workspaces = repositories
-                    .Select(r => r.Workspace)
-                    .Distinct()
-                    .OrderBy(w => w)
-                    .ToList();
-
-                // If no workspace is currently selected but workspaces exist, select the first one
-                if (!WorkspaceService.HasSelectedWorkspace && workspaces.Any())
-                {
-                    selectedWorkspace = workspaces.First();
-                    WorkspaceService.SelectedWorkspace = selectedWorkspace;
-                }
-                else if (WorkspaceService.HasSelectedWorkspace)
-                {
-                    selectedWorkspace = WorkspaceService.SelectedWorkspace;
-                }
-            }
-            else
-            {
-                workspaces = new List<string>();
+                selectedWorkspace = WorkspaceService.SelectedWorkspace ?? workspaces.First();
+                WorkspaceService.SelectedWorkspace = selectedWorkspace;
             }
         }
         catch (Exception ex)
         {
             ShowMessage($"Error loading workspaces: {ex.Message}", "error");
-            workspaces = new List<string>();
         }
     }
 
@@ -338,9 +374,23 @@
     private async Task RefreshWorkspaces()
     {
         isRefreshing = true;
-        await LoadWorkspaces();
-        isRefreshing = false;
-        ShowMessage("Workspaces refreshed successfully", "success");
+        message = string.Empty;
+
+        try
+        {
+            // Assuming a refresh endpoint exists or we can just reload from existing repos
+            // For now, we'll just reload the workspaces from the existing data
+            await LoadWorkspaces();
+            ShowMessage("Workspaces refreshed successfully.", "success");
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error refreshing workspaces: {ex.Message}", "error");
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     private async Task SyncRepositories()
@@ -352,7 +402,7 @@
         }
 
         isSyncingRepos = true;
-        message = "";
+        message = string.Empty;
 
         try
         {
@@ -395,7 +445,7 @@
 
     private void SetLastYear()
     {
-        var now = DateTime.Now;
+        var now = DateTime.Now.Date;
         commitStartDate = new DateTime(now.Year - 1, 1, 1);
         commitEndDate = new DateTime(now.Year - 1, 12, 31);
     }
@@ -415,7 +465,7 @@
         }
 
         isSyncingCommits = true;
-        message = "";
+        message = string.Empty;
 
         try
         {
@@ -462,7 +512,7 @@
 
     private void SetPRLastYear()
     {
-        var now = DateTime.Now;
+        var now = DateTime.Now.Date;
         prStartDate = new DateTime(now.Year - 1, 1, 1);
         prEndDate = new DateTime(now.Year - 1, 12, 31);
     }
@@ -482,7 +532,7 @@
         }
 
         isSyncingPRs = true;
-        message = "";
+        message = string.Empty;
 
         try
         {
@@ -514,9 +564,88 @@
         }
     }
 
+    private async Task RefreshCommitLineCounts()
+    {
+        isRefreshingCommits = true;
+        message = string.Empty;
+
+        try
+        {
+            var response = await Http.PostAsync("http://localhost:5000/api/sync/refresh-commit-line-counts", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                ShowMessage(responseContent, "success");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ShowMessage($"Refresh failed: {errorContent}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error during refresh: {ex.Message}", "error");
+        }
+        finally
+        {
+            isRefreshingCommits = false;
+        }
+    }
+
+    private async Task FixPRMergeFlags()
+    {
+        if (!WorkspaceService.HasSelectedWorkspace)
+        {
+            ShowMessage("Please select a workspace first", "error");
+            return;
+        }
+
+        // The following if-block caused an issue if fixPrRepoSlug was null or empty, leading to a Bad Request.
+        // It should allow empty for all repositories, as per the UI text.
+        // if (string.IsNullOrWhiteSpace(fixPrRepoSlug))
+        // {
+        //     ShowMessage("Please enter repository slug for specific fix or leave empty for all", "error");
+        //     return;
+        // }
+
+        isSyncingPRs = true; // Reusing isSyncingPRs for this operation
+        message = string.Empty;
+
+        try
+        {
+            // Construct URL based on whether repoSlug is provided
+            var url = string.IsNullOrWhiteSpace(fixPrRepoSlug)
+                ? $"/api/sync/fix-pr-merge-flags"
+                : $"/api/sync/fix-pr-merge-flags?repoSlug={fixPrRepoSlug}";
+
+            var response = await Http.PostAsync(url, null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                ShowMessage($"PR merge flags fixed successfully: {responseContent}", "success");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ShowMessage($"Fix failed: {errorContent}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error during fix: {ex.Message}", "error");
+        }
+        finally
+        {
+            isSyncingPRs = false;
+        }
+    }
+
     private void ShowMessage(string msg, string type)
     {
         message = msg;
         messageType = type;
+        StateHasChanged();
     }
 } 

@@ -4,6 +4,7 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace BB.Api.Services
@@ -146,7 +147,16 @@ namespace BB.Api.Services
         public async Task<IEnumerable<RepositorySummaryDto>> GetRepositoriesAsync()
         {
             using var connection = new SqlConnection(_connectionString);
-            const string sql = "SELECT Name, Slug, Workspace FROM Repositories ORDER BY Name;";
+            const string sql = @"
+                SELECT 
+                    r.Name, 
+                    r.Slug, 
+                    r.Workspace,
+                    MIN(c.Date) AS OldestCommitDate
+                FROM Repositories r
+                LEFT JOIN Commits c ON r.Id = c.RepositoryId
+                GROUP BY r.Name, r.Slug, r.Workspace
+                ORDER BY r.Name;";
             return await connection.QueryAsync<RepositorySummaryDto>(sql);
         }
 
@@ -155,6 +165,13 @@ namespace BB.Api.Services
             using var connection = new SqlConnection(_connectionString);
             const string sql = "SELECT Id, BitbucketUserId, DisplayName, AvatarUrl, CreatedOn FROM Users ORDER BY DisplayName;";
             return await connection.QueryAsync<UserDto>(sql);
+        }
+
+        public async Task<IEnumerable<string>> GetWorkspacesAsync()
+        {
+            using var connection = new SqlConnection(_connectionString);
+            const string sql = "SELECT DISTINCT Workspace FROM Repositories ORDER BY Workspace;";
+            return await connection.QueryAsync<string>(sql);
         }
 
         public async Task<IEnumerable<CommitDetailDto>> GetCommitDetailsAsync(
@@ -319,6 +336,154 @@ namespace BB.Api.Services
             ";
 
             return await connection.QueryAsync<FileTypeActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
+        }
+
+        public async Task<TopCommittersResponseDto> GetTopBottomCommittersAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
+            bool includePR = true, bool includeData = true, bool includeConfig = true, int topCount = 3, int bottomCount = 3)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            // First, get the ranking of committers based on the filters
+            var rankingSql = GetCommitterRankingQuery(includePR, includeData, includeConfig);
+            
+            var allCommitters = await connection.QueryAsync<CommitterRankingDto>(rankingSql, 
+                new { repoSlug, workspace, startDate, endDate });
+
+            var committersList = allCommitters.ToList();
+            
+            // Get top and bottom committers
+            var topCommitters = committersList.Take(topCount).ToList();
+            var bottomCommitters = committersList.TakeLast(bottomCount).ToList();
+
+            // Now get detailed activity data for each committer
+            var result = new TopCommittersResponseDto();
+
+            // Process top committers
+            foreach (var committer in topCommitters)
+            {
+                var activityData = await GetContributorActivityAsync(repoSlug!, workspace!, startDate, endDate, groupBy, committer.UserId, includePR, includeData, includeConfig);
+                
+                result.TopCommitters.Add(new TopCommittersDto
+                {
+                    UserId = committer.UserId,
+                    DisplayName = committer.DisplayName,
+                    AvatarUrl = committer.AvatarUrl,
+                    TotalCommits = committer.TotalCommits,
+                    TotalLinesAdded = committer.TotalLinesAdded,
+                    TotalLinesRemoved = committer.TotalLinesRemoved,
+                    CodeLinesAdded = committer.CodeLinesAdded,
+                    CodeLinesRemoved = committer.CodeLinesRemoved,
+                    DataLinesAdded = committer.DataLinesAdded,
+                    DataLinesRemoved = committer.DataLinesRemoved,
+                    ConfigLinesAdded = committer.ConfigLinesAdded,
+                    ConfigLinesRemoved = committer.ConfigLinesRemoved,
+                    DocsLinesAdded = committer.DocsLinesAdded,
+                    DocsLinesRemoved = committer.DocsLinesRemoved,
+                    ActivityData = activityData.ToList()
+                });
+            }
+
+            // Process bottom committers
+            foreach (var committer in bottomCommitters)
+            {
+                var activityData = await GetContributorActivityAsync(repoSlug!, workspace!, startDate, endDate, groupBy, committer.UserId, includePR, includeData, includeConfig);
+                
+                result.BottomCommitters.Add(new TopCommittersDto
+                {
+                    UserId = committer.UserId,
+                    DisplayName = committer.DisplayName,
+                    AvatarUrl = committer.AvatarUrl,
+                    TotalCommits = committer.TotalCommits,
+                    TotalLinesAdded = committer.TotalLinesAdded,
+                    TotalLinesRemoved = committer.TotalLinesRemoved,
+                    CodeLinesAdded = committer.CodeLinesAdded,
+                    CodeLinesRemoved = committer.CodeLinesRemoved,
+                    DataLinesAdded = committer.DataLinesAdded,
+                    DataLinesRemoved = committer.DataLinesRemoved,
+                    ConfigLinesAdded = committer.ConfigLinesAdded,
+                    ConfigLinesRemoved = committer.ConfigLinesRemoved,
+                    DocsLinesAdded = committer.DocsLinesAdded,
+                    DocsLinesRemoved = committer.DocsLinesRemoved,
+                    ActivityData = activityData.ToList()
+                });
+            }
+
+            return result;
+        }
+
+        private string GetCommitterRankingQuery(bool includePR, bool includeData, bool includeConfig)
+        {
+            // Build the ranking criteria based on filters
+            var rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded)"; // Default: Total + Code
+            
+            if (includeData && includeConfig)
+            {
+                rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded + c.DataLinesAdded + c.ConfigLinesAdded)";
+            }
+            else if (includeData)
+            {
+                rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded + c.DataLinesAdded)";
+            }
+            else if (includeConfig)
+            {
+                rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded + c.ConfigLinesAdded)";
+            }
+
+            // Create a custom filter clause without the userId parameter for ranking
+            var prFilter = includePR ? "" : "c.IsPRMergeCommit = 0 AND ";
+            var filterClause = $@"
+                WHERE 
+                    {prFilter}(@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR c.Date >= @StartDate)
+                    AND (@EndDate IS NULL OR c.Date <= @EndDate)
+            ";
+
+            return $@"
+                SELECT 
+                    u.Id AS UserId,
+                    u.DisplayName,
+                    u.AvatarUrl,
+                    COUNT(c.Id) AS TotalCommits,
+                    SUM(c.LinesAdded) AS TotalLinesAdded,
+                    SUM(c.LinesRemoved) AS TotalLinesRemoved,
+                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
+                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
+                    SUM(c.DataLinesAdded) AS DataLinesAdded,
+                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
+                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
+                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
+                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
+                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved,
+                    {rankingCriteria} AS RankingScore
+                FROM Commits c
+                JOIN Repositories r ON c.RepositoryId = r.Id
+                JOIN Users u ON c.AuthorId = u.Id
+                {filterClause}
+                GROUP BY u.Id, u.DisplayName, u.AvatarUrl
+                HAVING COUNT(c.Id) > 0
+                ORDER BY RankingScore DESC;
+            ";
+        }
+
+        private class CommitterRankingDto
+        {
+            public int UserId { get; set; }
+            public string DisplayName { get; set; } = string.Empty;
+            public string AvatarUrl { get; set; } = string.Empty;
+            public int TotalCommits { get; set; }
+            public int TotalLinesAdded { get; set; }
+            public int TotalLinesRemoved { get; set; }
+            public int CodeLinesAdded { get; set; }
+            public int CodeLinesRemoved { get; set; }
+            public int DataLinesAdded { get; set; }
+            public int DataLinesRemoved { get; set; }
+            public int ConfigLinesAdded { get; set; }
+            public int ConfigLinesRemoved { get; set; }
+            public int DocsLinesAdded { get; set; }
+            public int DocsLinesRemoved { get; set; }
+            public int RankingScore { get; set; }
         }
     }
 } 
