@@ -21,7 +21,7 @@ namespace BBIntegration.Common
         public BitbucketApiClient(BitbucketConfig config)
         {
             _config = config;
-            _httpClient = new HttpClient { BaseAddress = new Uri(_config.BitbucketApiBaseUrl) };
+            _httpClient = new HttpClient { BaseAddress = new Uri(_config.ApiBaseUrl) };
         }
 
         private async Task EnsureAuthenticatedAsync()
@@ -34,8 +34,8 @@ namespace BBIntegration.Common
                 Content = new FormUrlEncodedContent(new[]
                 {
                     new KeyValuePair<string, string>("grant_type", "client_credentials"),
-                    new KeyValuePair<string, string>("client_id", _config.BitbucketConsumerKey),
-                    new KeyValuePair<string, string>("client_secret", _config.BitbucketConsumerSecret)
+                    new KeyValuePair<string, string>("client_id", _config.ConsumerKey),
+                    new KeyValuePair<string, string>("client_secret", _config.ConsumerSecret)
                 })
             };
 

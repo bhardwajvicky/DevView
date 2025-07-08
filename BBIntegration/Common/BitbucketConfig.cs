@@ -8,13 +8,10 @@ namespace BBIntegration.Common
         public string DbConnectionString { get; set; }
 
         // Bitbucket API base URL, populated from configuration
-        [ConfigurationKeyName("Bitbucket:ApiBaseUrl")]
-        public string BitbucketApiBaseUrl { get; set; }
+        public string ApiBaseUrl { get; set; }
 
         // Bitbucket OAuth Consumer Key and Secret
-        [ConfigurationKeyName("Bitbucket:ConsumerKey")]
-        public string BitbucketConsumerKey { get; set; }
-        [ConfigurationKeyName("Bitbucket:ConsumerSecret")]
-        public string BitbucketConsumerSecret { get; set; }
+        public string ConsumerKey { get; set; }
+        public string ConsumerSecret { get; set; }
     }
 }

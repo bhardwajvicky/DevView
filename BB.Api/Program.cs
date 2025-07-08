@@ -12,9 +12,9 @@ var builder = WebApplication.CreateBuilder(args);
 var bitbucketConfig = new BitbucketConfig
 {
     DbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection"),
-    BitbucketApiBaseUrl = builder.Configuration["Bitbucket:ApiBaseUrl"],
-    BitbucketConsumerKey = builder.Configuration["Bitbucket:ConsumerKey"],
-    BitbucketConsumerSecret = builder.Configuration["Bitbucket:ConsumerSecret"]
+    ApiBaseUrl = builder.Configuration["Bitbucket:ApiBaseUrl"],
+    ConsumerKey = builder.Configuration["Bitbucket:ConsumerKey"],
+    ConsumerSecret = builder.Configuration["Bitbucket:ConsumerSecret"]
 };
 
 // 2. Register config and services for Dependency Injection

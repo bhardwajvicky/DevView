@@ -161,3 +161,18 @@ WHERE IsMerge = 1
 --     SUM(CASE WHEN IsPRMergeCommit = 1 THEN 1 ELSE 0 END) as PRMergeCommits,
 --     SUM(CASE WHEN IsMerge = 1 AND IsPRMergeCommit = 0 THEN 1 ELSE 0 END) as MergeCommitsNotInPR
 -- FROM Commits;
+
+-- RepositorySyncLog table for autosync logging
+CREATE TABLE RepositorySyncLog (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    RepositoryId INT NOT NULL,
+    StartDate DATETIME2 NOT NULL,
+    EndDate DATETIME2 NOT NULL,
+    SyncedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    Status NVARCHAR(50) NOT NULL, -- e.g., 'Started', 'Completed', 'Failed'
+    Message NVARCHAR(MAX) NULL,   -- error or info message
+    FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id)
+);
+
+CREATE INDEX IX_RepositorySyncLog_RepositoryId ON RepositorySyncLog(RepositoryId);
+CREATE INDEX IX_RepositorySyncLog_StartEndDate ON RepositorySyncLog(StartDate, EndDate);

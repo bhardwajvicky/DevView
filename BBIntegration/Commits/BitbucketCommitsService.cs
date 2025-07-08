@@ -30,10 +30,12 @@ namespace BBIntegration.Commits
             _logger = logger;
         }
 
-        public async Task SyncCommitsAsync(string workspace, string repoSlug, DateTime startDate, DateTime endDate)
+        public async Task<bool> SyncCommitsAsync(string workspace, string repoSlug, DateTime startDate, DateTime endDate)
         {
-            _logger.LogInformation("Starting commit sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
+            _logger.LogInformation("Starting commit sync for {Workspace}/{RepoSlug} from {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}", workspace, repoSlug, startDate, endDate);
             
+            bool hitStartDateBoundary = false; // Indicates if we found commits older than startDate
+
             // Check if we're currently rate limited
             if (BitbucketApiClient.IsRateLimited())
             {
@@ -51,7 +53,7 @@ namespace BBIntegration.Commits
             if (repoId == null)
             {
                 _logger.LogWarning("Repository '{RepoSlug}' not found. Sync repositories first.", repoSlug);
-                return;
+                return false; // Indicate no more history to fetch
             }
 
             string nextPageUrl = null;
@@ -71,15 +73,19 @@ namespace BBIntegration.Commits
                     var commitsJson = await _apiClient.GetCommitsAsync(workspace, repoSlug, nextPageUrl);
                     var pagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<CommitDto>>(commitsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                    if (pagedResponse?.Values == null || !pagedResponse.Values.Any()) break;
+                    if (pagedResponse?.Values == null || !pagedResponse.Values.Any()) {
+                        keepFetching = false;
+                        break;
+                    }
 
                     foreach (var commit in pagedResponse.Values)
                     {
                         // Stop if we've gone past the start date of our desired range
                         if (commit.Date < startDate)
                         {
-                            keepFetching = false;
-                            break;
+                            hitStartDateBoundary = true;
+                            keepFetching = false; // Stop fetching more pages for this specific repo within this batch
+                            break; // Exit foreach loop
                         }
 
                         // Skip if the commit is outside our desired date range
@@ -134,11 +140,12 @@ namespace BBIntegration.Commits
                 }
 
                 _logger.LogInformation("Commit sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
+                return hitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred during commit sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
-                throw;
+                throw; // Re-throw the exception to be handled by the caller
             }
         }
     }

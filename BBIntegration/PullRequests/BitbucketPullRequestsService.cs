@@ -28,10 +28,12 @@ namespace BBIntegration.PullRequests
             _diffParser = diffParser;
         }
 
-        public async Task SyncPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
+        public async Task<bool> SyncPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
         {
-            _logger.LogInformation("Starting PR sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
+            _logger.LogInformation("Starting PR sync for {Workspace}/{RepoSlug} from {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}", workspace, repoSlug, startDate, endDate);
             
+            bool hitStartDateBoundary = false; // Indicates if we found PRs older than startDate
+
             // Check if we're currently rate limited
             if (BitbucketApiClient.IsRateLimited())
             {
@@ -48,13 +50,14 @@ namespace BBIntegration.PullRequests
             if (repoId == null)
             {
                 _logger.LogWarning("Repository '{RepoSlug}' not found. Sync repositories first.", repoSlug);
-                return;
+                return false;
             }
 
             string nextPageUrl = null;
+            var keepFetching = true;
             try
             {
-                do
+                while(keepFetching)
                 {
                     // Check for rate limiting before each API call
                     if (BitbucketApiClient.IsRateLimited())
@@ -67,10 +70,22 @@ namespace BBIntegration.PullRequests
                     //_logger.LogInformation("Raw PRs JSON: {Json}", prsJson);
                     var prPagedResponse = JsonSerializer.Deserialize<PaginatedResponseDto<PullRequestDto>>(prsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                    if (prPagedResponse?.Values == null || !prPagedResponse.Values.Any()) break;
+                    if (prPagedResponse?.Values == null || !prPagedResponse.Values.Any()) {
+                        keepFetching = false;
+                        break;
+                    }
 
                     foreach (var pr in prPagedResponse.Values)
                     {
+                        if (pr.CreatedOn < startDate)
+                        {
+                            hitStartDateBoundary = true;
+                            keepFetching = false; // Stop fetching more pages for this specific repo within this batch
+                            break; // Exit foreach loop
+                        }
+
+                        if (pr.CreatedOn > endDate) continue;
+
                         if (pr.Author?.Uuid == null)
                         {
                             _logger.LogWarning("PR '{PrId}' has no author or author UUID. Skipping.", pr.Id);
@@ -116,9 +131,11 @@ namespace BBIntegration.PullRequests
                         await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
                     }
                     nextPageUrl = prPagedResponse.NextPageUrl;
-                } while (!string.IsNullOrEmpty(nextPageUrl));
+                    if (string.IsNullOrEmpty(nextPageUrl)) keepFetching = false;
+                } 
                 
                 _logger.LogInformation("PR sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
+                return hitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
             {
