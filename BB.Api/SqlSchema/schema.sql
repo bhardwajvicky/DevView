@@ -54,8 +54,24 @@ CREATE TABLE PullRequests (
     CreatedOn DATETIME2,
     UpdatedOn DATETIME2,
     MergedOn DATETIME2,
+    ClosedOn DATETIME2, -- New column for when the PR was closed
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
     FOREIGN KEY (AuthorId) REFERENCES Users(Id)
+);
+
+-- New table for Pull Request Approvals
+CREATE TABLE PullRequestApprovals (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    PullRequestId INT NOT NULL,
+    UserUuid NVARCHAR(255) NOT NULL,
+    DisplayName NVARCHAR(255) NOT NULL,
+    Role NVARCHAR(50), -- e.g., 'REVIEWER', 'PARTICIPANT'
+    Approved BIT NOT NULL, -- True if approved, False if not (e.g., changes requested)
+    State NVARCHAR(50), -- e.g., 'approved', 'changes_requested', 'needs_work'
+    ApprovedOn DATETIME2, -- Timestamp of the approval
+    FOREIGN KEY (PullRequestId) REFERENCES PullRequests(Id),
+    -- Consider adding a unique constraint if an approval by a specific user for a specific PR can only exist once
+    UNIQUE (PullRequestId, UserUuid)
 );
 
 -- Indexes for performance
@@ -176,3 +192,8 @@ CREATE TABLE RepositorySyncLog (
 
 CREATE INDEX IX_RepositorySyncLog_RepositoryId ON RepositorySyncLog(RepositoryId);
 CREATE INDEX IX_RepositorySyncLog_StartEndDate ON RepositorySyncLog(StartDate, EndDate);
+
+-- Indexes for performance on new table
+CREATE INDEX IX_PullRequestApprovals_PullRequestId ON PullRequestApprovals(PullRequestId);
+CREATE INDEX IX_PullRequestApprovals_UserUuid ON PullRequestApprovals(UserUuid);
+CREATE INDEX IX_PullRequestApprovals_Approved ON PullRequestApprovals(Approved);
