@@ -412,6 +412,73 @@ namespace BB.Api.Services
             return result;
         }
 
+        public async Task<IEnumerable<PullRequestAnalysisDto>> GetPullRequestAnalysisAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, string? state = null)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = @"
+                SELECT 
+                    pr.Id,
+                    pr.Title,
+                    pr.State,
+                    pr.CreatedOn,
+                    pr.UpdatedOn,
+                    pr.MergedOn,
+                    pr.ClosedOn,
+                    u.Id AS AuthorId,
+                    u.BitbucketUserId AS AuthorUuid,
+                    u.DisplayName AS AuthorDisplayName,
+                    u.AvatarUrl AS AuthorAvatarUrl,
+                    u.CreatedOn AS AuthorCreatedOn,
+                    a.UserId AS ApproverUserId,
+                    au.BitbucketUserId AS ApproverUuid,
+                    au.DisplayName AS ApproverDisplayName,
+                    au.AvatarUrl AS ApproverAvatarUrl,
+                    a.Role AS ApproverRole,
+                    a.IsApproved,
+                    a.ApprovedOn
+                FROM PullRequests pr
+                JOIN Repositories r ON pr.RepositoryId = r.Id
+                JOIN Users u ON pr.AuthorId = u.Id
+                LEFT JOIN PullRequestApprovals a ON pr.Id = a.PullRequestId
+                LEFT JOIN Users au ON a.UserId = au.Id
+                WHERE 
+                    (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
+                    AND (@EndDate IS NULL OR pr.CreatedOn <= @EndDate)
+                    AND (@State IS NULL OR pr.State = @State)
+                ORDER BY pr.CreatedOn DESC;";
+
+            var pullRequestDict = new Dictionary<long, PullRequestAnalysisDto>();
+
+            await connection.QueryAsync<PullRequestAnalysisDto, UserDto, PullRequestApproverDto, PullRequestAnalysisDto>(
+                sql,
+                (pr, author, approver) =>
+                {
+                    if (!pullRequestDict.TryGetValue(pr.Id, out var existingPr))
+                    {
+                        existingPr = pr;
+                        existingPr.Author = author;
+                        existingPr.TimeToMerge = pr.MergedOn.HasValue ? pr.MergedOn.Value - pr.CreatedOn : null;
+                        pullRequestDict.Add(pr.Id, existingPr);
+                    }
+
+                    if (approver != null)
+                    {
+                        existingPr.Approvers.Add(approver);
+                    }
+
+                    return existingPr;
+                },
+                new { repoSlug, workspace, startDate, endDate, state },
+                splitOn: "AuthorId,ApproverUserId"
+            );
+
+            return pullRequestDict.Values;
+        }
+
         private string GetCommitterRankingQuery(bool includePR, bool includeData, bool includeConfig)
         {
             // Build the ranking criteria based on filters

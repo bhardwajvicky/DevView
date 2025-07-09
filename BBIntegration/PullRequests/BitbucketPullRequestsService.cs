@@ -108,10 +108,10 @@ namespace BBIntegration.PullRequests
                             USING (SELECT @BitbucketPrId AS BitbucketPrId) AS Source
                             ON Target.BitbucketPrId = Source.BitbucketPrId
                             WHEN MATCHED THEN
-                                UPDATE SET Title = @Title, State = @State, UpdatedOn = @UpdatedOn, MergedOn = @MergedOn
+                                UPDATE SET Title = @Title, State = @State, UpdatedOn = @UpdatedOn, MergedOn = @MergedOn, ClosedOn = @ClosedOn
                             WHEN NOT MATCHED BY TARGET THEN
-                                INSERT (BitbucketPrId, RepositoryId, AuthorId, Title, State, CreatedOn, UpdatedOn, MergedOn)
-                                VALUES (@BitbucketPrId, @RepoId, @AuthorId, @Title, @State, @CreatedOn, @UpdatedOn, @MergedOn);
+                                INSERT (BitbucketPrId, RepositoryId, AuthorId, Title, State, CreatedOn, UpdatedOn, MergedOn, ClosedOn)
+                                VALUES (@BitbucketPrId, @RepoId, @AuthorId, @Title, @State, @CreatedOn, @UpdatedOn, @MergedOn, @ClosedOn);
                             SELECT Id FROM PullRequests WHERE BitbucketPrId = @BitbucketPrId;
                         ";
                         var prDbId = await connection.QuerySingleAsync<int>(prSql, new
@@ -123,8 +123,19 @@ namespace BBIntegration.PullRequests
                             pr.State,
                             pr.CreatedOn,
                             pr.UpdatedOn,
-                            MergedOn = pr.State == "MERGED" ? (DateTime?)pr.UpdatedOn : null
+                            MergedOn = pr.State == "MERGED" ? (DateTime?)pr.UpdatedOn : null,
+                            ClosedOn = pr.ClosedOn // Map the new ClosedOn property
                         });
+
+                        // Sync pull request approvals
+                        if (pr.Participants != null && pr.Participants.Any())
+                        {
+                            await SyncPullRequestApprovalsAsync(connection, prDbId, pr.Participants);
+                        }
+                        if (pr.Reviewers != null && pr.Reviewers.Any())
+                        {
+                            await SyncPullRequestApprovalsAsync(connection, prDbId, pr.Reviewers);
+                        }
 
                         // Now, sync commits for this PR
                         _logger.LogDebug("Starting commit sync for PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug}", pr.Id, pr.Title, workspace, repoSlug);
@@ -215,6 +226,59 @@ namespace BBIntegration.PullRequests
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to sync commits for PR {PrId} in {Workspace}/{RepoSlug}. This PR will be skipped.", bitbucketPrId, workspace, repoSlug);
+            }
+        }
+
+        private async Task SyncPullRequestApprovalsAsync(SqlConnection connection, int prDbId, System.Collections.Generic.List<BitbucketPullRequestParticipantDto> participants)
+        {
+            foreach (var participant in participants)
+            {
+                if (participant.User?.Uuid == null)
+                {
+                    _logger.LogWarning("Participant has no user UUID. Skipping approval sync for this participant.");
+                    continue;
+                }
+
+                // Find the user's internal ID
+                var userId = await connection.QuerySingleOrDefaultAsync<int?>(
+                    "SELECT Id FROM Users WHERE BitbucketUserId = @Uuid", new { Uuid = participant.User.Uuid });
+
+                if (userId == null)
+                {
+                    _logger.LogWarning("User with UUID '{UserUuid}' not found for PR {PrDbId} approval. Sync users first.", participant.User.Uuid, prDbId);
+                    continue;
+                }
+
+                // Determine ApprovedOn timestamp based on approval state
+                DateTime? approvedOn = null;
+                if (participant.Approved)
+                {
+                    approvedOn = DateTime.UtcNow; // Or use participant.ParticipatedOn if available and more accurate
+                }
+
+                const string approvalSql = @"
+                    MERGE INTO PullRequestApprovals AS Target
+                    USING (SELECT @PullRequestId AS PullRequestId, @UserUuid AS UserUuid) AS Source
+                    ON Target.PullRequestId = Source.PullRequestId AND Target.UserUuid = Source.UserUuid
+                    WHEN MATCHED THEN
+                        UPDATE SET DisplayName = @DisplayName, Role = @Role, Approved = @Approved, State = @State, ApprovedOn = @ApprovedOn
+                    WHEN NOT MATCHED BY TARGET THEN
+                        INSERT (PullRequestId, UserUuid, DisplayName, Role, Approved, State, ApprovedOn)
+                        VALUES (@PullRequestId, @UserUuid, @DisplayName, @Role, @Approved, @State, @ApprovedOn);
+                ";
+
+                await connection.ExecuteAsync(approvalSql, new
+                {
+                    PullRequestId = prDbId,
+                    UserUuid = participant.User.Uuid,
+                    DisplayName = participant.User.DisplayName,
+                    participant.Role,
+                    participant.Approved,
+                    participant.State,
+                    ApprovedOn = approvedOn
+                });
+
+                _logger.LogDebug("Synced approval for PR {PrDbId} by user {UserUuid} (approved: {Approved})", prDbId, participant.User.Uuid, participant.Approved);
             }
         }
     }

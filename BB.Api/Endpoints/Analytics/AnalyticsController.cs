@@ -175,5 +175,22 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetTopBottomCommittersAsync(repoSlug, workspace, startDate, endDate, groupBy, includePR, includeData, includeConfig, topCount, bottomCount);
             return Ok(result);
         }
+
+        [HttpGet("pull-requests/analysis")]
+        public async Task<IActionResult> GetPullRequestAnalysis(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] string? state = null)
+        {
+            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetPullRequestAnalysisAsync(repoSlug, workspace, startDate, endDate, state);
+            return Ok(result);
+        }
     }
 } 
