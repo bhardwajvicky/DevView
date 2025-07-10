@@ -131,6 +131,7 @@ namespace BBIntegration.PullRequests
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
                         var activityJson = await _apiClient.GetPullRequestActivityAsync(workspace, repoSlug, pr.Id);
+                        _logger.LogDebug("Raw activity JSON for PR {PrId}: {ActivityJson}", pr.Id, activityJson);
                         var activityResponse = System.Text.Json.JsonSerializer.Deserialize<BitbucketPullRequestActivityResponse>(activityJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                         var approvalParticipants = new List<BitbucketPullRequestParticipantDto>();
                         if (activityResponse?.Values != null)
