@@ -12,6 +12,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
+using BBIntegration.PullRequests;
+
 namespace BBIntegration.PullRequests
 {
     public class BitbucketPullRequestsService
@@ -78,7 +80,9 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
-                        _logger.LogInformation("Processing PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug}", pr.Id, pr.Title, workspace, repoSlug);
+                        _logger.LogInformation("Processing PR {PrId} (State: {State}, Created: {CreatedOn}, Updated: {UpdatedOn}, MergeCommitDate: {MergeCommitDate}, Closed: {ClosedOn})", 
+                            pr.Id, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergeCommit?.Date, pr.ClosedOn);
+
                         if (pr.CreatedOn < startDate)
                         {
                             hitStartDateBoundary = true;
@@ -123,10 +127,10 @@ namespace BBIntegration.PullRequests
                             AuthorId = authorId.Value,
                             pr.Title,
                             pr.State,
-                            CreatedOn = SafeDateTime(pr.CreatedOn),
-                            UpdatedOn = SafeDateTime(pr.UpdatedOn.GetValueOrDefault()),
-                            MergedOn = pr.State == "MERGED" ? SafeDateTime((pr.MergeCommit?.Date ?? pr.UpdatedOn).GetValueOrDefault()) : null,
-                            ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? SafeDateTime(pr.ClosedOn.GetValueOrDefault()) : null
+                            CreatedOn = pr.CreatedOn.SafeDateTime(),
+                            UpdatedOn = pr.UpdatedOn.SafeDateTime(),
+                            MergedOn = pr.State == "MERGED" ? ((DateTime?)(pr.MergeCommit?.Date ?? pr.UpdatedOn)).SafeDateTime() : null,
+                            ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
                         });
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
@@ -309,14 +313,7 @@ namespace BBIntegration.PullRequests
             }
         }
 
-        private static DateTime? SafeDateTime(DateTime date)
-        {
-            if (date == DateTime.MinValue || date.Year < 1753) // SQL Server min date
-            {
-                return null;
-            }
-            return date;
-        }
+        // The SafeDateTime method should be an extension method elsewhere, removing it from here.
     }
 }
 
