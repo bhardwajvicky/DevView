@@ -52,9 +52,7 @@ namespace BB.Api.Endpoints.PullRequests
                     JOIN Repositories r ON pr.RepositoryId = r.Id
                     LEFT JOIN PullRequestApprovals pa ON pr.Id = pa.PullRequestId
                     ORDER BY pr.CreatedOn DESC
-                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
-
-                    SELECT COUNT(*) FROM PullRequestApprovals WHERE PullRequestId = @PrId;
+                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
                 ";
 
                 // Using Dapper Multi-Mapping to map PRs and their approvals
@@ -106,9 +104,7 @@ namespace BB.Api.Endpoints.PullRequests
                     LEFT JOIN PullRequestApprovals pa ON pr.Id = pa.PullRequestId
                     WHERE pr.RepositoryId = @repoId
                     ORDER BY pr.CreatedOn DESC
-                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
-
-                    SELECT COUNT(*) FROM PullRequestApprovals WHERE PullRequestId = @PrId;
+                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
                 ";
 
                 // Using Dapper Multi-Mapping to map PRs and their approvals
@@ -128,7 +124,7 @@ namespace BB.Api.Endpoints.PullRequests
                         }
                         return currentPr;
                     },
-                    new 
+                    new
                     {
                         repoId,
                         offset = (page - 1) * pageSize,
