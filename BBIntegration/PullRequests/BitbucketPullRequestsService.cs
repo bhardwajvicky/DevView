@@ -80,6 +80,9 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
+                        _logger.LogInformation("Deserialized PR {PrId} - State: {State}, MergeCommit: {MergeCommit}, MergeCommitDate: {MergeCommitDate}", 
+                            pr.Id, pr.State, System.Text.Json.JsonSerializer.Serialize(pr.MergeCommit), pr.MergeCommit?.Date);
+
                         _logger.LogInformation("Processing PR {PrId} (State: {State}, Created: {CreatedOn}, Updated: {UpdatedOn}, MergeCommitDate: {MergeCommitDate}, Closed: {ClosedOn})", 
                             pr.Id, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergeCommit?.Date, pr.ClosedOn);
 
