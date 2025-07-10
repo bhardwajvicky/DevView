@@ -123,10 +123,10 @@ namespace BBIntegration.PullRequests
                             AuthorId = authorId.Value,
                             pr.Title,
                             pr.State,
-                            pr.CreatedOn,
-                            pr.UpdatedOn,
-                            MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date ?? pr.UpdatedOn) : null, // Use MergeCommit.Date if available, else UpdatedOn
-                            ClosedOn = pr.ClosedOn // Map the new ClosedOn property
+                            CreatedOn = SafeDateTime(pr.CreatedOn), // Ensure CreatedOn is not DateTime.MinValue
+                            UpdatedOn = SafeDateTime(pr.UpdatedOn), // Ensure UpdatedOn is not DateTime.MinValue
+                            MergedOn = pr.State == "MERGED" ? SafeDateTime(pr.MergeCommit?.Date ?? pr.UpdatedOn) : null, // Use MergeCommit.Date if available, else UpdatedOn, ensure valid
+                            ClosedOn = SafeDateTime(pr.ClosedOn) // Map the new ClosedOn property, ensure valid
                         });
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
@@ -323,4 +323,21 @@ public class BitbucketApprovalEvent
 {
     public UserDto User { get; set; }
     public DateTime Date { get; set; }
+}
+
+// Helper to ensure DateTime? values are null if they are DateTime.MinValue or before SQL min date
+public static class DateTimeExtensions
+{
+    public static DateTime? SafeDateTime(this DateTime? dt)
+    {
+        // SQL Server's DATETIME2 min value is 0001-01-01. However, the error message indicates 1753-01-01.
+        // Let's use a safe lower bound to be absolutely sure.
+        var sqlMinDateTime = new DateTime(1753, 1, 1);
+        return dt.HasValue && dt.Value > sqlMinDateTime ? dt.Value : (DateTime?)null;
+    }
+    public static DateTime? SafeDateTime(this DateTime dt) // Overload for non-nullable DateTime
+    {
+        var sqlMinDateTime = new DateTime(1753, 1, 1);
+        return dt > sqlMinDateTime ? dt : (DateTime?)null;
+    }
 }
