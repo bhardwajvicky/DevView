@@ -72,11 +72,13 @@ namespace BB.Api.Endpoints.PullRequests
                 "SELECT COUNT(*) FROM PullRequests WHERE RepositoryId = @repoId", new { repoId });
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-            // Query paginated PRs with author info
+            // Query paginated PRs with author info, repo slug, and workspace
             var sql = @"
-                SELECT pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, u.DisplayName AS AuthorName
+                SELECT pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, u.DisplayName AS AuthorName,
+                       r.Slug AS RepositorySlug, r.Workspace
                 FROM PullRequests pr
                 JOIN Users u ON pr.AuthorId = u.Id
+                JOIN Repositories r ON pr.RepositoryId = r.Id
                 WHERE pr.RepositoryId = @repoId
                 ORDER BY pr.CreatedOn DESC
                 OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
