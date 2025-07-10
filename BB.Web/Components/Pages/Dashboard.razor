@@ -701,8 +701,11 @@
             const ctx = canvas.getContext('2d');
             
             // Destroy existing chart if it exists
-            if (window[`contributorChart_${userId}`] && typeof window[`contributorChart_${userId}`].destroy === 'function') {
-                window[`contributorChart_${userId}`].destroy();
+            if (window.contributorCharts === undefined) {
+                window.contributorCharts = {};
+            }
+            if (window.contributorCharts[userId] && typeof window.contributorCharts[userId].destroy === 'function') {
+                window.contributorCharts[userId].destroy();
             }
             
             // Prepare data
@@ -732,7 +735,7 @@
             const configRemoved = contributor.data.map(item => item.configLinesRemoved);
             
             // Create chart
-            window[`contributorChart_${userId}`] = new Chart(ctx, {
+            window.contributorCharts[userId] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,

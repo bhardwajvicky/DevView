@@ -30,6 +30,37 @@ namespace BB.Api.Endpoints.PullRequests
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
+            if (repoSlug.ToLower() == "all")
+            {
+                // Count total PRs
+                var totalCountAll = await connection.QuerySingleAsync<int>(
+                    "SELECT COUNT(*) FROM PullRequests");
+                var totalPagesAll = (int)Math.Ceiling(totalCountAll / (double)pageSize);
+
+                // Query paginated PRs with author, repo, and workspace info
+                var sqlAll = @"
+                    SELECT pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, u.DisplayName AS AuthorName,
+                           r.Slug AS RepositorySlug, r.Workspace
+                    FROM PullRequests pr
+                    JOIN Users u ON pr.AuthorId = u.Id
+                    JOIN Repositories r ON pr.RepositoryId = r.Id
+                    ORDER BY pr.CreatedOn DESC
+                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                ";
+                var prListAll = (await connection.QueryAsync<PullRequestListItemDto>(sqlAll, new
+                {
+                    offset = (page - 1) * pageSize,
+                    pageSize
+                })).ToList();
+
+                var responseAll = new PaginatedPullRequestsResponse
+                {
+                    PullRequests = prListAll,
+                    TotalPages = totalPagesAll
+                };
+                return Ok(responseAll);
+            }
+
             // Get repo ID
             var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
                 "SELECT Id FROM Repositories WHERE Slug = @repoSlug", new { repoSlug });
@@ -73,6 +104,9 @@ namespace BB.Api.Endpoints.PullRequests
             public string State { get; set; } = string.Empty;
             public DateTime CreatedOn { get; set; }
             public DateTime? UpdatedOn { get; set; }
+            public string RepositorySlug { get; set; } = string.Empty;
+            public string Workspace { get; set; } = string.Empty;
+            public string BitbucketPrId { get; set; } = string.Empty;
         }
         public class PaginatedPullRequestsResponse
         {
