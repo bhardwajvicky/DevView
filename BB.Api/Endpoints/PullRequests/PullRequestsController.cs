@@ -30,70 +30,129 @@ namespace BB.Api.Endpoints.PullRequests
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
+            var prDictionary = new Dictionary<int, PullRequestListItemDto>(); // Declare once
+            int totalCount = 0; // Declare totalCount at method scope
+            int totalPages = 1; // Declare totalPages at method scope
+
             if (repoSlug.ToLower() == "all")
             {
-                // Count total PRs
-                var totalCountAll = await connection.QuerySingleAsync<int>(
-                    "SELECT COUNT(*) FROM PullRequests");
-                var totalPagesAll = (int)Math.Ceiling(totalCountAll / (double)pageSize);
+                // Count total PRs (distinct to avoid counting approvals as separate PRs)
+                totalCount = await connection.QuerySingleAsync<int>(
+                    "SELECT COUNT(DISTINCT pr.Id) FROM PullRequests pr");
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-                // Query paginated PRs with author, repo, and workspace info
+                // Query paginated PRs with author, repo, workspace, and approval info
                 var sqlAll = @"
-                    SELECT pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, u.DisplayName AS AuthorName,
-                           r.Slug AS RepositorySlug, r.Workspace
+                    SELECT 
+                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn,
+                        u.DisplayName AS AuthorName, r.Name AS RepositoryName, r.Slug AS RepositorySlug, r.Workspace,
+                        pa.DisplayName, pa.Role, pa.Approved, pa.ApprovedOn -- Approval details
                     FROM PullRequests pr
                     JOIN Users u ON pr.AuthorId = u.Id
                     JOIN Repositories r ON pr.RepositoryId = r.Id
+                    LEFT JOIN PullRequestApprovals pa ON pr.Id = pa.PullRequestId
                     ORDER BY pr.CreatedOn DESC
-                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
-                ";
-                var prListAll = (await connection.QueryAsync<PullRequestListItemDto>(sqlAll, new
-                {
-                    offset = (page - 1) * pageSize,
-                    pageSize
-                })).ToList();
+                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
 
-                var responseAll = new PaginatedPullRequestsResponse
-                {
-                    PullRequests = prListAll,
-                    TotalPages = totalPagesAll
-                };
-                return Ok(responseAll);
+                    SELECT COUNT(*) FROM PullRequestApprovals WHERE PullRequestId = @PrId;
+                ";
+
+                // Using Dapper Multi-Mapping to map PRs and their approvals
+                await connection.QueryAsync<PullRequestListItemDto, ApprovalDto, PullRequestListItemDto>(
+                    sqlAll,
+                    (pr, approval) =>
+                    {
+                        if (!prDictionary.TryGetValue(pr.Id, out var currentPr))
+                        {
+                            currentPr = pr;
+                            prDictionary.Add(pr.Id, currentPr);
+                        }
+
+                        if (approval != null)
+                        {
+                            currentPr.Approvals.Add(approval);
+                        }
+                        return currentPr;
+                    },
+                    new { offset = (page - 1) * pageSize, pageSize },
+                    splitOn: "DisplayName" // Split on the DisplayName column of ApprovalDto
+                );
+
+                // No need to create prListAll here, will be done after the if/else
+                // No need to calculate ApprovalCount here, will be done after the if/else
+            }
+            else
+            {
+                // Get repo ID
+                var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
+                    "SELECT Id FROM Repositories WHERE Slug = @repoSlug", new { repoSlug });
+                if (repoId == null)
+                    return NotFound($"Repository '{repoSlug}' not found.");
+
+                // Count total PRs (distinct to avoid counting approvals as separate PRs)
+                totalCount = await connection.QuerySingleAsync<int>(
+                    "SELECT COUNT(DISTINCT pr.Id) FROM PullRequests pr WHERE pr.RepositoryId = @repoId", new { repoId });
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+                // Query paginated PRs with author info, repo slug, workspace, and approval info
+                var sql = @"
+                    SELECT 
+                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn,
+                        u.DisplayName AS AuthorName, r.Name AS RepositoryName, r.Slug AS RepositorySlug, r.Workspace,
+                        pa.DisplayName, pa.Role, pa.Approved, pa.ApprovedOn -- Approval details
+                    FROM PullRequests pr
+                    JOIN Users u ON pr.AuthorId = u.Id
+                    JOIN Repositories r ON pr.RepositoryId = r.Id
+                    LEFT JOIN PullRequestApprovals pa ON pr.Id = pa.PullRequestId
+                    WHERE pr.RepositoryId = @repoId
+                    ORDER BY pr.CreatedOn DESC
+                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
+
+                    SELECT COUNT(*) FROM PullRequestApprovals WHERE PullRequestId = @PrId;
+                ";
+
+                // Using Dapper Multi-Mapping to map PRs and their approvals
+                await connection.QueryAsync<PullRequestListItemDto, ApprovalDto, PullRequestListItemDto>(
+                    sql,
+                    (pr, approval) =>
+                    {
+                        if (!prDictionary.TryGetValue(pr.Id, out var currentPr))
+                        {
+                            currentPr = pr;
+                            prDictionary.Add(pr.Id, currentPr);
+                        }
+
+                        if (approval != null)
+                        {
+                            currentPr.Approvals.Add(approval);
+                        }
+                        return currentPr;
+                    },
+                    new 
+                    {
+                        repoId,
+                        offset = (page - 1) * pageSize,
+                        pageSize
+                    },
+                    splitOn: "DisplayName" // Split on the DisplayName column of ApprovalDto
+                );
+
+                // No need to create prList here, will be done after the if/else
+                // No need to calculate ApprovalCount here, will be done after the if/else
             }
 
-            // Get repo ID
-            var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
-                "SELECT Id FROM Repositories WHERE Slug = @repoSlug", new { repoSlug });
-            if (repoId == null)
-                return NotFound($"Repository '{repoSlug}' not found.");
+            var prList = prDictionary.Values.ToList();
 
-            // Count total PRs
-            var totalCount = await connection.QuerySingleAsync<int>(
-                "SELECT COUNT(*) FROM PullRequests WHERE RepositoryId = @repoId", new { repoId });
-            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
-            // Query paginated PRs with author info, repo slug, and workspace
-            var sql = @"
-                SELECT pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, u.DisplayName AS AuthorName,
-                       r.Slug AS RepositorySlug, r.Workspace
-                FROM PullRequests pr
-                JOIN Users u ON pr.AuthorId = u.Id
-                JOIN Repositories r ON pr.RepositoryId = r.Id
-                WHERE pr.RepositoryId = @repoId
-                ORDER BY pr.CreatedOn DESC
-                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
-            ";
-            var prList = (await connection.QueryAsync<PullRequestListItemDto>(sql, new
+            // Manually calculate ApprovalCount for each PR after all PRs are processed
+            foreach(var prItem in prList)
             {
-                repoId,
-                offset = (page - 1) * pageSize,
-                pageSize
-            })).ToList();
+                prItem.ApprovalCount = prItem.Approvals.Count(a => a.Approved); // Count approved ones
+            }
 
             var response = new PaginatedPullRequestsResponse
             {
                 PullRequests = prList,
-                TotalPages = totalPages
+                TotalPages = totalPages // Now accessible
             };
             return Ok(response);
         }
@@ -109,7 +168,20 @@ namespace BB.Api.Endpoints.PullRequests
             public string RepositorySlug { get; set; } = string.Empty;
             public string Workspace { get; set; } = string.Empty;
             public string BitbucketPrId { get; set; } = string.Empty;
+            public int ApprovalCount { get; set; } // Added for frontend
+            public int RequiredApprovals { get; set; } = 1; // Defaulting to 1 for now
+            public List<ApprovalDto> Approvals { get; set; } = new(); // Added for frontend
+
         }
+
+        public class ApprovalDto
+        {
+            public string DisplayName { get; set; } = string.Empty;
+            public string Role { get; set; } = string.Empty;
+            public bool Approved { get; set; }
+            public DateTime? ApprovedOn { get; set; }
+        }
+
         public class PaginatedPullRequestsResponse
         {
             public List<PullRequestListItemDto> PullRequests { get; set; } = new();

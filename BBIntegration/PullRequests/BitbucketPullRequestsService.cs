@@ -153,7 +153,7 @@ namespace BBIntegration.PullRequests
                         }
                         if (approvalParticipants.Any())
                         {
-                            _logger.LogInformation("Found {Count} approval events in activity for PR {PrId}", approvalParticipants.Count, pr.Id);
+                            _logger.LogDebug("Found {Count} approval events in activity for PR {PrId}", approvalParticipants.Count, pr.Id);
                             await SyncPullRequestApprovalsAsync(connection, prDbId, approvalParticipants);
                         }
 
@@ -282,7 +282,7 @@ namespace BBIntegration.PullRequests
                 {
                     approvedOn = DateTime.UtcNow; // Or use participant.ParticipatedOn if available and more accurate
                 }
-                _logger.LogInformation("Inserting/updating approval for PR {PrDbId} by user {UserUuid} (approved: {Approved}, role: {Role}, state: {State})", prDbId, participant.User.Uuid, participant.Approved, participant.Role, participant.State);
+                _logger.LogDebug("Inserting/updating approval for PR {PrDbId} by user {UserUuid} (approved: {Approved}, role: {Role}, state: {State})", prDbId, participant.User.Uuid, participant.Approved, participant.Role, participant.State);
 
                 const string approvalSql = @"
                     MERGE INTO PullRequestApprovals AS Target
@@ -305,7 +305,7 @@ namespace BBIntegration.PullRequests
                     participant.State,
                     ApprovedOn = approvedOn
                 });
-                _logger.LogInformation("Successfully inserted/updated approval for PR {PrDbId} by user {UserUuid}", prDbId, participant.User.Uuid);
+                _logger.LogDebug("Successfully inserted/updated approval for PR {PrDbId} by user {UserUuid}", prDbId, participant.User.Uuid);
             }
         }
     }
