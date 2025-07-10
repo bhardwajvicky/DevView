@@ -77,6 +77,7 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
+                        _logger.LogInformation("Processing PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug}", pr.Id, pr.Title, workspace, repoSlug);
                         if (pr.CreatedOn < startDate)
                         {
                             hitStartDateBoundary = true;
@@ -235,7 +236,7 @@ namespace BBIntegration.PullRequests
             {
                 if (participant.User?.Uuid == null)
                 {
-                    _logger.LogWarning("Participant has no user UUID. Skipping approval sync for this participant.");
+                    _logger.LogWarning("Participant has no user UUID. Skipping approval sync for this participant in PR {PrDbId}.", prDbId);
                     continue;
                 }
 
@@ -245,7 +246,7 @@ namespace BBIntegration.PullRequests
 
                 if (userId == null)
                 {
-                    _logger.LogWarning("User with UUID '{UserUuid}' not found for PR {PrDbId} approval. Sync users first.", participant.User.Uuid, prDbId);
+                    _logger.LogWarning("User with UUID '{UserUuid}' not found for PR {PrDbId} approval. Skipping approval for this participant.", participant.User.Uuid, prDbId);
                     continue;
                 }
 
@@ -255,6 +256,7 @@ namespace BBIntegration.PullRequests
                 {
                     approvedOn = DateTime.UtcNow; // Or use participant.ParticipatedOn if available and more accurate
                 }
+                _logger.LogInformation("Inserting/updating approval for PR {PrDbId} by user {UserUuid} (approved: {Approved}, role: {Role}, state: {State})", prDbId, participant.User.Uuid, participant.Approved, participant.Role, participant.State);
 
                 const string approvalSql = @"
                     MERGE INTO PullRequestApprovals AS Target
@@ -277,8 +279,7 @@ namespace BBIntegration.PullRequests
                     participant.State,
                     ApprovedOn = approvedOn
                 });
-
-                _logger.LogDebug("Synced approval for PR {PrDbId} by user {UserUuid} (approved: {Approved})", prDbId, participant.User.Uuid, participant.Approved);
+                _logger.LogInformation("Successfully inserted/updated approval for PR {PrDbId} by user {UserUuid}", prDbId, participant.User.Uuid);
             }
         }
     }
