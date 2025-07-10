@@ -207,7 +207,8 @@ namespace BBIntegration.PullRequests
                 foreach (var commit in commitPagedResponse.Values)
                 {
                     // Find the repository ID (if not already available)
-                    var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
+                    var repoId = await connection.QuerySingleOrDefaultAsync<int?>
+                    (
                         "SELECT Id FROM Repositories WHERE Slug = @RepoSlug", new { RepoSlug = repoSlug });
                     if (repoId == null) {
                         _logger.LogWarning("Repository '{RepoSlug}' not found when inserting commit '{CommitHash}'.", repoSlug, commit.Hash);
@@ -226,12 +227,14 @@ namespace BBIntegration.PullRequests
                     );
                     if (commitId < 0) continue;
 
-                    // Associate commit with the PR
+                    // Always upsert the PR-commit mapping, even if the commit already exists
                     const string joinSql = @"
-                        IF NOT EXISTS (SELECT 1 FROM PullRequestCommits WHERE PullRequestId = @PrDbId AND CommitId = @CommitId)
-                        BEGIN
-                            INSERT INTO PullRequestCommits (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
-                        END
+                        MERGE INTO PullRequestCommits AS Target
+                        USING (SELECT @PrDbId AS PullRequestId, @CommitId AS CommitId) AS Source
+                        ON Target.PullRequestId = Source.PullRequestId AND Target.CommitId = Source.CommitId
+                        WHEN NOT MATCHED BY TARGET THEN
+                            INSERT (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
+                        -- No update needed, mapping is simple
                     ";
                     await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = commitId });
                 }
