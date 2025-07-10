@@ -46,7 +46,7 @@ CREATE TABLE Commits (
 -- Pull Requests table
 CREATE TABLE PullRequests (
     Id INT IDENTITY(1,1) PRIMARY KEY,
-    BitbucketPrId NVARCHAR(255) NOT NULL UNIQUE,
+    BitbucketPrId NVARCHAR(255) NOT NULL,
     RepositoryId INT NOT NULL,
     AuthorId INT NOT NULL,
     Title NVARCHAR(MAX),
@@ -56,7 +56,8 @@ CREATE TABLE PullRequests (
     MergedOn DATETIME2,
     ClosedOn DATETIME2, -- New column for when the PR was closed
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
-    FOREIGN KEY (AuthorId) REFERENCES Users(Id)
+    FOREIGN KEY (AuthorId) REFERENCES Users(Id),
+    UNIQUE (RepositoryId, BitbucketPrId) -- Composite unique key
 );
 
 -- New table for Pull Request Approvals

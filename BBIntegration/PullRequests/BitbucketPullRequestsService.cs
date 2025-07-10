@@ -107,14 +107,14 @@ namespace BBIntegration.PullRequests
                         // Insert or update the pull request
                         const string prSql = @"
                             MERGE INTO PullRequests AS Target
-                            USING (SELECT @BitbucketPrId AS BitbucketPrId) AS Source
-                            ON Target.BitbucketPrId = Source.BitbucketPrId
+                            USING (SELECT @BitbucketPrId AS BitbucketPrId, @RepoId AS RepositoryId) AS Source
+                            ON Target.BitbucketPrId = Source.BitbucketPrId AND Target.RepositoryId = Source.RepositoryId
                             WHEN MATCHED THEN
                                 UPDATE SET Title = @Title, State = @State, UpdatedOn = @UpdatedOn, MergedOn = @MergedOn, ClosedOn = @ClosedOn
                             WHEN NOT MATCHED BY TARGET THEN
                                 INSERT (BitbucketPrId, RepositoryId, AuthorId, Title, State, CreatedOn, UpdatedOn, MergedOn, ClosedOn)
                                 VALUES (@BitbucketPrId, @RepoId, @AuthorId, @Title, @State, @CreatedOn, @UpdatedOn, @MergedOn, @ClosedOn);
-                            SELECT Id FROM PullRequests WHERE BitbucketPrId = @BitbucketPrId;
+                            SELECT Id FROM PullRequests WHERE BitbucketPrId = @BitbucketPrId AND RepositoryId = @RepoId;
                         ";
                         var prDbId = await connection.QuerySingleAsync<int>(prSql, new
                         {
