@@ -80,9 +80,6 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
-                        _logger.LogInformation("Deserialized PR {PrId} - State: {State}, MergeCommit: {MergeCommit}, MergeCommitDate: {MergeCommitDate:o}", 
-                            pr.Id, pr.State, System.Text.Json.JsonSerializer.Serialize(pr.MergeCommit), pr.MergeCommit?.Date);
-
                         var effectiveMergedDate = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn) : null;
                         var effectiveClosedDate = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn : null;
 
@@ -138,6 +135,18 @@ namespace BBIntegration.PullRequests
                             MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn).SafeDateTime() : null,
                             ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
                         });
+
+                        _logger.LogInformation("Parameters for PR upsert for PR {PrId}: {Parameters}", pr.Id, System.Text.Json.JsonSerializer.Serialize(new {
+                            BitbucketPrId = pr.Id.ToString(),
+                            RepoId = repoId.Value,
+                            AuthorId = authorId.Value,
+                            pr.Title,
+                            pr.State,
+                            CreatedOn = pr.CreatedOn.SafeDateTime(),
+                            UpdatedOn = pr.UpdatedOn.SafeDateTime(),
+                            MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn).SafeDateTime() : null,
+                            ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
+                        }));
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
                         var activityJson = await _apiClient.GetPullRequestActivityAsync(workspace, repoSlug, pr.Id);
