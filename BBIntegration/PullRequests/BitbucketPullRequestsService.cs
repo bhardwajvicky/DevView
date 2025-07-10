@@ -80,11 +80,14 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
-                        _logger.LogInformation("Deserialized PR {PrId} - State: {State}, MergeCommit: {MergeCommit}, MergeCommitDate: {MergeCommitDate}", 
+                        _logger.LogInformation("Deserialized PR {PrId} - State: {State}, MergeCommit: {MergeCommit}, MergeCommitDate: {MergeCommitDate:o}", 
                             pr.Id, pr.State, System.Text.Json.JsonSerializer.Serialize(pr.MergeCommit), pr.MergeCommit?.Date);
 
-                        _logger.LogInformation("Processing PR {PrId} (State: {State}, Created: {CreatedOn}, Updated: {UpdatedOn}, MergeCommitDate: {MergeCommitDate}, Closed: {ClosedOn})", 
-                            pr.Id, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergeCommit?.Date, pr.ClosedOn);
+                        var effectiveMergedDate = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn) : null;
+                        var effectiveClosedDate = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn : null;
+
+                        _logger.LogInformation("Processing PR {PrId} (State: {State}, Created: {CreatedOn:o}, Updated: {UpdatedOn:o}, EffectiveMerged: {EffectiveMergedDate:o}, EffectiveClosed: {EffectiveClosedDate:o})", 
+                            pr.Id, pr.State, pr.CreatedOn, pr.UpdatedOn, effectiveMergedDate, effectiveClosedDate);
 
                         if (pr.CreatedOn < startDate)
                         {
@@ -132,7 +135,7 @@ namespace BBIntegration.PullRequests
                             pr.State,
                             CreatedOn = pr.CreatedOn.SafeDateTime(),
                             UpdatedOn = pr.UpdatedOn.SafeDateTime(),
-                            MergedOn = pr.State == "MERGED" ? ((DateTime?)(pr.MergeCommit?.Date ?? pr.UpdatedOn)).SafeDateTime() : null,
+                            MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn).SafeDateTime() : null,
                             ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
                         });
 
@@ -316,7 +319,7 @@ namespace BBIntegration.PullRequests
             }
         }
 
-        // The SafeDateTime method should be an extension method elsewhere, removing it from here.
+        // Removed the SafeDateTime static methods as they are now in BBIntegration.Utils.DateTimeExtensions
     }
 }
 
@@ -332,21 +335,4 @@ public class BitbucketApprovalEvent
 {
     public UserDto User { get; set; }
     public DateTime Date { get; set; }
-}
-
-// Helper to ensure DateTime? values are null if they are DateTime.MinValue or before SQL min date
-public static class DateTimeExtensions
-{
-    public static DateTime? SafeDateTime(this DateTime? dt)
-    {
-        // SQL Server's DATETIME2 min value is 0001-01-01. However, the error message indicates 1753-01-01.
-        // Let's use a safe lower bound to be absolutely sure.
-        var sqlMinDateTime = new DateTime(1753, 1, 1);
-        return dt.HasValue && dt.Value > sqlMinDateTime ? dt.Value : (DateTime?)null;
-    }
-    public static DateTime? SafeDateTime(this DateTime dt) // Overload for non-nullable DateTime
-    {
-        var sqlMinDateTime = new DateTime(1753, 1, 1);
-        return dt > sqlMinDateTime ? dt : (DateTime?)null;
-    }
 }
