@@ -141,6 +141,10 @@ namespace BBIntegration.PullRequests
                         // Now, sync commits for this PR
                         _logger.LogDebug("Starting commit sync for PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug}", pr.Id, pr.Title, workspace, repoSlug);
                         await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
+
+                        _logger.LogInformation("PR {PrId} has {ParticipantCount} participants and {ReviewerCount} reviewers", pr.Id, pr.Participants?.Count ?? 0, pr.Reviewers?.Count ?? 0);
+                        _logger.LogDebug("Participants for PR {PrId}: {Participants}", pr.Id, System.Text.Json.JsonSerializer.Serialize(pr.Participants));
+                        _logger.LogDebug("Reviewers for PR {PrId}: {Reviewers}", pr.Id, System.Text.Json.JsonSerializer.Serialize(pr.Reviewers));
                     }
                     nextPageUrl = prPagedResponse.NextPageUrl;
                     if (string.IsNullOrEmpty(nextPageUrl)) keepFetching = false;
