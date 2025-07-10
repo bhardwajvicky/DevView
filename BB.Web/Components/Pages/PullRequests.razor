@@ -108,7 +108,7 @@
                                     
                                     <tr>
                                         <td>
-                                            <a href="#" @onclick="() => OpenBitbucketPR(pr.BitbucketPrId)" @onclick:preventDefault>
+                                            <a href="https://bitbucket.org/@pr.Workspace/@pr.RepositorySlug/pull-requests/@pr.BitbucketPrId" target="_blank" rel="noopener noreferrer">
                                                 #@pr.BitbucketPrId
                                             </a>
                                         </td>
@@ -143,7 +143,7 @@
                                         <td>@pr.CreatedOn.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td>@(pr.UpdatedOn?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenBitbucketPR(pr.BitbucketPrId)">
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenBitbucketPR(pr.BitbucketPrId, pr.RepositorySlug, pr.Workspace)">
                                                 <i class="bi bi-box-arrow-up-right"></i>
                                             </button>
                                         </td>
@@ -335,16 +335,14 @@
         Navigation.NavigateTo("admin/settings");
     }
 
-    private async Task OpenBitbucketPR(string prId)
+    private async Task OpenBitbucketPR(string prId, string repoSlug, string workspace)
     {
-        var workspace = WorkspaceService.SelectedWorkspace;
-        if (string.IsNullOrEmpty(workspace) || string.IsNullOrEmpty(selectedRepoSlug))
+        if (string.IsNullOrEmpty(workspace) || string.IsNullOrEmpty(repoSlug))
         {
             errorMessage = "Cannot open PR: workspace or repository information is missing.";
             return;
         }
-
-        var url = $"https://bitbucket.org/{workspace}/{selectedRepoSlug}/pull-requests/{prId}";
+        var url = $"https://bitbucket.org/{workspace}/{repoSlug}/pull-requests/{prId}";
         await JSRuntime.InvokeVoidAsync("open", url, "_blank");
     }
 
@@ -372,6 +370,8 @@
         public int ApprovalCount { get; set; }
         public int RequiredApprovals { get; set; } = 1;
         public List<ApprovalDto> Approvals { get; set; } = new();
+        public string Workspace { get; set; } = string.Empty;
+        public string RepositorySlug { get; set; } = string.Empty;
     }
 
     public class ApprovalDto
