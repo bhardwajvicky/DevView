@@ -123,10 +123,10 @@ namespace BBIntegration.PullRequests
                             AuthorId = authorId.Value,
                             pr.Title,
                             pr.State,
-                            CreatedOn = SafeDateTime(pr.CreatedOn) ?? DateTime.MinValue,
-                            UpdatedOn = SafeDateTime(pr.UpdatedOn.GetValueOrDefault()) ?? DateTime.MinValue,
-                            MergedOn = SafeDateTime((pr.MergeCommit?.Date ?? pr.UpdatedOn).GetValueOrDefault()) ?? DateTime.MinValue,
-                            ClosedOn = SafeDateTime(pr.ClosedOn.GetValueOrDefault()) ?? DateTime.MinValue
+                            CreatedOn = SafeDateTime(pr.CreatedOn),
+                            UpdatedOn = SafeDateTime(pr.UpdatedOn.GetValueOrDefault()),
+                            MergedOn = SafeDateTime((pr.MergeCommit?.Date ?? pr.UpdatedOn).GetValueOrDefault()),
+                            ClosedOn = SafeDateTime(pr.ClosedOn.GetValueOrDefault())
                         });
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
