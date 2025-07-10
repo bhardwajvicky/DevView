@@ -123,10 +123,10 @@ namespace BBIntegration.PullRequests
                             AuthorId = authorId.Value,
                             pr.Title,
                             pr.State,
-                            CreatedOn = SafeDateTime(pr.CreatedOn), // Ensure CreatedOn is not DateTime.MinValue
-                            UpdatedOn = SafeDateTime(pr.UpdatedOn), // Ensure UpdatedOn is not DateTime.MinValue
-                            MergedOn = pr.State == "MERGED" ? SafeDateTime(pr.MergeCommit?.Date ?? pr.UpdatedOn) : null, // Use MergeCommit.Date if available, else UpdatedOn, ensure valid
-                            ClosedOn = SafeDateTime(pr.ClosedOn) // Map the new ClosedOn property, ensure valid
+                            CreatedOn = SafeDateTime(pr.CreatedOn) ?? DateTime.MinValue,
+                            UpdatedOn = SafeDateTime(pr.UpdatedOn.GetValueOrDefault()) ?? DateTime.MinValue,
+                            MergedOn = SafeDateTime((pr.MergeCommit?.Date ?? pr.UpdatedOn).GetValueOrDefault()) ?? DateTime.MinValue,
+                            ClosedOn = SafeDateTime(pr.ClosedOn.GetValueOrDefault()) ?? DateTime.MinValue
                         });
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
@@ -307,6 +307,15 @@ namespace BBIntegration.PullRequests
                 });
                 _logger.LogDebug("Successfully inserted/updated approval for PR {PrDbId} by user {UserUuid}", prDbId, participant.User.Uuid);
             }
+        }
+
+        private static DateTime? SafeDateTime(DateTime date)
+        {
+            if (date == DateTime.MinValue || date.Year < 1753) // SQL Server min date
+            {
+                return null;
+            }
+            return date;
         }
     }
 }
