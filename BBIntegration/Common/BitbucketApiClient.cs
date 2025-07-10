@@ -233,6 +233,12 @@ namespace BBIntegration.Common
             return await SendRequestAsync(url);
         }
 
+        public async Task<string> GetPullRequestActivityAsync(string workspace, string repoSlug, int pullRequestId)
+        {
+            var url = $"repositories/{workspace}/{repoSlug}/pullrequests/{pullRequestId}/activity";
+            return await SendRequestAsync(url);
+        }
+
         private string BuildPullRequestsUrl(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
         {
             if (startDate.HasValue && endDate.HasValue)

@@ -6,6 +6,7 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic; // Added for List
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -128,14 +129,31 @@ namespace BBIntegration.PullRequests
                             ClosedOn = pr.ClosedOn // Map the new ClosedOn property
                         });
 
-                        // Sync pull request approvals
-                        if (pr.Participants != null && pr.Participants.Any())
+                        // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
+                        var activityJson = await _apiClient.GetPullRequestActivityAsync(workspace, repoSlug, pr.Id);
+                        var activityResponse = System.Text.Json.JsonSerializer.Deserialize<BitbucketPullRequestActivityResponse>(activityJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        var approvalParticipants = new List<BitbucketPullRequestParticipantDto>();
+                        if (activityResponse?.Values != null)
                         {
-                            await SyncPullRequestApprovalsAsync(connection, prDbId, pr.Participants);
+                            foreach (var activity in activityResponse.Values)
+                            {
+                                if (activity.Approval != null && activity.Approval.User != null)
+                                {
+                                    approvalParticipants.Add(new BitbucketPullRequestParticipantDto
+                                    {
+                                        User = activity.Approval.User,
+                                        Approved = true,
+                                        State = "approved",
+                                        Role = "REVIEWER",
+                                        ParticipatedOn = activity.Approval.Date
+                                    });
+                                }
+                            }
                         }
-                        if (pr.Reviewers != null && pr.Reviewers.Any())
+                        if (approvalParticipants.Any())
                         {
-                            await SyncPullRequestApprovalsAsync(connection, prDbId, pr.Reviewers);
+                            _logger.LogInformation("Found {Count} approval events in activity for PR {PrId}", approvalParticipants.Count, pr.Id);
+                            await SyncPullRequestApprovalsAsync(connection, prDbId, approvalParticipants);
                         }
 
                         // Now, sync commits for this PR
@@ -287,4 +305,18 @@ namespace BBIntegration.PullRequests
             }
         }
     }
+}
+
+public class BitbucketPullRequestActivityResponse
+{
+    public List<BitbucketPullRequestActivityItem> Values { get; set; }
+}
+public class BitbucketPullRequestActivityItem
+{
+    public BitbucketApprovalEvent Approval { get; set; }
+}
+public class BitbucketApprovalEvent
+{
+    public UserDto User { get; set; }
+    public DateTime Date { get; set; }
 }
