@@ -125,7 +125,7 @@ namespace BBIntegration.PullRequests
                             pr.State,
                             pr.CreatedOn,
                             pr.UpdatedOn,
-                            MergedOn = pr.State == "MERGED" ? (DateTime?)pr.UpdatedOn : null,
+                            MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date ?? pr.UpdatedOn) : null, // Use MergeCommit.Date if available, else UpdatedOn
                             ClosedOn = pr.ClosedOn // Map the new ClosedOn property
                         });
 
