@@ -96,15 +96,32 @@
                                     <th>Days Open</th>
                                     <th>Created</th>
                                     <th>Updated</th>
-                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var pr in pullRequests)
                                 {
-                                    var daysOpen = pr.State.ToLower() == "open" 
-                                        ? (DateTime.UtcNow - pr.CreatedOn).Days 
-                                        : ((pr.UpdatedOn ?? DateTime.UtcNow) - pr.CreatedOn).Days;
+                                    DateTime? endDateForCalc = null;
+                                    if (pr.State.ToLower() == "open")
+                                    {
+                                        endDateForCalc = DateTime.UtcNow;
+                                    }
+                                    else if (pr.State.ToLower() == "merged")
+                                    {
+                                        endDateForCalc = pr.MergedOn ?? pr.UpdatedOn;
+                                    }
+                                    else if (pr.State.ToLower() == "declined" || pr.State.ToLower() == "superseded")
+                                    {
+                                        endDateForCalc = pr.ClosedOn ?? pr.UpdatedOn;
+                                    }
+                                    else
+                                    {
+                                        endDateForCalc = pr.UpdatedOn;
+                                    }
+
+                                    var daysOpen = (endDateForCalc.HasValue && pr.CreatedOn < endDateForCalc.Value)
+                                        ? (endDateForCalc.Value - pr.CreatedOn).Days
+                                        : 0; // Default to 0 if createdOn is after endDate or no endDate
                                     
                                     <tr>
                                         <td>
@@ -129,6 +146,23 @@
                                                     "superseded" => ("bg-warning", "bi-arrow-repeat"),
                                                     _ => ("bg-secondary", "bi-question-circle")
                                                 };
+
+                                                string approvalBadgeClass = "bg-secondary"; // Default neutral color
+                                                if (pr.State.ToLower() == "merged")
+                                                {
+                                                    if (pr.ApprovalCount == 0)
+                                                    {
+                                                        approvalBadgeClass = "bg-danger"; // Red for 0 approvals on merged
+                                                    }
+                                                    else if (pr.ApprovalCount == 1)
+                                                    {
+                                                        approvalBadgeClass = "bg-warning"; // Orange for 1 approval on merged
+                                                    }
+                                                    else if (pr.ApprovalCount >= 2)
+                                                    {
+                                                        approvalBadgeClass = "bg-success"; // Green for 2+ approvals on merged
+                                                    }
+                                                }
                                             }
                                             <span class="badge @stateClass">
                                                 <i class="bi @icon me-1"></i>@pr.State
@@ -136,17 +170,14 @@
                                         </td>
                                         <td>
                                             <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowApprovals(pr)">
-                                                @pr.ApprovalCount / @pr.RequiredApprovals
+                                                <span class="badge @approvalBadgeClass">
+                                                    @pr.ApprovalCount
+                                                </span>
                                             </button>
                                         </td>
                                         <td>@daysOpen days</td>
                                         <td>@pr.CreatedOn.ToString("yyyy-MM-dd HH:mm")</td>
                                         <td>@(pr.UpdatedOn?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenBitbucketPR(pr.BitbucketPrId, pr.RepositorySlug, pr.Workspace)">
-                                                <i class="bi bi-box-arrow-up-right"></i>
-                                            </button>
-                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -335,17 +366,6 @@
         Navigation.NavigateTo("admin/settings");
     }
 
-    private async Task OpenBitbucketPR(string prId, string repoSlug, string workspace)
-    {
-        if (string.IsNullOrEmpty(workspace) || string.IsNullOrEmpty(repoSlug))
-        {
-            errorMessage = "Cannot open PR: workspace or repository information is missing.";
-            return;
-        }
-        var url = $"https://bitbucket.org/{workspace}/{repoSlug}/pull-requests/{prId}";
-        await JSRuntime.InvokeVoidAsync("open", url, "_blank");
-    }
-
     private void ShowApprovals(PullRequestDto pr)
     {
         selectedPR = pr;
@@ -372,6 +392,8 @@
         public List<ApprovalDto> Approvals { get; set; } = new();
         public string Workspace { get; set; } = string.Empty;
         public string RepositorySlug { get; set; } = string.Empty;
+        public DateTime? MergedOn { get; set; }
+        public DateTime? ClosedOn { get; set; }
     }
 
     public class ApprovalDto

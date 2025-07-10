@@ -44,7 +44,7 @@ namespace BB.Api.Endpoints.PullRequests
                 // Query paginated PRs with author, repo, workspace, and approval info
                 var sqlAll = @"
                     SELECT 
-                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn,
+                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergedOn, pr.ClosedOn,
                         u.DisplayName AS AuthorName, r.Name AS RepositoryName, r.Slug AS RepositorySlug, r.Workspace,
                         pa.DisplayName, pa.Role, pa.Approved, pa.ApprovedOn -- Approval details
                     FROM PullRequests pr
@@ -95,7 +95,7 @@ namespace BB.Api.Endpoints.PullRequests
                 // Query paginated PRs with author info, repo slug, workspace, and approval info
                 var sql = @"
                     SELECT 
-                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn,
+                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergedOn, pr.ClosedOn,
                         u.DisplayName AS AuthorName, r.Name AS RepositoryName, r.Slug AS RepositorySlug, r.Workspace,
                         pa.DisplayName, pa.Role, pa.Approved, pa.ApprovedOn -- Approval details
                     FROM PullRequests pr
@@ -167,6 +167,8 @@ namespace BB.Api.Endpoints.PullRequests
             public int ApprovalCount { get; set; } // Added for frontend
             public int RequiredApprovals { get; set; } = 1; // Defaulting to 1 for now
             public List<ApprovalDto> Approvals { get; set; } = new(); // Added for frontend
+            public DateTime? MergedOn { get; set; } // Added to DTO
+            public DateTime? ClosedOn { get; set; } // Added to DTO
 
         }
 
