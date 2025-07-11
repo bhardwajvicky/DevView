@@ -49,7 +49,7 @@
             GroupBy="@groupBy"
             ShowGrouping="false"
             OnRepositorySelected="OnRepositorySelected"
-            OnDateRangeUpdated="OnDateRangeUpdated"
+            OnDateRangeUpdated="@((dateRange) => OnDateRangeUpdated(dateRange.start, dateRange.end))"
             OnFiltersChanged="OnFiltersChanged"
             OnGroupingUpdated="OnGroupingUpdated" />
 

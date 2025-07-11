@@ -184,7 +184,7 @@
     {
         Console.WriteLine($"OnIncludePRChanged called with value: {e.Value}");
         var oldValue = includePR;
-        includePR = (bool)e.Value;
+        includePR = (bool)(e.Value ?? false); // Safely unbox to bool
         Console.WriteLine($"includePR changed from {oldValue} to {includePR}");
         Console.WriteLine($"Setting currentPage from {currentPage} to 1");
         currentPage = 1;
