@@ -1,8 +1,8 @@
 @using Radzen
 @using Radzen.Blazor
-@using BB.Web.DTOs
 @using BB.Web.Services
 @using System.Net.Http.Json
+@using BB.Api.Endpoints.Analytics
 
 <div class="row mb-4">
     <div class="col-md-6">
@@ -108,7 +108,7 @@
     public bool IsLoadingRepos { get; set; }
 
     [Parameter]
-    public IEnumerable<RepositorySummaryDto>? Repositories { get; set; }
+    public IEnumerable<BB.Api.Endpoints.Analytics.RepositorySummaryDto>? Repositories { get; set; }
 
     [Parameter]
     public string? SelectedRepoSlug { get; set; }

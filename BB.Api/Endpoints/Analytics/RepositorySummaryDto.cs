@@ -6,5 +6,8 @@ namespace BB.Api.Endpoints.Analytics
         public required string Slug { get; set; }
         public required string Workspace { get; set; }
         public DateTime? OldestCommitDate { get; set; }
+        public int OpenPullRequestCount { get; set; }
+        public DateTime? OldestOpenPullRequestDate { get; set; } // Added for PR Dashboard
+        public int PRsMissingApprovalCount { get; set; } // Added for PR Dashboard
     }
 } 

@@ -479,6 +479,113 @@ namespace BB.Api.Services
             return pullRequestDict.Values;
         }
 
+        public async Task<IEnumerable<RepositorySummaryDto>> GetTopOpenPullRequestsAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = @"
+                SELECT TOP 5
+                    r.Name,
+                    r.Slug,
+                    r.Workspace,
+                    COUNT(pr.Id) AS OpenPullRequestCount
+                FROM Repositories r
+                JOIN PullRequests pr ON r.Id = pr.RepositoryId
+                WHERE pr.State = 'OPEN'
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
+                    AND (@EndDate IS NULL OR pr.CreatedOn <= @EndDate)
+                GROUP BY r.Name, r.Slug, r.Workspace
+                ORDER BY OpenPullRequestCount DESC;";
+
+            return await connection.QueryAsync<RepositorySummaryDto>(sql, new { repoSlug, workspace, startDate, endDate });
+        }
+
+        public async Task<IEnumerable<RepositorySummaryDto>> GetTopOldestOpenPullRequestsAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = @"
+                SELECT TOP 5
+                    r.Name,
+                    r.Slug,
+                    r.Workspace,
+                    MIN(pr.CreatedOn) AS OldestOpenPullRequestDate
+                FROM Repositories r
+                JOIN PullRequests pr ON r.Id = pr.RepositoryId
+                WHERE pr.State = 'OPEN'
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
+                    AND (@EndDate IS NULL OR pr.CreatedOn <= @EndDate)
+                GROUP BY r.Name, r.Slug, r.Workspace
+                ORDER BY OldestOpenPullRequestDate ASC;";
+
+            return await connection.QueryAsync<RepositorySummaryDto>(sql, new { repoSlug, workspace, startDate, endDate });
+        }
+
+        public async Task<IEnumerable<RepositorySummaryDto>> GetTopUnapprovedPullRequestsAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, int minRequiredApprovals)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = @"
+                SELECT TOP 5
+                    r.Name,
+                    r.Slug,
+                    r.Workspace,
+                    COUNT(pr.Id) AS PRsMissingApprovalCount
+                FROM Repositories r
+                JOIN PullRequests pr ON r.Id = pr.RepositoryId
+                LEFT JOIN (
+                    SELECT
+                        PullRequestId,
+                        COUNT(CASE WHEN Approved = 1 THEN 1 ELSE NULL END) AS ActualApprovals
+                    FROM PullRequestApprovals
+                    GROUP BY PullRequestId
+                ) pa ON pr.Id = pa.PullRequestId
+                WHERE pr.State = 'OPEN'
+                    AND pr.RequiredApprovals >= @minRequiredApprovals
+                    AND (pa.ActualApprovals IS NULL OR pa.ActualApprovals < pr.RequiredApprovals)
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
+                    AND (@EndDate IS NULL OR pr.CreatedOn <= @EndDate)
+                GROUP BY r.Name, r.Slug, r.Workspace
+                ORDER BY PRsMissingApprovalCount DESC;";
+
+            return await connection.QueryAsync<RepositorySummaryDto>(sql, new { repoSlug, workspace, startDate, endDate, minRequiredApprovals });
+        }
+
+        public async Task<IEnumerable<PrAgeBubbleDto>> GetPrAgeBubbleDataAsync(
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = @"
+                SELECT
+                    DATEDIFF(day, pr.CreatedOn, GETUTCDATE()) AS AgeInDays,
+                    COUNT(pr.Id) AS NumberOfPRs,
+                    r.Name AS RepositoryName,
+                    r.Slug AS RepositorySlug,
+                    r.Workspace
+                FROM PullRequests pr
+                JOIN Repositories r ON pr.RepositoryId = r.Id
+                WHERE pr.State = 'OPEN'
+                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
+                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
+                    AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
+                    AND (@EndDate IS NULL OR pr.CreatedOn <= @EndDate)
+                    AND DATEDIFF(day, pr.CreatedOn, GETUTCDATE()) BETWEEN 1 AND 20 -- PR age between 1 and 20 days
+                GROUP BY DATEDIFF(day, pr.CreatedOn, GETUTCDATE()), r.Name, r.Slug, r.Workspace
+                ORDER BY AgeInDays ASC;";
+
+            return await connection.QueryAsync<PrAgeBubbleDto>(sql, new { repoSlug, workspace, startDate, endDate });
+        }
+
         private string GetCommitterRankingQuery(bool includePR, bool includeData, bool includeConfig)
         {
             // Build the ranking criteria based on filters

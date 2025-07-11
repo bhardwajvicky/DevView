@@ -1,10 +1,11 @@
 @page "/admin/users"
-@using BB.Web.DTOs
-@using BB.Web.Services
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject WorkspaceService WorkspaceService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using BB.Web.Services
+@using BB.Api.Endpoints.Analytics
 @rendermode InteractiveServer
 
 <PageTitle>Admin - Users</PageTitle>

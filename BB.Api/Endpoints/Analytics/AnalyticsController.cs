@@ -192,5 +192,70 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetPullRequestAnalysisAsync(repoSlug, workspace, startDate, endDate, state);
             return Ok(result);
         }
+
+        [HttpGet("top-open-prs")]
+        public async Task<IActionResult> GetTopOpenPullRequests(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            if (string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetTopOpenPullRequestsAsync(repoSlug, workspace, startDate, endDate);
+            return Ok(result);
+        }
+
+        [HttpGet("top-oldest-open-prs")]
+        public async Task<IActionResult> GetTopOldestOpenPullRequests(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            if (string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetTopOldestOpenPullRequestsAsync(repoSlug, workspace, startDate, endDate);
+            return Ok(result);
+        }
+
+        [HttpGet("top-unapproved-prs")]
+        public async Task<IActionResult> GetTopUnapprovedPullRequests(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] int minRequiredApprovals = 1)
+        {
+            if (string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetTopUnapprovedPullRequestsAsync(repoSlug, workspace, startDate, endDate, minRequiredApprovals);
+            return Ok(result);
+        }
+
+        [HttpGet("pr-age-bubble")]
+        public async Task<IActionResult> GetPrAgeBubbleData(
+            [FromQuery] string? repoSlug,
+            [FromQuery] string? workspace,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            if (string.IsNullOrEmpty(workspace))
+            {
+                return BadRequest("'workspace' must be provided.");
+            }
+
+            var result = await _analyticsService.GetPrAgeBubbleDataAsync(repoSlug, workspace, startDate, endDate);
+            return Ok(result);
+        }
     }
 } 

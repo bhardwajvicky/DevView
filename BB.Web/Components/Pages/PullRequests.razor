@@ -1,10 +1,10 @@
 @page "/pull-requests"
-@using BB.Web.DTOs
 @using BB.Web.Services
 @using System.Net.Http.Json
 @using Radzen
 @using Radzen.Blazor
 @using BB.Web.Components.Common
+@using BB.Api.Endpoints.Analytics
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
@@ -269,7 +269,7 @@
 }
 
 @code {
-    private IEnumerable<RepositorySummaryDto>? repositories;
+    private IEnumerable<BB.Api.Endpoints.Analytics.RepositorySummaryDto>? repositories;
     private List<PullRequestDto> pullRequests = new();
     private bool isLoadingRepos = true;
     private bool isLoadingPRs = false;
@@ -293,7 +293,7 @@
         try
         {
             isLoadingRepos = true;
-            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("api/analytics/repositories");
+            repositories = await Http.GetFromJsonAsync<IEnumerable<BB.Api.Endpoints.Analytics.RepositorySummaryDto>>("api/analytics/repositories");
         }
         catch (Exception ex)
         {

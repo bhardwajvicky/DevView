@@ -1,10 +1,11 @@
 @page "/commits"
-@using BB.Web.DTOs
 @using BB.Web.Services
 @using System.Net.Http.Json
 @using Radzen
 @using Radzen.Blazor
 @using BB.Web.Components.Common
+@using BB.Api.Endpoints.Analytics // For RepositorySummaryDto, UserDto
+@using BB.Api.Endpoints.Commits // For CommitListItemDto, PaginatedCommitsResponse
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
