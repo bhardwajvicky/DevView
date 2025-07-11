@@ -543,14 +543,15 @@ namespace BB.Api.Services
                         LEFT JOIN
                             PullRequestApprovals pa ON pr.Id = pa.PullRequestId AND pa.Approved = 1
                         WHERE
-                            r.WorkspaceSlug = @workspace
+                            r.Workspace = @workspace
                             AND (@repoSlug IS NULL OR r.Slug = @repoSlug)
                             AND (@startDate IS NULL OR pr.CreatedOn >= @startDate)
                             AND (@endDate IS NULL OR pr.CreatedOn <= @endDate)
-                            AND pr.Status = 'OPEN'
-                            AND (pa.ActualApprovals IS NULL OR pa.ActualApprovals = 0)
+                            AND pr.State = 'OPEN'
                         GROUP BY
                             r.Name
+                        HAVING
+                            COUNT(pa.Id) = 0
                         ORDER BY
                             PRsMissingApprovalCount DESC
                         OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY;";

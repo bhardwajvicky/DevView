@@ -218,7 +218,7 @@
     private bool includePR = false;  // Changed default to false
     private bool includeData = true;
     private bool includeConfig = true;
-    private string groupBy = "Day";
+    private string? groupBy = "Day"; // Make nullable and initialize to null
     private string? errorMessage;
     private int currentPage = 1;
     private int totalPages = 1;
@@ -290,10 +290,17 @@
         await LoadCommits();
     }
 
-    private async Task OnDateRangeUpdated((DateTime? start, DateTime? end) range)
+    private async Task OnDateRangeUpdated(DateTime? newStartDate, DateTime? newEndDate)
     {
-        startDate = range.start;
-        endDate = range.end;
+        startDate = newStartDate;
+        endDate = newEndDate;
+        currentPage = 1;
+        await LoadCommits();
+    }
+
+    private async Task OnGroupingUpdated(string? newGrouping)
+    {
+        groupBy = newGrouping;
         currentPage = 1;
         await LoadCommits();
     }
@@ -303,13 +310,6 @@
         this.includePR = filters.includePR;
         this.includeData = filters.includeData;
         this.includeConfig = filters.includeConfig;
-        currentPage = 1;
-        await LoadCommits();
-    }
-
-    private async Task OnGroupingUpdated(string grouping)
-    {
-        groupBy = grouping;
         currentPage = 1;
         await LoadCommits();
     }
