@@ -38,7 +38,7 @@ namespace BB.Api.Endpoints.PullRequests
             {
                 // Count total PRs (distinct to avoid counting approvals as separate PRs)
                 totalCount = await connection.QuerySingleAsync<int>(
-                    "SELECT COUNT(DISTINCT pr.Id) FROM PullRequests pr");
+                    "SELECT COUNT(DISTINCT pr.Id) FROM PullRequests pr WHERE pr.State != 'DECLINED'");
                 totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
                 // Query paginated PRs with author, repo, workspace, and approval info
@@ -51,6 +51,7 @@ namespace BB.Api.Endpoints.PullRequests
                     JOIN Users u ON pr.AuthorId = u.Id
                     JOIN Repositories r ON pr.RepositoryId = r.Id
                     LEFT JOIN PullRequestApprovals pa ON pr.Id = pa.PullRequestId
+                    WHERE pr.State != 'DECLINED'
                     ORDER BY pr.CreatedOn DESC
                     OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
                 ";
@@ -89,7 +90,7 @@ namespace BB.Api.Endpoints.PullRequests
 
                 // Count total PRs (distinct to avoid counting approvals as separate PRs)
                 totalCount = await connection.QuerySingleAsync<int>(
-                    "SELECT COUNT(DISTINCT pr.Id) FROM PullRequests pr WHERE pr.RepositoryId = @repoId", new { repoId });
+                    "SELECT COUNT(DISTINCT pr.Id) FROM PullRequests pr WHERE pr.RepositoryId = @repoId AND pr.State != 'DECLINED'", new { repoId });
                 totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
                 // Query paginated PRs with author info, repo slug, workspace, and approval info
@@ -102,7 +103,7 @@ namespace BB.Api.Endpoints.PullRequests
                     JOIN Users u ON pr.AuthorId = u.Id
                     JOIN Repositories r ON pr.RepositoryId = r.Id
                     LEFT JOIN PullRequestApprovals pa ON pr.Id = pa.PullRequestId
-                    WHERE pr.RepositoryId = @repoId
+                    WHERE pr.RepositoryId = @repoId AND pr.State != 'DECLINED'
                     ORDER BY pr.CreatedOn DESC
                     OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
                 ";

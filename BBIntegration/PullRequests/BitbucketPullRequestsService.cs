@@ -35,7 +35,7 @@ namespace BBIntegration.PullRequests
         {
             _logger.LogInformation("Starting PR sync for {Workspace}/{RepoSlug} from {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}", workspace, repoSlug, startDate, endDate);
             
-            bool hitStartDateBoundary = false; // Indicates if we found PRs older than startDate
+            bool currentBatchHitStartDateBoundary = false; // Indicates if we found PRs older than startDate
 
             // Check if we're currently rate limited
             if (BitbucketApiClient.IsRateLimited())
@@ -85,12 +85,10 @@ namespace BBIntegration.PullRequests
 
                         if (pr.CreatedOn < startDate)
                         {
-                            hitStartDateBoundary = true;
-                            keepFetching = false; // Stop fetching more pages for this specific repo within this batch
-                            break; // Exit foreach loop
+                            currentBatchHitStartDateBoundary = true;
                         }
 
-                        if (pr.CreatedOn > endDate) continue;
+                        // if (pr.CreatedOn > endDate) continue; // REMOVED: All PRs returned on the page will now be considered for UPSERT.
 
                         if (pr.Author?.Uuid == null)
                         {
@@ -166,12 +164,21 @@ namespace BBIntegration.PullRequests
                         // Now, sync commits for this PR
                         await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
                     }
-                    nextPageUrl = prPagedResponse.NextPageUrl;
-                    if (string.IsNullOrEmpty(nextPageUrl)) keepFetching = false;
+                    // Determine if we should keep fetching more pages
+                    if (currentBatchHitStartDateBoundary)
+                    {
+                        // If we hit the historical startDate boundary in this batch, stop fetching more pages
+                        keepFetching = false;
+                    }
+                    else if (string.IsNullOrEmpty(nextPageUrl))
+                    {
+                        // No more pages from Bitbucket API, so stop fetching
+                        keepFetching = false;
+                    }
                 } 
                 
                 _logger.LogInformation("PR sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
-                return hitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
+                return currentBatchHitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
             {
