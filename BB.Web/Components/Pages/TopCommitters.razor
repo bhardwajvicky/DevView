@@ -278,7 +278,7 @@
         try
         {
             isLoadingRepos = true;
-            var allRepositories = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.RepositorySummaryDto[]>("http://localhost:5000/api/analytics/repositories");
+            var allRepositories = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.RepositorySummaryDto[]>("/api/analytics/repositories");
             
             if (allRepositories != null && allRepositories.Any())
             {
@@ -291,6 +291,7 @@
         }
         catch (Exception ex)
         {
+            _ = ex; // Suppress unused variable warning
             errorMessage = $"Error loading repositories: {ex.Message}";
         }
         finally
@@ -371,11 +372,11 @@
             string url;
             if (string.IsNullOrEmpty(repoSlug))
             {
-                url = $"http://localhost:5000/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
             else
             {
-                url = $"http://localhost:5000/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
             }
 
             // Add date range parameters if specified
