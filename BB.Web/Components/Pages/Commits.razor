@@ -41,6 +41,9 @@
             IsLoadingRepos="@isLoadingRepos"
             Repositories="@repositories"
             SelectedRepoSlug="@selectedRepoSlug"
+            IsLoadingUsers="@isLoadingUsers"
+            Users="@users"
+            SelectedUserId="@selectedUserId"
             StartDate="@startDate"
             EndDate="@endDate"
             IncludePR="@includePR"
@@ -49,6 +52,7 @@
             GroupBy="@groupBy"
             ShowGrouping="false"
             OnRepositorySelected="OnRepositorySelected"
+            OnUserSelected="OnUserSelected"
             OnDateRangeUpdated="@((dateRange) => OnDateRangeUpdated(dateRange.start, dateRange.end))"
             OnFiltersChanged="OnFiltersChanged"
             OnGroupingUpdated="OnGroupingUpdated" />
@@ -209,10 +213,13 @@
 
 @code {
     private IEnumerable<RepositorySummaryDto>? repositories;
+    private IEnumerable<BB.Api.Endpoints.Analytics.UserDto>? users;
     private List<CommitListItemDto> commits = new();
     private bool isLoadingRepos = true;
+    private bool isLoadingUsers = true;
     private bool isLoadingCommits = false;
     private string? selectedRepoSlug;
+    private int? selectedUserId;
     private DateTime? startDate;
     private DateTime? endDate;
     private bool includePR = false;  // Changed default to false
@@ -229,6 +236,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadRepositories();
+        await LoadUsers();
     }
 
     private async Task LoadRepositories()
@@ -249,6 +257,24 @@
         }
     }
 
+    private async Task LoadUsers()
+    {
+        try
+        {
+            isLoadingUsers = true;
+            users = await Http.GetFromJsonAsync<IEnumerable<BB.Api.Endpoints.Analytics.UserDto>>("/api/analytics/users");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading users: {ex.Message}";
+            Logger.LogError(ex, "Error loading users");
+        }
+        finally
+        {
+            isLoadingUsers = false;
+        }
+    }
+
     private async Task LoadCommits()
     {
         try
@@ -262,6 +288,7 @@
             var url = $"api/commits/{repoSlug}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}";
             if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            if (selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
 
             var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
             if (response != null)
@@ -286,6 +313,13 @@
     private async Task OnRepositorySelected(string? slug)
     {
         selectedRepoSlug = slug;
+        currentPage = 1;
+        await LoadCommits();
+    }
+
+    private async Task OnUserSelected(int? userId)
+    {
+        selectedUserId = userId;
         currentPage = 1;
         await LoadCommits();
     }

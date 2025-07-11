@@ -16,10 +16,6 @@
     
     [Parameter]
     [SupplyParameterFromQuery]
-    public string? UserName { get; set; }
-    
-    [Parameter]
-    [SupplyParameterFromQuery]
     public string? StartDate { get; set; }
     
     [Parameter]
@@ -31,7 +27,9 @@
     public string? RepoSlug { get; set; }
 
     private List<CommitListItemDto> commits = new();
+    private List<RepositorySummaryDto> repositories = new();
     private UserDto? selectedUser;
+    private string? selectedRepoSlug;
     private string? startDateString;
     private string? endDateString;
     private bool includePR = false; // Default unchecked as requested
@@ -46,9 +44,24 @@
         // Initialize date strings from parameters
         startDateString = StartDate;
         endDateString = EndDate;
+        selectedRepoSlug = RepoSlug;
         
+        await LoadRepositories();
         await LoadUser();
         await LoadCommits();
+    }
+
+    private async Task LoadRepositories()
+    {
+        try
+        {
+            var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("/api/analytics/repositories");
+            repositories = allRepositories?.ToList() ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading repositories: {ex.Message}");
+        }
     }
 
     private async Task LoadUser()
@@ -57,21 +70,19 @@
         {
             var users = await Http.GetFromJsonAsync<List<UserDto>>("/api/analytics/users") ?? new();
             selectedUser = users.FirstOrDefault(u => u.Id == UserId);
-            
-            // If UserName is provided but user not found by ID, try to find by name
-            if (selectedUser == null && !string.IsNullOrEmpty(UserName))
-            {
-                selectedUser = users.FirstOrDefault(u => u.DisplayName.Equals(UserName, StringComparison.OrdinalIgnoreCase));
-                if (selectedUser != null)
-                {
-                    UserId = selectedUser.Id;
-                }
-            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading user: {ex.Message}");
         }
+    }
+
+    private async Task OnRepositorySelected(ChangeEventArgs e)
+    {
+        selectedRepoSlug = e.Value?.ToString();
+        if (selectedRepoSlug == "all") selectedRepoSlug = null;
+        currentPage = 1;
+        await LoadCommits();
     }
 
     private async Task OnDateRangeChanged(ChangeEventArgs? e = null)
@@ -88,7 +99,7 @@
         try
         {
             // Use the existing commits API endpoint with userId filter
-            var url = $"/api/commits/{RepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&userId={UserId}";
+            var url = $"/api/commits/{selectedRepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&userId={UserId}";
             
             if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
             if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
@@ -105,7 +116,7 @@
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             Console.WriteLine($"Repository not found error: {ex.Message}");
-            errorMessage = $"Repository '{RepoSlug}' not found or no commits found for this user.";
+            errorMessage = $"Repository '{selectedRepoSlug}' not found or no commits found for this user.";
         }
         catch (Exception ex)
         {
@@ -141,7 +152,7 @@
     private async void OpenBitbucketPopup(string hash, string? repositorySlug = null)
     {
         var owner = WorkspaceService.SelectedWorkspace;
-        var targetRepo = repositorySlug ?? RepoSlug;
+        var targetRepo = repositorySlug ?? selectedRepoSlug;
         
         // If workspace is not set, try to get it from repository data
         if (string.IsNullOrEmpty(owner))
@@ -195,9 +206,9 @@
 
     private void NavigateBack()
     {
-        if (!string.IsNullOrEmpty(RepoSlug))
+        if (!string.IsNullOrEmpty(selectedRepoSlug))
         {
-            Navigation.NavigateTo($"/dashboard?repo={RepoSlug}");
+            Navigation.NavigateTo($"/dashboard?repo={selectedRepoSlug}");
         }
         else
         {
@@ -241,6 +252,16 @@
         public string AvatarUrl { get; set; } = string.Empty;
         public DateTime? CreatedOn { get; set; }
     }
+
+    public class RepositorySummaryDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public string Workspace { get; set; } = string.Empty;
+        public int CommitCount { get; set; }
+        public int ContributorCount { get; set; }
+        public DateTime? LastCommitDate { get; set; }
+    }
 }
 
 <!-- Header Section with User Info and Navigation -->
@@ -253,11 +274,11 @@
                         <i class="bi bi-person-circle me-2"></i>
                         Commits by @(selectedUser?.DisplayName ?? "User")
                     </h3>
-                    @if (!string.IsNullOrEmpty(RepoSlug))
+                    @if (!string.IsNullOrEmpty(selectedRepoSlug))
                     {
                         <p class="text-muted mb-0">
                             <i class="bi bi-folder me-1"></i>
-                            Repository: <strong>@RepoSlug</strong>
+                            Repository: <strong>@selectedRepoSlug</strong>
                         </p>
                     }
                     else
@@ -300,6 +321,16 @@
                         <label class="form-check-label">
                             <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
                         </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Repository</label>
+                        <select class="form-control" value="@(selectedRepoSlug ?? "all")" @onchange="OnRepositorySelected">
+                            <option value="all">All Repositories</option>
+                            @foreach (var repo in repositories)
+                            {
+                                <option value="@repo.Slug">@repo.Name</option>
+                            }
+                        </select>
                     </div>
                 </div>
             </div>
@@ -373,7 +404,7 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Commit</th>
-                        @if (string.IsNullOrEmpty(RepoSlug) || RepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
+                        @if (string.IsNullOrEmpty(selectedRepoSlug) || selectedRepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
                         {
                             <th>Repository</th>
                         }
@@ -395,7 +426,7 @@
                             <td>
                                 <button type="button" class="btn btn-link p-0 text-decoration-underline" @onclick="() => OpenBitbucketPopup(commit.Hash, commit.RepositorySlug)" title="View on Bitbucket">@commit.Hash.Substring(0, 8)</button>
                             </td>
-                            @if (string.IsNullOrEmpty(RepoSlug) || RepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
+                            @if (string.IsNullOrEmpty(selectedRepoSlug) || selectedRepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
                             {
                                 <td>
                                     <span class="badge bg-secondary">@(commit.RepositoryName ?? commit.RepositorySlug ?? "Unknown")</span>
@@ -501,17 +532,19 @@
 </div>
 
 @code {
-    private void SetDateRange(int days)
+    private async Task SetDateRange(int days)
     {
         endDateString = DateTime.Today.ToString("yyyy-MM-dd");
         startDateString = DateTime.Today.AddDays(-days).ToString("yyyy-MM-dd");
-        InvokeAsync(() => OnDateRangeChanged(null));
+        currentPage = 1;
+        await LoadCommits();
     }
 
-    private void ClearDateRange()
+    private async Task ClearDateRange()
     {
         startDateString = null;
         endDateString = null;
-        InvokeAsync(() => OnDateRangeChanged(null));
+        currentPage = 1;
+        await LoadCommits();
     }
 } 

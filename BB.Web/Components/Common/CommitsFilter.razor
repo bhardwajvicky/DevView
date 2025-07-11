@@ -5,7 +5,7 @@
 @using BB.Api.Endpoints.Analytics
 
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="mb-3">
             <label for="repoSelect" class="form-label fw-bold">Select Repository</label>
             @if (IsLoadingRepos)
@@ -34,6 +34,40 @@
             {
                 <div class="alert alert-warning">
                     No repositories found. Please check your configuration.
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="mb-3">
+            <label for="userSelect" class="form-label fw-bold">Select User</label>
+            @if (IsLoadingUsers)
+            {
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading users...</span>
+                </div>
+            }
+            else if (Users != null && Users.Any())
+            {
+                <RadzenDropDown Data="@Users.OrderBy(u => u.DisplayName)"
+                              TextProperty="DisplayName"
+                              ValueProperty="Id"
+                              AllowClear="true"
+                              AllowFiltering="true"
+                              FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                              Placeholder="Search users..."
+                              Value="@SelectedUserId"
+                              Change="@(args => OnUserChanged(args))"
+                              class="w-100" />
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    No users found. Please check your configuration.
                 </div>
             }
         </div>
@@ -114,6 +148,15 @@
     public string? SelectedRepoSlug { get; set; }
 
     [Parameter]
+    public bool IsLoadingUsers { get; set; }
+
+    [Parameter]
+    public IEnumerable<BB.Api.Endpoints.Analytics.UserDto>? Users { get; set; }
+
+    [Parameter]
+    public int? SelectedUserId { get; set; }
+
+    [Parameter]
     public DateTime? StartDate { get; set; }
 
     [Parameter]
@@ -138,6 +181,9 @@
     public EventCallback<string> OnRepositorySelected { get; set; }
 
     [Parameter]
+    public EventCallback<int?> OnUserSelected { get; set; }
+
+    [Parameter]
     public EventCallback<(DateTime? start, DateTime? end)> OnDateRangeUpdated { get; set; }
 
     [Parameter]
@@ -151,6 +197,13 @@
         var slug = value?.ToString();
         await OnRepositorySelected.InvokeAsync(slug);
         SelectedRepoSlug = slug;
+    }
+
+    private async Task OnUserChanged(object? value)
+    {
+        var userId = value != null ? (int?)Convert.ToInt32(value) : null;
+        await OnUserSelected.InvokeAsync(userId);
+        SelectedUserId = userId;
     }
 
     private async Task OnDateRangeChanged(DateTime? date)

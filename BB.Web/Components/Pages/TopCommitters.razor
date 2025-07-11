@@ -502,15 +502,24 @@
 
     private void NavigateToUserCommits(TopCommittersDto committer)
     {
-        var url = $"/user/{committer.UserId}/commits?UserName={Uri.EscapeDataString(committer.DisplayName)}";
+        var url = $"/user/{committer.UserId}/commits";
+        var queryParams = new List<string>();
+        
         if (startDate.HasValue && endDate.HasValue)
         {
-            url += $"&StartDate={startDate.Value:yyyy-MM-dd}&EndDate={endDate.Value:yyyy-MM-dd}";
+            queryParams.Add($"StartDate={startDate.Value:yyyy-MM-dd}");
+            queryParams.Add($"EndDate={endDate.Value:yyyy-MM-dd}");
         }
         if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
         {
-            url += $"&RepoSlug={Uri.EscapeDataString(selectedRepoSlug)}";
+            queryParams.Add($"RepoSlug={Uri.EscapeDataString(selectedRepoSlug)}");
         }
+        
+        if (queryParams.Any())
+        {
+            url += "?" + string.Join("&", queryParams);
+        }
+        
         Navigation.NavigateTo(url);
     }
 

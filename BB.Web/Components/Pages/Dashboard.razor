@@ -1651,15 +1651,24 @@
 
     private void NavigateToUserCommits(int userId, string userName, DateTime? commitDate, string? repoSlug)
     {
-        var url = $"/user/{userId}/commits?UserName={Uri.EscapeDataString(userName)}";
+        var url = $"/user/{userId}/commits";
+        var queryParams = new List<string>();
+        
         if (commitDate.HasValue)
         {
-            url += $"&StartDate={commitDate.Value:yyyy-MM-dd}&EndDate={commitDate.Value:yyyy-MM-dd}";
+            queryParams.Add($"StartDate={commitDate.Value:yyyy-MM-dd}");
+            queryParams.Add($"EndDate={commitDate.Value:yyyy-MM-dd}");
         }
         if (!string.IsNullOrEmpty(repoSlug) && repoSlug != "ALL")
         {
-            url += $"&RepoSlug={repoSlug}";
+            queryParams.Add($"RepoSlug={Uri.EscapeDataString(repoSlug)}");
         }
+        
+        if (queryParams.Any())
+        {
+            url += "?" + string.Join("&", queryParams);
+        }
+        
         Navigation.NavigateTo(url);
     }
 
