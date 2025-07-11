@@ -109,6 +109,8 @@ namespace BBIntegration.Common
             
             int maxRetries = 3;
             int retryCount = 0;
+            int unauthorizedRetryCount = 0; // New: Counter for 401 retries
+            const int maxUnauthorizedRetries = 1; // New: Max retries for 401
 
             while (retryCount <= maxRetries)
             {
@@ -141,6 +143,20 @@ namespace BBIntegration.Common
                         await WaitForRateLimitResetAsync();
                         
                         retryCount++;
+                    }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) // New: Handle 401 Unauthorized
+                    {
+                        if (unauthorizedRetryCount < maxUnauthorizedRetries)
+                        {
+                            _accessToken = null; // Clear token to force re-authentication
+                            unauthorizedRetryCount++;
+                            Console.WriteLine($"Unauthorized (401) for URL: {url}. Attempting to re-authenticate and retry (Attempt {unauthorizedRetryCount})...");
+                            continue; // Retry the request immediately
+                        }
+                        else
+                        {
+                            throw new HttpRequestException($"Failed to authenticate for URL: {url} after {maxUnauthorizedRetries} retries.", null, response.StatusCode);
+                        }
                     }
                     else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {

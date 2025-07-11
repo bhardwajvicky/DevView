@@ -83,9 +83,6 @@ namespace BBIntegration.PullRequests
                         var effectiveMergedDate = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn) : null;
                         var effectiveClosedDate = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn : null;
 
-                        _logger.LogInformation("Processing PR {PrId} (State: {State}, Created: {CreatedOn:o}, Updated: {UpdatedOn:o}, EffectiveMerged: {EffectiveMergedDate:o}, EffectiveClosed: {EffectiveClosedDate:o})", 
-                            pr.Id, pr.State, pr.CreatedOn, pr.UpdatedOn, effectiveMergedDate, effectiveClosedDate);
-
                         if (pr.CreatedOn < startDate)
                         {
                             hitStartDateBoundary = true;
@@ -94,6 +91,9 @@ namespace BBIntegration.PullRequests
                         }
 
                         if (pr.CreatedOn > endDate) continue;
+
+                        // Log PR insertion/update
+                        _logger.LogInformation("PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug} was inserted/updated. DB ID: {PrDbId}", pr.Id, pr.Title, workspace, repoSlug, prDbId);
 
                         if (pr.Author?.Uuid == null)
                         {
@@ -136,21 +136,11 @@ namespace BBIntegration.PullRequests
                             ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
                         });
 
-                        _logger.LogInformation("Parameters for PR upsert for PR {PrId}: {Parameters}", pr.Id, System.Text.Json.JsonSerializer.Serialize(new {
-                            BitbucketPrId = pr.Id.ToString(),
-                            RepoId = repoId.Value,
-                            AuthorId = authorId.Value,
-                            pr.Title,
-                            pr.State,
-                            CreatedOn = pr.CreatedOn.SafeDateTime(),
-                            UpdatedOn = pr.UpdatedOn.SafeDateTime(),
-                            MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn).SafeDateTime() : null,
-                            ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
-                        }));
+                        // Log PR insertion/update
+                        _logger.LogInformation("PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug} was inserted/updated. DB ID: {PrDbId}", pr.Id, pr.Title, workspace, repoSlug, prDbId);
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
                         var activityJson = await _apiClient.GetPullRequestActivityAsync(workspace, repoSlug, pr.Id);
-                        _logger.LogDebug("Raw activity JSON for PR {PrId}: {ActivityJson}", pr.Id, activityJson);
                         var activityResponse = System.Text.Json.JsonSerializer.Deserialize<BitbucketPullRequestActivityResponse>(activityJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                         var approvalParticipants = new List<BitbucketPullRequestParticipantDto>();
                         if (activityResponse?.Values != null)
@@ -172,17 +162,12 @@ namespace BBIntegration.PullRequests
                         }
                         if (approvalParticipants.Any())
                         {
-                            _logger.LogDebug("Found {Count} approval events in activity for PR {PrId}", approvalParticipants.Count, pr.Id);
+                            _logger.LogInformation("Found {Count} approval events in activity for PR {PrId}", approvalParticipants.Count, pr.Id);
                             await SyncPullRequestApprovalsAsync(connection, prDbId, approvalParticipants);
                         }
 
                         // Now, sync commits for this PR
-                        _logger.LogDebug("Starting commit sync for PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug}", pr.Id, pr.Title, workspace, repoSlug);
                         await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
-
-                        _logger.LogInformation("PR {PrId} has {ParticipantCount} participants and {ReviewerCount} reviewers", pr.Id, pr.Participants?.Count ?? 0, pr.Reviewers?.Count ?? 0);
-                        _logger.LogDebug("Participants for PR {PrId}: {Participants}", pr.Id, System.Text.Json.JsonSerializer.Serialize(pr.Participants));
-                        _logger.LogDebug("Reviewers for PR {PrId}: {Reviewers}", pr.Id, System.Text.Json.JsonSerializer.Serialize(pr.Reviewers));
                     }
                     nextPageUrl = prPagedResponse.NextPageUrl;
                     if (string.IsNullOrEmpty(nextPageUrl)) keepFetching = false;
@@ -209,7 +194,6 @@ namespace BBIntegration.PullRequests
                     if (BitbucketApiClient.IsRateLimited())
                     {
                         var waitTime = BitbucketApiClient.GetRateLimitWaitTime();
-                        _logger.LogInformation("Waiting for rate limit to reset ({WaitTime} seconds) before fetching PR commits for PR {PrId}...", waitTime?.TotalSeconds ?? 0, bitbucketPrId);
                     }
                     
                     var commitsJson = await _apiClient.GetPullRequestCommitsAsync(workspace, repoSlug, bitbucketPrId, commitNextPageUrl);
@@ -219,7 +203,6 @@ namespace BBIntegration.PullRequests
                     {
                         if (string.IsNullOrEmpty(commitNextPageUrl))
                         {
-                            _logger.LogInformation("PR {PrId} in {Workspace}/{RepoSlug} has no commits. This is normal for empty or draft PRs.", bitbucketPrId, workspace, repoSlug);
                         }
                         break;
                     }
@@ -246,6 +229,8 @@ namespace BBIntegration.PullRequests
                         _logger
                     );
                     if (commitId < 0) continue;
+
+                    _logger.LogInformation("Commit {CommitHash} for PR {PrId} in {Workspace}/{RepoSlug} was inserted/updated.", commit.Hash, bitbucketPrId, workspace, repoSlug);
 
                     // Always upsert the PR-commit mapping, even if the commit already exists
                     const string joinSql = @"
@@ -301,7 +286,6 @@ namespace BBIntegration.PullRequests
                 {
                     approvedOn = DateTime.UtcNow; // Or use participant.ParticipatedOn if available and more accurate
                 }
-                _logger.LogDebug("Inserting/updating approval for PR {PrDbId} by user {UserUuid} (approved: {Approved}, role: {Role}, state: {State})", prDbId, participant.User.Uuid, participant.Approved, participant.Role, participant.State);
 
                 const string approvalSql = @"
                     MERGE INTO PullRequestApprovals AS Target
@@ -324,7 +308,6 @@ namespace BBIntegration.PullRequests
                     participant.State,
                     ApprovedOn = approvedOn
                 });
-                _logger.LogDebug("Successfully inserted/updated approval for PR {PrDbId} by user {UserUuid}", prDbId, participant.User.Uuid);
             }
         }
 
