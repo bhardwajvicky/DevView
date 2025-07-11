@@ -15,9 +15,9 @@
     public string RepoSlug { get; set; } = string.Empty;
     private List<CommitListItemDto> commits = new();
     private List<UserDto> users = new();
-    private string? selectedUserId;
-    private string? startDateString;
-    private string? endDateString;
+    private string? selectedUserId = null;
+    private string? startDateString = null;
+    private string? endDateString = null;
     private bool includePR = false;
     private int currentPage = 1;
     private int totalPages = 1;
@@ -151,7 +151,7 @@
     {
         Console.WriteLine($"OnIncludePRChanged called with value: {e.Value}");
         var oldValue = includePR;
-        includePR = (bool)e.Value;
+        includePR = (bool)(e.Value ?? false); // Safely unbox to bool
         Console.WriteLine($"includePR changed from {oldValue} to {includePR}");
         Console.WriteLine($"Setting currentPage from {currentPage} to 1");
         currentPage = 1;
