@@ -44,7 +44,7 @@ window.waitForElement = (elementId, maxRetries = 10, retryDelay = 100) => {
     });
 };
 
-window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCommitter) => {
+window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCommitter, dotNetRef) => {
     try {
         // console.log('Initializing chart:', canvasId, 'Raw Data:', rawData); // Commented out for less noise
         
@@ -286,6 +286,17 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                                         return `🛠️ Config --: ${item.configLinesRemoved.toLocaleString()} lines`;
                                     default:
                                         return `${label}: ${context.parsed.y.toLocaleString()}`;
+                                }
+                            }
+                        },
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) {
+                                const dataIndex = elements[0].index;
+                                const item = data[dataIndex];
+                                const date = new Date(item.date).toISOString().split('T')[0]; // Format as YYYY-MM-DD
+                                
+                                if (dotNetRef) {
+                                    dotNetRef.invokeMethodAsync('HandleChartClick', date);
                                 }
                             }
                         }

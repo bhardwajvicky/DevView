@@ -103,7 +103,7 @@ namespace BB.Api.Services
                     SUM(ISNULL(cf_config.LinesRemoved, 0)) AS ConfigLinesRemoved,
                     SUM(ISNULL(cf_docs.LinesAdded, 0)) AS DocsLinesAdded,
                     SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved,
-                    MAX(c.IsMerge) AS IsMergeCommit
+                    MAX(CAST(c.IsMerge AS INT)) AS IsMergeCommit
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 LEFT JOIN CommitFiles_Aggregated cf_code ON c.Id = cf_code.CommitId AND cf_code.FileType = 'code'
@@ -178,7 +178,7 @@ namespace BB.Api.Services
                     SUM(ISNULL(cf_config.LinesRemoved, 0)) AS ConfigLinesRemoved,
                     SUM(ISNULL(cf_docs.LinesAdded, 0)) AS DocsLinesAdded,
                     SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved,
-                    MAX(c.IsMerge) AS IsMergeCommit
+                    MAX(CAST(c.IsMerge AS INT)) AS IsMergeCommit
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 JOIN Users u ON c.AuthorId = u.Id
@@ -573,6 +573,8 @@ namespace BB.Api.Services
                 startDate,
                 endDate,
                 includePR,
+                includeData,
+                includeConfig,
                 topCount,
                 bottomCount
             })).ToList();

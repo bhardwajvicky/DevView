@@ -134,7 +134,8 @@
                                             TotalCommits="@totalCommits"
                                             TotalLinesAdded="@totalLinesAdded"
                                             TotalLinesDeleted="@totalLinesDeleted"
-                                            IsTopCommitter="true" />
+                                            IsTopCommitter="true"
+                                            OnChartClick="@(date => HandleContributorChartClick(committer.UserId, date))" />
                                     </div>
                                 }
                             </div>
@@ -193,7 +194,8 @@
                                                 TotalCommits="@totalCommits"
                                                 TotalLinesAdded="@totalLinesAdded"
                                                 TotalLinesDeleted="@totalLinesDeleted"
-                                                IsTopCommitter="false" />
+                                                IsTopCommitter="false"
+                                                OnChartClick="@(date => HandleContributorChartClick(committer.UserId, date))" />
                                         </div>
                                     }
                                 </div>
@@ -382,14 +384,7 @@
             
             topCommittersData = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.TopCommittersResponseDto>(url);
             
-            // Handle case when there's only one developer
-            if (topCommittersData?.TopCommitters != null && 
-                topCommittersData.TopCommitters.Any() && 
-                (topCommittersData.BottomCommitters == null || !topCommittersData.BottomCommitters.Any()))
-            {
-                // Show message but don't treat as error
-                errorMessage = "Note: Only one developer found in the selected time range.";
-            }
+            // Removed conditional message for "Only one developer found"
 
             if (topCommittersData != null && 
                 ((topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any()) ||
@@ -415,21 +410,20 @@
         }
     }
 
-    private void NavigateToUserCommits(TopCommittersDto committer)
+    private void NavigateToUserCommits(int userId, string userName, DateTime? commitDate, string? repoSlug)
     {
-        var url = $"/user/{committer.UserId}/commits";
+        var url = $"/user/{userId}/commits";
         var queryParams = new List<string>();
         
-        if (startDate.HasValue && endDate.HasValue)
+        if (commitDate.HasValue)
         {
-            queryParams.Add($"StartDate={startDate.Value:yyyy-MM-dd}");
-            queryParams.Add($"EndDate={endDate.Value:yyyy-MM-dd}");
+            queryParams.Add($"CommitDate={commitDate.Value:yyyy-MM-dd}");
         }
         
         // Only add repository slug if it's not "ALL"
-        if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+        if (!string.IsNullOrEmpty(repoSlug) && repoSlug != "ALL")
         {
-            queryParams.Add($"RepoSlug={Uri.EscapeDataString(selectedRepoSlug)}");
+            queryParams.Add($"RepoSlug={Uri.EscapeDataString(repoSlug)}");
         }
         
         if (queryParams.Any())
@@ -448,5 +442,15 @@
     private async Task ToggleCommitterDatasetJs(string canvasId, int datasetIndex)
     {
         await JSRuntime.InvokeVoidAsync("toggleCommitterDataset", canvasId, datasetIndex);
+    }
+
+    private void HandleContributorChartClick(int userId, DateTime date)
+    {
+        var user = topCommittersData?.TopCommitters.FirstOrDefault(c => c.UserId == userId) ?? 
+                   topCommittersData?.BottomCommitters.FirstOrDefault(c => c.UserId == userId);
+        if (user != null)
+        {
+            NavigateToUserCommits(userId, user.DisplayName, date, selectedRepoSlug);
+        }
     }
 } 

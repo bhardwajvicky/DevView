@@ -38,15 +38,36 @@
     [Parameter] public int TotalLinesAdded { get; set; }
     [Parameter] public int TotalLinesDeleted { get; set; }
     [Parameter] public bool IsTopCommitter { get; set; } = true;
+    [Parameter] public EventCallback<DateTime> OnChartClick { get; set; }
 
+    private DotNetObjectReference<ContributorChart>? _dotNetRef;
     private string StatsString => $"{TotalCommits} commits, {TotalLinesAdded}++ {TotalLinesDeleted}--";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+        }
         if (ActivityData != null && ActivityData.Any())
         {
             // Pass parsed data directly to JS
-            await JSRuntime.InvokeVoidAsync("initializeCommitterChart", CanvasId, ActivityData, DisplayName, IsTopCommitter);
+            await JSRuntime.InvokeVoidAsync("initializeCommitterChart", CanvasId, ActivityData, DisplayName, IsTopCommitter, _dotNetRef);
         }
+    }
+
+    [JSInvokable]
+    public Task HandleChartClick(string dateString)
+    {
+        if (DateTime.TryParse(dateString, out var date))
+        {
+            return OnChartClick.InvokeAsync(date);
+        }
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
     }
 } 

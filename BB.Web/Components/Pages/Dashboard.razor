@@ -264,7 +264,8 @@
                                 TotalCommits="@totalCommits"
                                 TotalLinesAdded="@totalLinesAdded"
                                 TotalLinesDeleted="@totalLinesDeleted"
-                                IsTopCommitter="true" />
+                                IsTopCommitter="true"
+                                OnChartClick="@(date => HandleContributorChartClick(contributor.UserId, date))" />
                         </div>
                     }
                 </div>
@@ -1679,6 +1680,15 @@
         var totalAdded = stats.Sum(s => s.TotalLinesAdded);
         var totalRemoved = stats.Sum(s => s.TotalLinesRemoved);
         return $"Commits: {totalCommits}, Lines Added: {totalAdded}, Lines Removed: {totalRemoved}";
+    }
+
+    private void HandleContributorChartClick(int userId, DateTime date)
+    {
+        var user = contributorData?.FirstOrDefault(c => c.UserId == userId);
+        if (user != null)
+        {
+            NavigateToUserCommits(userId, user.DisplayName, date, selectedRepoSlug);
+        }
     }
 
     private void NavigateToUserCommits(int userId, string userName, DateTime? commitDate, string? repoSlug)
