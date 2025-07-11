@@ -101,16 +101,39 @@
                                 @foreach (var committer in topCommittersData.TopCommitters)
                                 {
                                     var canvasId = $"committerChart_top_{committer.UserId}";
-                                    var stats = $"{committer.TotalCommits} commits, {committer.TotalLinesAdded}++ {committer.TotalLinesRemoved}--";
                                     var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>() :
                                         System.Text.Json.JsonSerializer.Deserialize<List<BB.Api.Endpoints.Analytics.CommitActivityDto>>(committer.ActivityData) ?? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>();
+
+                                    // Apply filters to calculate totals
+                                    var filteredActivity = activityData.AsEnumerable();
+
+                                    if (!includePR)
+                                    {
+                                        filteredActivity = filteredActivity.Where(a => !a.IsMergeCommit);
+                                    }
+                                    // Removed FileType filtering as it's no longer present on CommitActivityDto
+
+                                    var totalCommits = filteredActivity.Sum(a => a.CommitCount);
+                                    var totalLinesAdded = filteredActivity.Sum(a => 
+                                        a.CodeLinesAdded 
+                                        + (includeData ? a.DataLinesAdded : 0) 
+                                        + (includeConfig ? a.ConfigLinesAdded : 0)
+                                    );
+                                    var totalLinesDeleted = filteredActivity.Sum(a => 
+                                        a.CodeLinesRemoved 
+                                        + (includeData ? a.DataLinesRemoved : 0) 
+                                        + (includeConfig ? a.ConfigLinesRemoved : 0)
+                                    );
+
                                     <div class="col-md-4">
                                         <ContributorChart 
                                             DisplayName="@committer.DisplayName"
                                             AvatarUrl="@committer.AvatarUrl"
                                             CanvasId="@canvasId"
                                             ActivityData="@activityData"
-                                            Stats="@stats"
+                                            TotalCommits="@totalCommits"
+                                            TotalLinesAdded="@totalLinesAdded"
+                                            TotalLinesDeleted="@totalLinesDeleted"
                                             IsTopCommitter="true" />
                                     </div>
                                 }
@@ -137,16 +160,39 @@
                                     @foreach (var committer in topCommittersData.BottomCommitters)
                                     {
                                         var canvasId = $"committerChart_bottom_{committer.UserId}";
-                                        var stats = $"{committer.TotalCommits} commits, {committer.TotalLinesAdded}++ {committer.TotalLinesRemoved}--";
                                         var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>() :
                                             System.Text.Json.JsonSerializer.Deserialize<List<BB.Api.Endpoints.Analytics.CommitActivityDto>>(committer.ActivityData) ?? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>();
+
+                                        // Apply filters to calculate totals
+                                        var filteredActivity = activityData.AsEnumerable();
+
+                                        if (!includePR)
+                                        {
+                                            filteredActivity = filteredActivity.Where(a => !a.IsMergeCommit);
+                                        }
+                                        // Removed FileType filtering as it's no longer present on CommitActivityDto
+
+                                        var totalCommits = filteredActivity.Sum(a => a.CommitCount);
+                                        var totalLinesAdded = filteredActivity.Sum(a => 
+                                            a.CodeLinesAdded 
+                                            + (includeData ? a.DataLinesAdded : 0) 
+                                            + (includeConfig ? a.ConfigLinesAdded : 0)
+                                        );
+                                        var totalLinesDeleted = filteredActivity.Sum(a => 
+                                            a.CodeLinesRemoved 
+                                            + (includeData ? a.DataLinesRemoved : 0) 
+                                            + (includeConfig ? a.ConfigLinesRemoved : 0)
+                                        );
+
                                         <div class="col-md-4">
                                             <ContributorChart 
                                                 DisplayName="@committer.DisplayName"
                                                 AvatarUrl="@committer.AvatarUrl"
                                                 CanvasId="@canvasId"
                                                 ActivityData="@activityData"
-                                                Stats="@stats"
+                                                TotalCommits="@totalCommits"
+                                                TotalLinesAdded="@totalLinesAdded"
+                                                TotalLinesDeleted="@totalLinesDeleted"
                                                 IsTopCommitter="false" />
                                         </div>
                                     }

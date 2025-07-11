@@ -83,8 +83,18 @@ namespace BB.Api.Services
                 SELECT 
                     CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                     COUNT(c.Id) AS CommitCount,
-                    SUM(ISNULL(c.LinesAdded, 0)) AS TotalLinesAdded,
-                    SUM(ISNULL(c.LinesRemoved, 0)) AS TotalLinesRemoved,
+                    SUM(
+                        ISNULL(cf_code.LinesAdded, 0)
+                        + CASE WHEN @includeData = 1 THEN ISNULL(cf_data.LinesAdded, 0) ELSE 0 END
+                        + CASE WHEN @includeConfig = 1 THEN ISNULL(cf_config.LinesAdded, 0) ELSE 0 END
+                        + ISNULL(cf_docs.LinesAdded, 0)
+                    ) AS TotalLinesAdded,
+                    SUM(
+                        ISNULL(cf_code.LinesRemoved, 0)
+                        + CASE WHEN @includeData = 1 THEN ISNULL(cf_data.LinesRemoved, 0) ELSE 0 END
+                        + CASE WHEN @includeConfig = 1 THEN ISNULL(cf_config.LinesRemoved, 0) ELSE 0 END
+                        + ISNULL(cf_docs.LinesRemoved, 0)
+                    ) AS TotalLinesRemoved,
                     SUM(ISNULL(cf_code.LinesAdded, 0)) AS CodeLinesAdded,
                     SUM(ISNULL(cf_code.LinesRemoved, 0)) AS CodeLinesRemoved,
                     SUM(ISNULL(cf_data.LinesAdded, 0)) AS DataLinesAdded,
@@ -92,7 +102,8 @@ namespace BB.Api.Services
                     SUM(ISNULL(cf_config.LinesAdded, 0)) AS ConfigLinesAdded,
                     SUM(ISNULL(cf_config.LinesRemoved, 0)) AS ConfigLinesRemoved,
                     SUM(ISNULL(cf_docs.LinesAdded, 0)) AS DocsLinesAdded,
-                    SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved
+                    SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved,
+                    MAX(c.IsMerge) AS IsMergeCommit
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 LEFT JOIN CommitFiles_Aggregated cf_code ON c.Id = cf_code.CommitId AND cf_code.FileType = 'code'
@@ -104,7 +115,7 @@ namespace BB.Api.Services
                 ORDER BY Date;
             ";
 
-            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
+            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, includeData, includeConfig });
         }
 
         public async Task<IEnumerable<ContributorActivityDto>> GetContributorActivityAsync(
@@ -147,8 +158,18 @@ namespace BB.Api.Services
                     u.DisplayName,
                     u.AvatarUrl,
                     COUNT(c.Id) AS CommitCount,
-                    SUM(ISNULL(c.LinesAdded, 0)) AS TotalLinesAdded,
-                    SUM(ISNULL(c.LinesRemoved, 0)) AS TotalLinesRemoved,
+                    SUM(
+                        ISNULL(cf_code.LinesAdded, 0)
+                        + CASE WHEN @includeData = 1 THEN ISNULL(cf_data.LinesAdded, 0) ELSE 0 END
+                        + CASE WHEN @includeConfig = 1 THEN ISNULL(cf_config.LinesAdded, 0) ELSE 0 END
+                        + ISNULL(cf_docs.LinesAdded, 0)
+                    ) AS TotalLinesAdded,
+                    SUM(
+                        ISNULL(cf_code.LinesRemoved, 0)
+                        + CASE WHEN @includeData = 1 THEN ISNULL(cf_data.LinesRemoved, 0) ELSE 0 END
+                        + CASE WHEN @includeConfig = 1 THEN ISNULL(cf_config.LinesRemoved, 0) ELSE 0 END
+                        + ISNULL(cf_docs.LinesRemoved, 0)
+                    ) AS TotalLinesRemoved,
                     SUM(ISNULL(cf_code.LinesAdded, 0)) AS CodeLinesAdded,
                     SUM(ISNULL(cf_code.LinesRemoved, 0)) AS CodeLinesRemoved,
                     SUM(ISNULL(cf_data.LinesAdded, 0)) AS DataLinesAdded,
@@ -156,7 +177,8 @@ namespace BB.Api.Services
                     SUM(ISNULL(cf_config.LinesAdded, 0)) AS ConfigLinesAdded,
                     SUM(ISNULL(cf_config.LinesRemoved, 0)) AS ConfigLinesRemoved,
                     SUM(ISNULL(cf_docs.LinesAdded, 0)) AS DocsLinesAdded,
-                    SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved
+                    SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved,
+                    MAX(c.IsMerge) AS IsMergeCommit
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 JOIN Users u ON c.AuthorId = u.Id
@@ -169,7 +191,7 @@ namespace BB.Api.Services
                 ORDER BY Date, DisplayName;
             ";
 
-            return await connection.QueryAsync<ContributorActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
+            return await connection.QueryAsync<ContributorActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, includeData, includeConfig });
         }
 
         public async Task<IEnumerable<CommitPunchcardDto>> GetCommitPunchcardAsync(
@@ -424,14 +446,27 @@ namespace BB.Api.Services
                         SUM(ISNULL(data.LinesRemoved, 0)) as DataLinesRemoved,
                         SUM(ISNULL(config.LinesAdded, 0)) as ConfigLinesAdded,
                         SUM(ISNULL(config.LinesRemoved, 0)) as ConfigLinesRemoved,
-                        SUM(ISNULL(code.LinesAdded, 0) + ISNULL(data.LinesAdded, 0) + ISNULL(config.LinesAdded, 0)) as TotalLinesAdded,
-                        SUM(ISNULL(code.LinesRemoved, 0) + ISNULL(data.LinesRemoved, 0) + ISNULL(config.LinesRemoved, 0)) as TotalLinesRemoved
+                        SUM(ISNULL(docs.LinesAdded, 0)) as DocsLinesAdded,
+                        SUM(ISNULL(docs.LinesRemoved, 0)) as DocsLinesRemoved,
+                        SUM(
+                            ISNULL(code.LinesAdded, 0)
+                            + CASE WHEN @includeData = 1 THEN ISNULL(data.LinesAdded, 0) ELSE 0 END
+                            + CASE WHEN @includeConfig = 1 THEN ISNULL(config.LinesAdded, 0) ELSE 0 END
+                            + ISNULL(docs.LinesAdded, 0)
+                        ) as TotalLinesAdded,
+                        SUM(
+                            ISNULL(code.LinesRemoved, 0)
+                            + CASE WHEN @includeData = 1 THEN ISNULL(data.LinesRemoved, 0) ELSE 0 END
+                            + CASE WHEN @includeConfig = 1 THEN ISNULL(config.LinesRemoved, 0) ELSE 0 END
+                            + ISNULL(docs.LinesRemoved, 0)
+                        ) as TotalLinesRemoved
                     FROM Commits c
                     INNER JOIN Users u ON c.AuthorId = u.Id
                     INNER JOIN Repositories r ON c.RepositoryId = r.Id
                     LEFT JOIN CommitFiles_Aggregated code ON code.CommitId = c.Id AND code.FileType = 'code'
                     LEFT JOIN CommitFiles_Aggregated data ON data.CommitId = c.Id AND data.FileType = 'data'
                     LEFT JOIN CommitFiles_Aggregated config ON config.CommitId = c.Id AND config.FileType = 'config'
+                    LEFT JOIN CommitFiles_Aggregated docs ON docs.CommitId = c.Id AND docs.FileType = 'docs'
                     WHERE (@repoSlug IS NULL OR r.Slug = @repoSlug)
                         AND r.Workspace = @workspace
                         AND (@startDate IS NULL OR c.Date >= @startDate)
@@ -449,18 +484,22 @@ namespace BB.Api.Services
                         SUM(ISNULL(data.LinesAdded, 0)) as DataLinesAdded,
                         SUM(ISNULL(data.LinesRemoved, 0)) as DataLinesRemoved,
                         SUM(ISNULL(config.LinesAdded, 0)) as ConfigLinesAdded,
-                        SUM(ISNULL(config.LinesRemoved, 0)) as ConfigLinesRemoved
+                        SUM(ISNULL(config.LinesRemoved, 0)) as ConfigLinesRemoved,
+                        SUM(ISNULL(docs.LinesAdded, 0)) as DocsLinesAdded,
+                        SUM(ISNULL(docs.LinesRemoved, 0)) as DocsLinesRemoved,
+                        c.IsMerge AS IsMergeCommit
                     FROM Commits c
                     INNER JOIN Repositories r ON c.RepositoryId = r.Id
                     LEFT JOIN CommitFiles_Aggregated code ON code.CommitId = c.Id AND code.FileType = 'code'
                     LEFT JOIN CommitFiles_Aggregated data ON data.CommitId = c.Id AND data.FileType = 'data'
                     LEFT JOIN CommitFiles_Aggregated config ON config.CommitId = c.Id AND config.FileType = 'config'
+                    LEFT JOIN CommitFiles_Aggregated docs ON docs.CommitId = c.Id AND docs.FileType = 'docs'
                     WHERE (@repoSlug IS NULL OR r.Slug = @repoSlug)
                         AND r.Workspace = @workspace
                         AND (@startDate IS NULL OR c.Date >= @startDate)
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
-                    GROUP BY c.AuthorId, DATEADD(DAY, DATEDIFF(DAY, 0, c.Date), 0)
+                    GROUP BY c.AuthorId, DATEADD(DAY, DATEDIFF(DAY, 0, c.Date), 0), c.IsMerge
                 ),
                 TopCommitters AS (
                     SELECT TOP (@topCount) *
@@ -487,7 +526,10 @@ namespace BB.Api.Services
                                     ad.DataLinesAdded,
                                     ad.DataLinesRemoved,
                                     ad.ConfigLinesAdded,
-                                    ad.ConfigLinesRemoved
+                                    ad.ConfigLinesRemoved,
+                                    ad.DocsLinesAdded,
+                                    ad.DocsLinesRemoved,
+                                    ad.IsMergeCommit
                                 FROM ActivityData ad
                                 WHERE ad.UserId = cs.UserId
                                 ORDER BY ad.Date
@@ -511,7 +553,10 @@ namespace BB.Api.Services
                                     ad.DataLinesAdded,
                                     ad.DataLinesRemoved,
                                     ad.ConfigLinesAdded,
-                                    ad.ConfigLinesRemoved
+                                    ad.ConfigLinesRemoved,
+                                    ad.DocsLinesAdded,
+                                    ad.DocsLinesRemoved,
+                                    ad.IsMergeCommit
                                 FROM ActivityData ad
                                 WHERE ad.UserId = cs.UserId
                                 ORDER BY ad.Date

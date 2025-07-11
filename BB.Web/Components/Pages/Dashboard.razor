@@ -233,15 +233,37 @@
                     @foreach (var contributor in GetUniqueContributors())
                     {
                         var canvasId = $"contributorChart_{contributor.UserId}";
-                        var stats = GetContributorStats(contributor.UserId);
                         var activityData = _individualContributorCommitActivity.ContainsKey(contributor.UserId) ? _individualContributorCommitActivity[contributor.UserId] : new List<BB.Api.Endpoints.Analytics.CommitActivityDto>();
+
+                        // Apply filters to calculate totals
+                        var filteredActivity = activityData.AsEnumerable();
+
+                        if (!includePR)
+                        {
+                            filteredActivity = filteredActivity.Where(a => !a.IsMergeCommit);
+                        }
+
+                        var totalCommits = filteredActivity.Sum(a => a.CommitCount);
+                        var totalLinesAdded = filteredActivity.Sum(a => 
+                            a.CodeLinesAdded 
+                            + (includeData ? a.DataLinesAdded : 0) 
+                            + (includeConfig ? a.ConfigLinesAdded : 0)
+                        );
+                        var totalLinesDeleted = filteredActivity.Sum(a => 
+                            a.CodeLinesRemoved 
+                            + (includeData ? a.DataLinesRemoved : 0) 
+                            + (includeConfig ? a.ConfigLinesRemoved : 0)
+                        );
+
                         <div class="col-md-6 col-lg-4 mb-4">
                             <ContributorChart 
                                 DisplayName="@contributor.DisplayName"
                                 AvatarUrl="@contributor.AvatarUrl"
                                 CanvasId="@canvasId"
                                 ActivityData="@activityData"
-                                Stats="@stats"
+                                TotalCommits="@totalCommits"
+                                TotalLinesAdded="@totalLinesAdded"
+                                TotalLinesDeleted="@totalLinesDeleted"
                                 IsTopCommitter="true" />
                         </div>
                     }

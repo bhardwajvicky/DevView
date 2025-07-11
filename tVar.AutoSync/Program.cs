@@ -14,7 +14,6 @@ using System.Collections.Generic; // Added for Dictionary
 using System.Linq; // Added for ToDictionary and Min
 using tVar.AutoSync.Models; // Added this line
 using BBIntegration.Users; // Added this line
-using BBIntegration.Repositories; // Added this line
 
 namespace tVar.AutoSync
 {

@@ -16,6 +16,7 @@ namespace BB.Api.Endpoints.Analytics
         public int ConfigLinesRemoved { get; set; }
         public int DocsLinesAdded { get; set; }
         public int DocsLinesRemoved { get; set; }
+        public bool IsMergeCommit { get; set; }
     }
 
     public enum GroupingType

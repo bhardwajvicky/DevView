@@ -16,9 +16,9 @@
         }
         <div class="flex-grow-1">
             <h6 class="card-title mb-0 text-primary">@DisplayName</h6>
-            @if (!string.IsNullOrEmpty(Stats))
+            @if (TotalCommits > 0 || TotalLinesAdded > 0 || TotalLinesDeleted > 0)
             {
-                <small class="text-muted">@Stats</small>
+                <small class="text-muted">@StatsString</small>
             }
         </div>
     </div>
@@ -34,8 +34,12 @@
     [Parameter] public string? AvatarUrl { get; set; }
     [Parameter] public string CanvasId { get; set; } = string.Empty;
     [Parameter] public List<CommitActivityDto> ActivityData { get; set; } = new();
-    [Parameter] public string? Stats { get; set; }
+    [Parameter] public int TotalCommits { get; set; }
+    [Parameter] public int TotalLinesAdded { get; set; }
+    [Parameter] public int TotalLinesDeleted { get; set; }
     [Parameter] public bool IsTopCommitter { get; set; } = true;
+
+    private string StatsString => $"{TotalCommits} commits, {TotalLinesAdded}++ {TotalLinesDeleted}--";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
