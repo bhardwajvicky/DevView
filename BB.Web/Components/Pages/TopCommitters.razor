@@ -77,7 +77,7 @@
         }
         else if (topCommittersData?.TopCommitters != null && topCommittersData.TopCommitters.Any())
         {
-            <!-- Top Committers -->
+            @* Top Committers *@
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card">
@@ -100,37 +100,18 @@
                             <div class="row">
                                 @foreach (var committer in topCommittersData.TopCommitters)
                                 {
+                                    var canvasId = $"committerChart_top_{committer.UserId}";
+                                    var stats = $"{committer.TotalCommits} commits, {committer.TotalLinesAdded}++ {committer.TotalLinesRemoved}--";
+                                    var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>() :
+                                        System.Text.Json.JsonSerializer.Deserialize<List<BB.Api.Endpoints.Analytics.CommitActivityDto>>(committer.ActivityData) ?? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>();
                                     <div class="col-md-4">
-                                        <div class="card mb-3">
-                                            <div class="card-body">
-                                                <div class="d-flex align-items-center mb-3">
-                                                    @if (!string.IsNullOrEmpty(committer.AvatarUrl))
-                                                    {
-                                                        <img src="@committer.AvatarUrl" alt="@committer.DisplayName" class="rounded-circle me-2" style="width: 40px; height: 40px;" />
-                                                    }
-                                                    else
-                                                    {
-                                                        <div class="rounded-circle bg-secondary me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                                            <i class="bi bi-person text-white"></i>
-                                                        </div>
-                                                    }
-                                                    <div>
-                                                        <button type="button"
-                                                                class="btn btn-link p-0 text-start text-decoration-none mb-0"
-                                                                style="font-size: 1rem; font-weight: 600; color: #0d6efd; cursor: pointer;"
-                                                                @onclick="() => NavigateToUserCommits(committer)">
-                                                            @committer.DisplayName
-                                                        </button>
-                                                        <small class="text-muted">
-                                                            @committer.TotalCommits commits, @committer.TotalLinesAdded++ @committer.TotalLinesRemoved--
-                                                        </small>
-                                                    </div>
-                                                </div>
-                                                <div style="height: 200px;">
-                                                    <canvas id="committerChart_top_@committer.UserId"></canvas>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <ContributorChart 
+                                            DisplayName="@committer.DisplayName"
+                                            AvatarUrl="@committer.AvatarUrl"
+                                            CanvasId="@canvasId"
+                                            ActivityData="@activityData"
+                                            Stats="@stats"
+                                            IsTopCommitter="true" />
                                     </div>
                                 }
                             </div>
@@ -139,7 +120,7 @@
                 </div>
             </div>
 
-            <!-- Bottom Committers -->
+            @* Bottom Committers *@
             @if (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())
             {
                 <div class="row mb-4">
@@ -155,37 +136,18 @@
                                 <div class="row">
                                     @foreach (var committer in topCommittersData.BottomCommitters)
                                     {
+                                        var canvasId = $"committerChart_bottom_{committer.UserId}";
+                                        var stats = $"{committer.TotalCommits} commits, {committer.TotalLinesAdded}++ {committer.TotalLinesRemoved}--";
+                                        var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>() :
+                                            System.Text.Json.JsonSerializer.Deserialize<List<BB.Api.Endpoints.Analytics.CommitActivityDto>>(committer.ActivityData) ?? new List<BB.Api.Endpoints.Analytics.CommitActivityDto>();
                                         <div class="col-md-4">
-                                            <div class="card mb-3">
-                                                <div class="card-body">
-                                                    <div class="d-flex align-items-center mb-3">
-                                                        @if (!string.IsNullOrEmpty(committer.AvatarUrl))
-                                                        {
-                                                            <img src="@committer.AvatarUrl" alt="@committer.DisplayName" class="rounded-circle me-2" style="width: 40px; height: 40px;" />
-                                                        }
-                                                        else
-                                                        {
-                                                            <div class="rounded-circle bg-secondary me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                                                <i class="bi bi-person text-white"></i>
-                                                            </div>
-                                                        }
-                                                        <div>
-                                                            <button type="button"
-                                                                    class="btn btn-link p-0 text-start text-decoration-none mb-0"
-                                                                    style="font-size: 1rem; font-weight: 600; color: #0d6efd; cursor: pointer;"
-                                                                    @onclick="() => NavigateToUserCommits(committer)">
-                                                                @committer.DisplayName
-                                                            </button>
-                                                            <small class="text-muted">
-                                                                @committer.TotalCommits commits, @committer.TotalLinesAdded++ @committer.TotalLinesRemoved--
-                                                            </small>
-                                                        </div>
-                                                    </div>
-                                                    <div style="height: 200px;">
-                                                        <canvas id="committerChart_bottom_@committer.UserId"></canvas>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <ContributorChart 
+                                                DisplayName="@committer.DisplayName"
+                                                AvatarUrl="@committer.AvatarUrl"
+                                                CanvasId="@canvasId"
+                                                ActivityData="@activityData"
+                                                Stats="@stats"
+                                                IsTopCommitter="false" />
                                         </div>
                                     }
                                 </div>
@@ -255,31 +217,6 @@
             await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
             await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
             await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
-        }
-
-        if (topCommittersData != null && !chartInitialized)
-        {
-            try
-            {
-                // Add initial delay to ensure DOM is ready
-                await Task.Delay(500);
-                await InitializeCharts();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
-                // Retry once more after a longer delay
-                try
-                {
-                    await Task.Delay(1000);
-                    await InitializeCharts();
-                }
-                catch (Exception retryEx)
-                {
-                    Logger.LogError(retryEx, "Retry failed for chart initialization: {Message}", retryEx.Message);
-                    errorMessage = "Charts could not be initialized. Please refresh the page.";
-                }
-            }
         }
     }
 
@@ -434,108 +371,6 @@
         {
             isLoadingCommitters = false;
             StateHasChanged();
-        }
-    }
-
-    private async Task InitializeCharts()
-    {
-        if (topCommittersData == null) return;
-
-        try
-        {
-            // Add initial delay to ensure DOM is ready
-            await Task.Delay(500);
-
-            // Initialize charts for top committers
-            if (topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any())
-            {
-                foreach (var committer in topCommittersData.TopCommitters)
-                {
-                    var canvasId = $"committerChart_top_{committer.UserId}";
-                    try
-                    {
-                        if (string.IsNullOrEmpty(committer.ActivityData))
-                        {
-                            Logger.LogWarning("No activity data for committer: {DisplayName}", committer.DisplayName);
-                            continue;
-                        }
-
-                        // Parse activity data to ensure it's valid
-                        var activityData = JsonSerializer.Deserialize<List<CommitActivityDto>>(committer.ActivityData);
-                        if (activityData == null || !activityData.Any())
-                        {
-                            Logger.LogWarning("Invalid or empty activity data for committer: {DisplayName}", committer.DisplayName);
-                            continue;
-                        }
-
-                        // Initialize chart with parsed data
-                        await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
-                            canvasId, 
-                            activityData,  // Pass parsed data directly
-                            committer.DisplayName,
-                            true);
-                        Logger.LogInformation("Successfully initialized chart for top committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
-                    }
-                    catch (JsonException jsonEx)
-                    {
-                        Logger.LogError(jsonEx, "Failed to parse activity data for committer: {DisplayName}", committer.DisplayName);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, "Failed to initialize chart for top committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
-                    }
-                }
-            }
-
-            // Initialize charts for bottom committers
-            if (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())
-            {
-                foreach (var committer in topCommittersData.BottomCommitters)
-                {
-                    var canvasId = $"committerChart_bottom_{committer.UserId}";
-                    try
-                    {
-                        if (string.IsNullOrEmpty(committer.ActivityData))
-                        {
-                            Logger.LogWarning("No activity data for committer: {DisplayName}", committer.DisplayName);
-                            continue;
-                        }
-
-                        // Parse activity data to ensure it's valid
-                        var activityData = JsonSerializer.Deserialize<List<CommitActivityDto>>(committer.ActivityData);
-                        if (activityData == null || !activityData.Any())
-                        {
-                            Logger.LogWarning("Invalid or empty activity data for committer: {DisplayName}", committer.DisplayName);
-                            continue;
-                        }
-
-                        // Initialize chart with parsed data
-                        await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
-                            canvasId, 
-                            activityData,  // Pass parsed data directly
-                            committer.DisplayName,
-                            false);
-                        Logger.LogInformation("Successfully initialized chart for bottom committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
-                    }
-                    catch (JsonException jsonEx)
-                    {
-                        Logger.LogError(jsonEx, "Failed to parse activity data for committer: {DisplayName}", committer.DisplayName);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, "Failed to initialize chart for bottom committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
-                    }
-                }
-            }
-
-            chartInitialized = true;
-            Logger.LogInformation("All charts initialized successfully");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
-            errorMessage = $"Error initializing charts: {ex.Message}";
-            throw; // Re-throw to allow retry
         }
     }
 

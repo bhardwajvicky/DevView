@@ -232,29 +232,17 @@
                 <div class="row" id="contributorChartsContainer">
                     @foreach (var contributor in GetUniqueContributors())
                     {
+                        var canvasId = $"contributorChart_{contributor.UserId}";
+                        var stats = GetContributorStats(contributor.UserId);
+                        var activityData = _individualContributorCommitActivity.ContainsKey(contributor.UserId) ? _individualContributorCommitActivity[contributor.UserId] : new List<BB.Api.Endpoints.Analytics.CommitActivityDto>();
                         <div class="col-md-6 col-lg-4 mb-4">
-                            <div class="card">
-                                <div class="card-header d-flex align-items-center">
-                                    <div class="me-2">
-                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 14px;">
-                                            @contributor.DisplayName.Substring(0, Math.Min(2, contributor.DisplayName.Length)).ToUpper()
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <button type="button" class="btn btn-link p-0 text-start text-decoration-none" 
-                                                @onclick="() => NavigateToUserCommits(contributor.UserId, contributor.DisplayName, null, selectedRepoSlug)"
-                                                style="border: none; background: none; color: inherit;">
-                                            <h6 class="card-title mb-0 text-primary">@contributor.DisplayName</h6>
-                                        </button>
-                                        <small class="text-muted">@GetContributorStats(contributor.UserId)</small>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    <div style="position: relative; height: 200px;">
-                                        <canvas id="contributorChart_@contributor.UserId"></canvas>
-                                    </div>
-                                </div>
-                            </div>
+                            <ContributorChart 
+                                DisplayName="@contributor.DisplayName"
+                                AvatarUrl="@contributor.AvatarUrl"
+                                CanvasId="@canvasId"
+                                ActivityData="@activityData"
+                                Stats="@stats"
+                                IsTopCommitter="true" />
                         </div>
                     }
                 </div>
@@ -1254,6 +1242,7 @@
     private bool includeData = true;
     private bool includeConfig = true;
     private string selectedGrouping = "Day";
+    private Dictionary<int, List<BB.Api.Endpoints.Analytics.CommitActivityDto>> _individualContributorCommitActivity = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -1461,6 +1450,27 @@
             contributorUrl += $"&groupBy={selectedGrouping}"; // Grouping applies to contributor activity as well
 
             contributorData = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.ContributorActivityDto[]>(contributorUrl);
+
+            // Fetch individual commit activity for each contributor
+            _individualContributorCommitActivity.Clear();
+            if (contributorData != null)
+            {
+                foreach (var contributor in contributorData.GroupBy(c => c.UserId).Select(g => g.First())) // Get unique contributors
+                {
+                    var individualCommitActivityUrl = $"api/analytics/commits/activity?workspace={WorkspaceService.SelectedWorkspace}&groupBy={selectedGrouping}&userId={contributor.UserId}";
+                    if (selectedRepoSlug != "ALL") individualCommitActivityUrl += $"&repoSlug={selectedRepoSlug}";
+                    if (startDate.HasValue) individualCommitActivityUrl += $"&startDate={startDate.Value:yyyy-MM-dd}";
+                    if (endDate.HasValue) individualCommitActivityUrl += $"&endDate={endDate.Value:yyyy-MM-dd}";
+                    individualCommitActivityUrl += $"&includePR={includePR}";
+                    individualCommitActivityUrl += $"&includeData={includeData}";
+                    individualCommitActivityUrl += $"&includeConfig={includeConfig}";
+
+                    var individualActivity = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.CommitActivityDto[]>(individualCommitActivityUrl);
+                    if (individualActivity != null) {
+                        _individualContributorCommitActivity[contributor.UserId] = individualActivity.ToList();
+                    }
+                }
+            }
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {

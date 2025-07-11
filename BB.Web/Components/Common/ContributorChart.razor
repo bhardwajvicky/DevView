@@ -1,0 +1,48 @@
+@using System.Text.Json
+@using BB.Api.Endpoints.Analytics
+@inject IJSRuntime JSRuntime
+
+<div class="card h-100">
+    <div class="card-header d-flex align-items-center">
+        @if (!string.IsNullOrEmpty(AvatarUrl))
+        {
+            <img src="@AvatarUrl" alt="@DisplayName" class="rounded-circle me-2" style="width: 32px; height: 32px;" />
+        }
+        else
+        {
+            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px; font-size: 14px;">
+                @DisplayName.Substring(0, Math.Min(2, DisplayName.Length)).ToUpper()
+            </div>
+        }
+        <div class="flex-grow-1">
+            <h6 class="card-title mb-0 text-primary">@DisplayName</h6>
+            @if (!string.IsNullOrEmpty(Stats))
+            {
+                <small class="text-muted">@Stats</small>
+            }
+        </div>
+    </div>
+    <div class="card-body">
+        <div style="position: relative; height: 200px;">
+            <canvas id="@CanvasId"></canvas>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string DisplayName { get; set; } = string.Empty;
+    [Parameter] public string? AvatarUrl { get; set; }
+    [Parameter] public string CanvasId { get; set; } = string.Empty;
+    [Parameter] public List<CommitActivityDto> ActivityData { get; set; } = new();
+    [Parameter] public string? Stats { get; set; }
+    [Parameter] public bool IsTopCommitter { get; set; } = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ActivityData != null && ActivityData.Any())
+        {
+            // Pass parsed data directly to JS
+            await JSRuntime.InvokeVoidAsync("initializeCommitterChart", CanvasId, ActivityData, DisplayName, IsTopCommitter);
+        }
+    }
+} 
