@@ -261,14 +261,24 @@
         {
             try
             {
-                // Add delay to ensure DOM is rendered
-                await Task.Delay(200);
+                // Add longer delay to ensure DOM is fully rendered
+                await Task.Delay(500);
                 await InitializeCharts();
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
-                // Don't retry here - let the next render cycle handle it
+                // Retry once more after a longer delay
+                try
+                {
+                    await Task.Delay(1000);
+                    await InitializeCharts();
+                }
+                catch (Exception retryEx)
+                {
+                    Logger.LogError(retryEx, "Retry failed for chart initialization: {Message}", retryEx.Message);
+                    errorMessage = "Charts could not be initialized. Please refresh the page.";
+                }
             }
         }
     }
@@ -406,7 +416,8 @@
                 ((topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any()) ||
                  (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())))
             {
-                await InitializeCharts();
+                // Don't initialize charts here - let OnAfterRenderAsync handle it after DOM is rendered
+                chartInitialized = false;
             }
             else
             {
@@ -432,19 +443,28 @@
 
         try
         {
-            // Add delay to ensure DOM is rendered
-            await Task.Delay(200);
+            // Ensure DOM is fully rendered
+            await Task.Delay(100);
 
             // Initialize charts for top committers
             if (topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any())
             {
                 foreach (var committer in topCommittersData.TopCommitters)
                 {
-                    await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
-                        $"committerChart_top_{committer.UserId}", 
-                        committer.ActivityData,
-                        committer.DisplayName,
-                        true);
+                    var canvasId = $"committerChart_top_{committer.UserId}";
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
+                            canvasId, 
+                            committer.ActivityData,
+                            committer.DisplayName,
+                            true);
+                        Logger.LogInformation("Successfully initialized chart for top committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Failed to initialize chart for top committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
+                    }
                 }
             }
 
@@ -453,15 +473,25 @@
             {
                 foreach (var committer in topCommittersData.BottomCommitters)
                 {
-                    await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
-                        $"committerChart_bottom_{committer.UserId}", 
-                        committer.ActivityData,
-                        committer.DisplayName,
-                        false);
+                    var canvasId = $"committerChart_bottom_{committer.UserId}";
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
+                            canvasId, 
+                            committer.ActivityData,
+                            committer.DisplayName,
+                            false);
+                        Logger.LogInformation("Successfully initialized chart for bottom committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Failed to initialize chart for bottom committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
+                    }
                 }
             }
 
             chartInitialized = true;
+            Logger.LogInformation("All charts initialized successfully");
         }
         catch (Exception ex)
         {
