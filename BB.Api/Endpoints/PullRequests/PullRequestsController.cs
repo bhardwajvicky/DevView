@@ -166,7 +166,6 @@ namespace BB.Api.Endpoints.PullRequests
             public string Workspace { get; set; } = string.Empty;
             public string BitbucketPrId { get; set; } = string.Empty;
             public int ApprovalCount { get; set; } // Added for frontend
-            public int RequiredApprovals { get; set; } = 1; // Defaulting to 1 for now
             public List<ApprovalDto> Approvals { get; set; } = new(); // Added for frontend
             public DateTime? MergedOn { get; set; } // Added to DTO
             public DateTime? ClosedOn { get; set; } // Added to DTO

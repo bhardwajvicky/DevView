@@ -147,7 +147,7 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0">Top 5 Projects by Unapproved PRs (1+ required)</h5>
+                            <h5 class="card-title mb-0">Top 5 Projects by Unapproved PRs</h5>
                         </div>
                         <div class="card-body">
                             <RadzenDataGrid Data="@topUnapprovedPrs" TItem="BB.Api.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
@@ -466,7 +466,6 @@
             {
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
-            // minRequiredApprovals is defaulted to 1 in the API endpoint
 
             topUnapprovedPrs = await Http.GetFromJsonAsync<List<RepositorySummaryDto>>(url);
         }
@@ -558,7 +557,7 @@
 
         const ctx = chartElement.getContext('2d');
 
-        if (window.prAgeBubbleChart) {
+        if (window.prAgeBubbleChart && typeof window.prAgeBubbleChart.destroy === 'function') {
             window.prAgeBubbleChart.destroy();
         }
 

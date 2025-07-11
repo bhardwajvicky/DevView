@@ -528,36 +528,35 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<RepositorySummaryDto>> GetTopUnapprovedPullRequestsAsync(
-            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, int minRequiredApprovals)
+            string? repoSlug,
+            string? workspace,
+            DateTime? startDate,
+            DateTime? endDate)
         {
+            var sql = @"SELECT
+                            r.Name,
+                            COUNT(pr.Id) AS PRsMissingApprovalCount
+                        FROM
+                            PullRequests pr
+                        JOIN
+                            Repositories r ON pr.RepositoryId = r.Id
+                        LEFT JOIN
+                            PullRequestApprovals pa ON pr.Id = pa.PullRequestId AND pa.Approved = 1
+                        WHERE
+                            r.WorkspaceSlug = @workspace
+                            AND (@repoSlug IS NULL OR r.Slug = @repoSlug)
+                            AND (@startDate IS NULL OR pr.CreatedOn >= @startDate)
+                            AND (@endDate IS NULL OR pr.CreatedOn <= @endDate)
+                            AND pr.Status = 'OPEN'
+                            AND (pa.ActualApprovals IS NULL OR pa.ActualApprovals = 0)
+                        GROUP BY
+                            r.Name
+                        ORDER BY
+                            PRsMissingApprovalCount DESC
+                        OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY;";
+
             using var connection = new SqlConnection(_connectionString);
-
-            var sql = @"
-                SELECT TOP 5
-                    r.Name,
-                    r.Slug,
-                    r.Workspace,
-                    COUNT(pr.Id) AS PRsMissingApprovalCount
-                FROM Repositories r
-                JOIN PullRequests pr ON r.Id = pr.RepositoryId
-                LEFT JOIN (
-                    SELECT
-                        PullRequestId,
-                        COUNT(CASE WHEN Approved = 1 THEN 1 ELSE NULL END) AS ActualApprovals
-                    FROM PullRequestApprovals
-                    GROUP BY PullRequestId
-                ) pa ON pr.Id = pa.PullRequestId
-                WHERE pr.State = 'OPEN'
-                    AND pr.RequiredApprovals >= @minRequiredApprovals
-                    AND (pa.ActualApprovals IS NULL OR pa.ActualApprovals < pr.RequiredApprovals)
-                    AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
-                    AND (@Workspace IS NULL OR r.Workspace = @Workspace)
-                    AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
-                    AND (@EndDate IS NULL OR pr.CreatedOn <= @EndDate)
-                GROUP BY r.Name, r.Slug, r.Workspace
-                ORDER BY PRsMissingApprovalCount DESC;";
-
-            return await connection.QueryAsync<RepositorySummaryDto>(sql, new { repoSlug, workspace, startDate, endDate, minRequiredApprovals });
+            return await connection.QueryAsync<RepositorySummaryDto>(sql, new { repoSlug, workspace, startDate, endDate });
         }
 
         public async Task<IEnumerable<PrAgeBubbleDto>> GetPrAgeBubbleDataAsync(

@@ -227,18 +227,12 @@ namespace BB.Api.Endpoints.Analytics
 
         [HttpGet("top-unapproved-prs")]
         public async Task<IActionResult> GetTopUnapprovedPullRequests(
-            [FromQuery] string? repoSlug,
-            [FromQuery] string? workspace,
-            [FromQuery] DateTime? startDate,
-            [FromQuery] DateTime? endDate,
-            [FromQuery] int minRequiredApprovals = 1)
+            [FromQuery] string? repoSlug = null,
+            [FromQuery] string? workspace = null,
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null)
         {
-            if (string.IsNullOrEmpty(workspace))
-            {
-                return BadRequest("'workspace' must be provided.");
-            }
-
-            var result = await _analyticsService.GetTopUnapprovedPullRequestsAsync(repoSlug, workspace, startDate, endDate, minRequiredApprovals);
+            var result = await _analyticsService.GetTopUnapprovedPullRequestsAsync(repoSlug, workspace, startDate, endDate);
             return Ok(result);
         }
 
