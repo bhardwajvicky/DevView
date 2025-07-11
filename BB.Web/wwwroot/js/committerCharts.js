@@ -33,7 +33,7 @@ window.waitForElement = (elementId, maxRetries = 10, retryDelay = 100) => {
                 resolve(element);
             } else if (retries < maxRetries) {
                 retries++;
-                console.log(`Waiting for element ${elementId}, retry ${retries}/${maxRetries}`);
+                // console.log(`Waiting for element ${elementId}, retry ${retries}/${maxRetries}`); // Commented out for less noise
                 setTimeout(checkElement, retryDelay);
             } else {
                 reject(new Error(`Element ${elementId} not found after ${maxRetries} retries`));
@@ -46,13 +46,13 @@ window.waitForElement = (elementId, maxRetries = 10, retryDelay = 100) => {
 
 window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCommitter) => {
     try {
-        console.log('Initializing chart:', canvasId, 'Raw Data:', rawData);
+        // console.log('Initializing chart:', canvasId, 'Raw Data:', rawData); // Commented out for less noise
         
         // Parse data if it's a string
         let data;
         try {
             data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-            console.log('Parsed data:', data);
+            // console.log('Parsed data:', data); // Commented out for less noise
         } catch (parseError) {
             console.error('Error parsing data:', parseError);
             return;
@@ -320,7 +320,7 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
             }
         });
         
-        console.log(`Successfully initialized chart for ${canvasId}`);
+        // console.log(`Successfully initialized chart for ${canvasId}`); // Commented out for less noise
     } catch (error) {
         console.error('Error initializing chart:', canvasId, error);
     }

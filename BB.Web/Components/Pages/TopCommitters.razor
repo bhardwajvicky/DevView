@@ -265,16 +265,18 @@
         await RefreshData();
     }
 
-    private async Task OnFiltersChanged()
-    {
-        await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
-        await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
-        await RefreshData();
-    }
-
     private async Task OnGroupingUpdated(string grouping)
     {
         selectedGrouping = grouping;
+        await RefreshData();
+    }
+
+    private async Task OnFiltersChanged((bool includePR, bool includeData, bool includeConfig) filters)
+    {
+        this.includePR = filters.includePR;
+        this.includeData = filters.includeData;
+        this.includeConfig = filters.includeConfig;
+        // Removed redundant JS interop calls for window.includeData and window.includeConfig
         await RefreshData();
     }
 
