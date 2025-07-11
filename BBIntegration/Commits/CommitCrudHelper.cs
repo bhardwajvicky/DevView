@@ -196,8 +196,8 @@ namespace BBIntegration.Commits
             if (fileChanges == null || !fileChanges.Any()) return;
 
             const string insertFilesSql = @"
-                INSERT INTO CommitFiles (CommitId, FilePath, FileType, ChangeStatus, LinesAdded, LinesRemoved, FileExtension, CreatedOn)
-                VALUES (@CommitId, @FilePath, @FileType, @ChangeStatus, @LinesAdded, @LinesRemoved, @FileExtension, @CreatedOn);
+                INSERT INTO CommitFiles (CommitId, FilePath, FileType, ChangeStatus, LinesAdded, LinesRemoved, FileExtension, CreatedOn, ExcludeFromReporting)
+                VALUES (@CommitId, @FilePath, @FileType, @ChangeStatus, @LinesAdded, @LinesRemoved, @FileExtension, @CreatedOn, @ExcludeFromReporting);
             ";
 
             var fileRecords = fileChanges.Select(fc => new
@@ -209,7 +209,8 @@ namespace BBIntegration.Commits
                 LinesAdded = fc.LinesAdded,
                 LinesRemoved = fc.LinesRemoved,
                 FileExtension = fc.FileExtension,
-                CreatedOn = DateTime.UtcNow
+                CreatedOn = DateTime.UtcNow,
+                ExcludeFromReporting = false // Default to false for new files
             }).ToArray();
 
             await connection.ExecuteAsync(insertFilesSql, fileRecords);

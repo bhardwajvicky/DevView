@@ -104,46 +104,16 @@
 
     private async void OpenBitbucketPopup(string hash)
     {
-        var owner = WorkspaceService.SelectedWorkspace;
-        
-        // If workspace is not set, try to get it from repository data
-        if (string.IsNullOrEmpty(owner))
-        {
-            Console.WriteLine("WorkspaceService.SelectedWorkspace is empty, fetching from repository data");
-            try
-            {
-                var repositories = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.RepositorySummaryDto[]>("/api/analytics/repositories");
-                var repo = repositories?.FirstOrDefault(r => r.Slug.Equals(RepoSlug, StringComparison.OrdinalIgnoreCase));
-                if (repo != null)
-                {
-                    owner = repo.Workspace;
-                    Console.WriteLine($"Found workspace from repository data: '{owner}'");
-                    // Optionally set it in the service for future use
-                    WorkspaceService.SelectedWorkspace = owner;
-                }
-                else
-                {
-                    Console.WriteLine($"Repository '{RepoSlug}' not found in repository data");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching repository data: {ex.Message}");
-            }
-        }
-        
-        // If still no workspace, use a fallback or show an error
-        if (string.IsNullOrEmpty(owner))
+        var workspace = WorkspaceService.SelectedWorkspace;
+        if (string.IsNullOrEmpty(workspace))
         {
             Console.WriteLine("No workspace available, cannot open Bitbucket URL");
+            errorMessage = "Workspace not configured. Please select a workspace in Settings.";
             return;
         }
         
-        var url = $"https://bitbucket.org/{owner}/{RepoSlug}/commits/{hash}";
+        var url = $"https://bitbucket.org/{workspace}/{RepoSlug}/commits/{hash}";
         Console.WriteLine($"Opening Bitbucket URL: {url}");
-        Console.WriteLine($"Final workspace: '{owner}'");
-        Console.WriteLine($"RepoSlug: '{RepoSlug}'");
-        Console.WriteLine($"Hash: '{hash}'");
         _ = JS.InvokeVoidAsync("window.open", url, "bitbucketPopup", "width=1000,height=800,noopener");
     }
 

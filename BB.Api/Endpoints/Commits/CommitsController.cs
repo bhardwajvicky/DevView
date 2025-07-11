@@ -69,11 +69,19 @@ namespace BB.Api.Endpoints.Commits
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
             // Query paginated commits with author info and repository info
+            // Recalculate line counts excluding files with ExcludeFromReporting = true
             var sql = $@"
                 SELECT c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
-                       c.LinesAdded, c.LinesRemoved, c.CodeLinesAdded, c.CodeLinesRemoved, 
-                       c.DataLinesAdded, c.DataLinesRemoved, c.ConfigLinesAdded, c.ConfigLinesRemoved,
-                       c.DocsLinesAdded, c.DocsLinesRemoved, r.Name AS RepositoryName, r.Slug AS RepositorySlug
+                       c.LinesAdded, c.LinesRemoved,
+                       ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesAdded,
+                       ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesRemoved,
+                       ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0), 0) AS DataLinesAdded,
+                       ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0), 0) AS DataLinesRemoved,
+                       ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0), 0) AS ConfigLinesAdded,
+                       ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0), 0) AS ConfigLinesRemoved,
+                       ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0), 0) AS DocsLinesAdded,
+                       ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0), 0) AS DocsLinesRemoved,
+                       r.Name AS RepositoryName, r.Slug AS RepositorySlug
                 FROM Commits c
                 JOIN Users u ON c.AuthorId = u.Id
                 JOIN Repositories r ON c.RepositoryId = r.Id

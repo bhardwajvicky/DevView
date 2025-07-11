@@ -106,16 +106,19 @@ namespace BBIntegration.PullRequests
                             continue;
                         }
 
+                        // Check if this PR is a revert
+                        bool isRevert = IsRevertPullRequest(pr.Title);
+
                         // Insert or update the pull request
                         const string prSql = @"
                             MERGE INTO PullRequests AS Target
                             USING (SELECT @BitbucketPrId AS BitbucketPrId, @RepoId AS RepositoryId) AS Source
                             ON Target.BitbucketPrId = Source.BitbucketPrId AND Target.RepositoryId = Source.RepositoryId
                             WHEN MATCHED THEN
-                                UPDATE SET Title = @Title, State = @State, UpdatedOn = @UpdatedOn, MergedOn = @MergedOn, ClosedOn = @ClosedOn
+                                UPDATE SET Title = @Title, State = @State, UpdatedOn = @UpdatedOn, MergedOn = @MergedOn, ClosedOn = @ClosedOn, IsRevert = @IsRevert
                             WHEN NOT MATCHED BY TARGET THEN
-                                INSERT (BitbucketPrId, RepositoryId, AuthorId, Title, State, CreatedOn, UpdatedOn, MergedOn, ClosedOn)
-                                VALUES (@BitbucketPrId, @RepoId, @AuthorId, @Title, @State, @CreatedOn, @UpdatedOn, @MergedOn, @ClosedOn);
+                                INSERT (BitbucketPrId, RepositoryId, AuthorId, Title, State, CreatedOn, UpdatedOn, MergedOn, ClosedOn, IsRevert)
+                                VALUES (@BitbucketPrId, @RepoId, @AuthorId, @Title, @State, @CreatedOn, @UpdatedOn, @MergedOn, @ClosedOn, @IsRevert);
                             SELECT Id FROM PullRequests WHERE BitbucketPrId = @BitbucketPrId AND RepositoryId = @RepoId;
                         ";
                         var prDbId = await connection.QuerySingleAsync<int>(prSql, new
@@ -128,11 +131,13 @@ namespace BBIntegration.PullRequests
                             CreatedOn = pr.CreatedOn.SafeDateTime(),
                             UpdatedOn = pr.UpdatedOn.SafeDateTime(),
                             MergedOn = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn).SafeDateTime() : null,
-                            ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
+                            ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null,
+                            IsRevert = isRevert
                         });
 
-                        // Log PR insertion/update - moved to here to ensure prDbId is declared
-                        _logger.LogInformation("PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug} was inserted/updated. DB ID: {PrDbId}", pr.Id, pr.Title, workspace, repoSlug, prDbId);
+                        // Log PR insertion/update with revert status
+                        _logger.LogInformation("PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug} was inserted/updated. DB ID: {PrDbId}, IsRevert: {IsRevert}", 
+                            pr.Id, pr.Title, workspace, repoSlug, prDbId, isRevert);
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
                         var activityJson = await _apiClient.GetPullRequestActivityAsync(workspace, repoSlug, pr.Id);
@@ -185,6 +190,52 @@ namespace BBIntegration.PullRequests
                 _logger.LogError(ex, "An error occurred during PR sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Determines if a pull request is a revert based on its title
+        /// </summary>
+        /// <param name="title">The PR title to analyze</param>
+        /// <returns>True if the PR appears to be a revert, false otherwise</returns>
+        private bool IsRevertPullRequest(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return false;
+
+            var titleLower = title.ToLowerInvariant().Trim();
+            
+            // Common patterns for revert PRs
+            var revertPatterns = new[]
+            {
+                @"^revert\s+",                           // "Revert something"
+                @"^revert:\s*",                          // "Revert: something"
+                @"^revert\s+"".*""\s*",                  // "Revert "some title""
+                @"^revert\s+#\d+",                       // "Revert #123"
+                @"^revert\s+pr\s*#?\d+",                 // "Revert PR #123" or "Revert PR123"
+                @"^revert\s+pull\s+request\s*#?\d+",     // "Revert pull request #123"
+                @"^revert\s+merge\s+request\s*#?\d+",    // "Revert merge request #123"
+                @"^revert\s+commit\s+[a-f0-9]{6,}",      // "Revert commit abc123..."
+                @"^revert\s+changes\s+",                 // "Revert changes from..."
+                @"^revert\s+.*\s+commit",                // "Revert ... commit"
+                @"^rollback\s+",                         // "Rollback something"
+                @"^undo\s+",                             // "Undo something"
+                @"\brevert\s+this\s+",                   // "... revert this ..."
+                @"\bundo\s+this\s+",                     // "... undo this ..."
+                @"\brollback\s+this\s+",                 // "... rollback this ..."
+                @"\breverting\s+",                       // "... reverting ..."
+                @"\bundoing\s+",                         // "... undoing ..."
+                @"\brolling\s+back\s+"                   // "... rolling back ..."
+            };
+
+            foreach (var pattern in revertPatterns)
+            {
+                if (Regex.IsMatch(titleLower, pattern, RegexOptions.IgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private async Task SyncCommitsForPullRequest(SqlConnection connection, string workspace, string repoSlug, int bitbucketPrId, int prDbId)

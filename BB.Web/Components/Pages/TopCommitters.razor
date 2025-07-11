@@ -257,11 +257,11 @@
             await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
         }
 
-        if (!firstRender && topCommittersData != null && !chartInitialized)
+        if (topCommittersData != null && !chartInitialized)
         {
             try
             {
-                // Add longer delay to ensure DOM is fully rendered
+                // Add initial delay to ensure DOM is ready
                 await Task.Delay(500);
                 await InitializeCharts();
             }
@@ -443,8 +443,8 @@
 
         try
         {
-            // Ensure DOM is fully rendered
-            await Task.Delay(100);
+            // Add initial delay to ensure DOM is ready
+            await Task.Delay(500);
 
             // Initialize charts for top committers
             if (topCommittersData.TopCommitters != null && topCommittersData.TopCommitters.Any())
@@ -454,12 +454,31 @@
                     var canvasId = $"committerChart_top_{committer.UserId}";
                     try
                     {
+                        if (string.IsNullOrEmpty(committer.ActivityData))
+                        {
+                            Logger.LogWarning("No activity data for committer: {DisplayName}", committer.DisplayName);
+                            continue;
+                        }
+
+                        // Parse activity data to ensure it's valid
+                        var activityData = JsonSerializer.Deserialize<List<CommitActivityDto>>(committer.ActivityData);
+                        if (activityData == null || !activityData.Any())
+                        {
+                            Logger.LogWarning("Invalid or empty activity data for committer: {DisplayName}", committer.DisplayName);
+                            continue;
+                        }
+
+                        // Initialize chart with parsed data
                         await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
                             canvasId, 
-                            committer.ActivityData,
+                            activityData,  // Pass parsed data directly
                             committer.DisplayName,
                             true);
                         Logger.LogInformation("Successfully initialized chart for top committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Logger.LogError(jsonEx, "Failed to parse activity data for committer: {DisplayName}", committer.DisplayName);
                     }
                     catch (Exception ex)
                     {
@@ -476,12 +495,31 @@
                     var canvasId = $"committerChart_bottom_{committer.UserId}";
                     try
                     {
+                        if (string.IsNullOrEmpty(committer.ActivityData))
+                        {
+                            Logger.LogWarning("No activity data for committer: {DisplayName}", committer.DisplayName);
+                            continue;
+                        }
+
+                        // Parse activity data to ensure it's valid
+                        var activityData = JsonSerializer.Deserialize<List<CommitActivityDto>>(committer.ActivityData);
+                        if (activityData == null || !activityData.Any())
+                        {
+                            Logger.LogWarning("Invalid or empty activity data for committer: {DisplayName}", committer.DisplayName);
+                            continue;
+                        }
+
+                        // Initialize chart with parsed data
                         await JSRuntime.InvokeVoidAsync("initializeCommitterChart", 
                             canvasId, 
-                            committer.ActivityData,
+                            activityData,  // Pass parsed data directly
                             committer.DisplayName,
                             false);
                         Logger.LogInformation("Successfully initialized chart for bottom committer: {DisplayName} (Canvas: {CanvasId})", committer.DisplayName, canvasId);
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Logger.LogError(jsonEx, "Failed to parse activity data for committer: {DisplayName}", committer.DisplayName);
                     }
                     catch (Exception ex)
                     {
@@ -497,6 +535,7 @@
         {
             Logger.LogError(ex, "Error initializing charts: {Message}", ex.Message);
             errorMessage = $"Error initializing charts: {ex.Message}";
+            throw; // Re-throw to allow retry
         }
     }
 
@@ -510,6 +549,8 @@
             queryParams.Add($"StartDate={startDate.Value:yyyy-MM-dd}");
             queryParams.Add($"EndDate={endDate.Value:yyyy-MM-dd}");
         }
+        
+        // Only add repository slug if it's not "ALL"
         if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
         {
             queryParams.Add($"RepoSlug={Uri.EscapeDataString(selectedRepoSlug)}");

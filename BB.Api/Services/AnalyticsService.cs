@@ -18,6 +18,22 @@ namespace BB.Api.Services
             _connectionString = config.DbConnectionString;
         }
 
+        /// <summary>
+        /// Generates SQL subqueries for line counts that exclude files with ExcludeFromReporting = true
+        /// </summary>
+        private static string GetLineCountSubquery(string fileType, string lineType, string commitAlias = "c")
+        {
+            return $"ISNULL((SELECT SUM(cf.{lineType}) FROM CommitFiles cf WHERE cf.CommitId = {commitAlias}.Id AND cf.FileType = '{fileType}' AND cf.ExcludeFromReporting = 0), 0)";
+        }
+
+        /// <summary>
+        /// Generates SQL subqueries for aggregated line counts that exclude files with ExcludeFromReporting = true
+        /// </summary>
+        private static string GetAggregatedLineCountSubquery(string fileType, string lineType, string commitAlias = "c")
+        {
+            return $"SUM(ISNULL((SELECT SUM(cf.{lineType}) FROM CommitFiles cf WHERE cf.CommitId = {commitAlias}.Id AND cf.FileType = '{fileType}' AND cf.ExcludeFromReporting = 0), 0))";
+        }
+
         private static string GetFilterClause(bool includePR = true)
         {
             var prFilter = includePR ? "" : "c.IsPRMergeCommit = 0 AND ";
@@ -53,21 +69,36 @@ namespace BB.Api.Services
             }
 
             var sql = $@"
+                WITH CommitFiles_Aggregated AS (
+                    SELECT 
+                        c.Id AS CommitId,
+                        FileType,
+                        SUM(cf.LinesAdded) AS LinesAdded,
+                        SUM(cf.LinesRemoved) AS LinesRemoved
+                    FROM Commits c
+                    JOIN CommitFiles cf ON c.Id = cf.CommitId
+                    WHERE cf.ExcludeFromReporting = 0
+                    GROUP BY c.Id, FileType
+                )
                 SELECT 
                     CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                     COUNT(c.Id) AS CommitCount,
-                    SUM(c.LinesAdded) AS TotalLinesAdded,
-                    SUM(c.LinesRemoved) AS TotalLinesRemoved,
-                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
-                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
-                    SUM(c.DataLinesAdded) AS DataLinesAdded,
-                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
-                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
-                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
-                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
-                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved
+                    SUM(ISNULL(c.LinesAdded, 0)) AS TotalLinesAdded,
+                    SUM(ISNULL(c.LinesRemoved, 0)) AS TotalLinesRemoved,
+                    SUM(ISNULL(cf_code.LinesAdded, 0)) AS CodeLinesAdded,
+                    SUM(ISNULL(cf_code.LinesRemoved, 0)) AS CodeLinesRemoved,
+                    SUM(ISNULL(cf_data.LinesAdded, 0)) AS DataLinesAdded,
+                    SUM(ISNULL(cf_data.LinesRemoved, 0)) AS DataLinesRemoved,
+                    SUM(ISNULL(cf_config.LinesAdded, 0)) AS ConfigLinesAdded,
+                    SUM(ISNULL(cf_config.LinesRemoved, 0)) AS ConfigLinesRemoved,
+                    SUM(ISNULL(cf_docs.LinesAdded, 0)) AS DocsLinesAdded,
+                    SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
+                LEFT JOIN CommitFiles_Aggregated cf_code ON c.Id = cf_code.CommitId AND cf_code.FileType = 'code'
+                LEFT JOIN CommitFiles_Aggregated cf_data ON c.Id = cf_data.CommitId AND cf_data.FileType = 'data'
+                LEFT JOIN CommitFiles_Aggregated cf_config ON c.Id = cf_config.CommitId AND cf_config.FileType = 'config'
+                LEFT JOIN CommitFiles_Aggregated cf_docs ON c.Id = cf_docs.CommitId AND cf_docs.FileType = 'docs'
                 {GetFilterClause(includePR)}
                 GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE)
                 ORDER BY Date;
@@ -98,26 +129,43 @@ namespace BB.Api.Services
             }
 
             var sql = $@"
+                WITH CommitFiles_Aggregated AS (
+                    SELECT 
+                        c.Id AS CommitId,
+                        c.AuthorId,
+                        FileType,
+                        SUM(cf.LinesAdded) AS LinesAdded,
+                        SUM(cf.LinesRemoved) AS LinesRemoved
+                    FROM Commits c
+                    JOIN CommitFiles cf ON c.Id = cf.CommitId
+                    WHERE cf.ExcludeFromReporting = 0
+                    GROUP BY c.Id, c.AuthorId, FileType
+                )
                 SELECT 
                     CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                     u.Id AS UserId,
                     u.DisplayName,
+                    u.AvatarUrl,
                     COUNT(c.Id) AS CommitCount,
-                    SUM(c.LinesAdded) AS TotalLinesAdded,
-                    SUM(c.LinesRemoved) AS TotalLinesRemoved,
-                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
-                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
-                    SUM(c.DataLinesAdded) AS DataLinesAdded,
-                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
-                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
-                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
-                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
-                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved
+                    SUM(ISNULL(c.LinesAdded, 0)) AS TotalLinesAdded,
+                    SUM(ISNULL(c.LinesRemoved, 0)) AS TotalLinesRemoved,
+                    SUM(ISNULL(cf_code.LinesAdded, 0)) AS CodeLinesAdded,
+                    SUM(ISNULL(cf_code.LinesRemoved, 0)) AS CodeLinesRemoved,
+                    SUM(ISNULL(cf_data.LinesAdded, 0)) AS DataLinesAdded,
+                    SUM(ISNULL(cf_data.LinesRemoved, 0)) AS DataLinesRemoved,
+                    SUM(ISNULL(cf_config.LinesAdded, 0)) AS ConfigLinesAdded,
+                    SUM(ISNULL(cf_config.LinesRemoved, 0)) AS ConfigLinesRemoved,
+                    SUM(ISNULL(cf_docs.LinesAdded, 0)) AS DocsLinesAdded,
+                    SUM(ISNULL(cf_docs.LinesRemoved, 0)) AS DocsLinesRemoved
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 JOIN Users u ON c.AuthorId = u.Id
+                LEFT JOIN CommitFiles_Aggregated cf_code ON c.Id = cf_code.CommitId AND cf_code.FileType = 'code'
+                LEFT JOIN CommitFiles_Aggregated cf_data ON c.Id = cf_data.CommitId AND cf_data.FileType = 'data'
+                LEFT JOIN CommitFiles_Aggregated cf_config ON c.Id = cf_config.CommitId AND cf_config.FileType = 'config'
+                LEFT JOIN CommitFiles_Aggregated cf_docs ON c.Id = cf_docs.CommitId AND cf_docs.FileType = 'docs'
                 {GetFilterClause(includePR)}
-                GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE), u.Id, u.DisplayName
+                GROUP BY CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE), u.Id, u.DisplayName, u.AvatarUrl
                 ORDER BY Date, DisplayName;
             ";
 
@@ -190,14 +238,14 @@ namespace BB.Api.Services
                     r.Slug AS RepositorySlug,
                     c.LinesAdded,
                     c.LinesRemoved,
-                    c.CodeLinesAdded,
-                    c.CodeLinesRemoved,
-                    c.DataLinesAdded,
-                    c.DataLinesRemoved,
-                    c.ConfigLinesAdded,
-                    c.ConfigLinesRemoved,
-                    c.DocsLinesAdded,
-                    c.DocsLinesRemoved,
+                    ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesAdded,
+                    ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesRemoved,
+                    ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0), 0) AS DataLinesAdded,
+                    ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0), 0) AS DataLinesRemoved,
+                    ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0), 0) AS ConfigLinesAdded,
+                    ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0), 0) AS ConfigLinesRemoved,
+                    ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0), 0) AS DocsLinesAdded,
+                    ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0), 0) AS DocsLinesRemoved,
                     c.IsMerge
                 FROM Commits c
                 JOIN Users u ON c.AuthorId = u.Id
@@ -225,21 +273,25 @@ namespace BB.Api.Services
                     SUM(c.LinesAdded) AS TotalLinesAdded,
                     SUM(c.LinesRemoved) AS TotalLinesRemoved,
                     
-                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
-                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
-                    COUNT(CASE WHEN c.CodeLinesAdded > 0 OR c.CodeLinesRemoved > 0 THEN 1 END) AS CodeCommits,
+                    {GetAggregatedLineCountSubquery("code", "LinesAdded")} AS CodeLinesAdded,
+                    {GetAggregatedLineCountSubquery("code", "LinesRemoved")} AS CodeLinesRemoved,
+                    COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0) > 0 
+                              OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CodeCommits,
                     
-                    SUM(c.DataLinesAdded) AS DataLinesAdded,
-                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
-                    COUNT(CASE WHEN c.DataLinesAdded > 0 OR c.DataLinesRemoved > 0 THEN 1 END) AS DataCommits,
+                    {GetAggregatedLineCountSubquery("data", "LinesAdded")} AS DataLinesAdded,
+                    {GetAggregatedLineCountSubquery("data", "LinesRemoved")} AS DataLinesRemoved,
+                    COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0) > 0 
+                              OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS DataCommits,
                     
-                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
-                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
-                    COUNT(CASE WHEN c.ConfigLinesAdded > 0 OR c.ConfigLinesRemoved > 0 THEN 1 END) AS ConfigCommits,
+                    {GetAggregatedLineCountSubquery("config", "LinesAdded")} AS ConfigLinesAdded,
+                    {GetAggregatedLineCountSubquery("config", "LinesRemoved")} AS ConfigLinesRemoved,
+                    COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0) > 0 
+                              OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS ConfigCommits,
                     
-                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
-                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved,
-                    COUNT(CASE WHEN c.DocsLinesAdded > 0 OR c.DocsLinesRemoved > 0 THEN 1 END) AS DocsCommits
+                    {GetAggregatedLineCountSubquery("docs", "LinesAdded")} AS DocsLinesAdded,
+                    {GetAggregatedLineCountSubquery("docs", "LinesRemoved")} AS DocsLinesRemoved,
+                    COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0) > 0 
+                              OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS DocsCommits
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id
                 {GetFilterClause(includePR)}
@@ -276,9 +328,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'code' AS FileType,
-                        COUNT(CASE WHEN c.CodeLinesAdded > 0 OR c.CodeLinesRemoved > 0 THEN 1 END) AS CommitCount,
-                        SUM(c.CodeLinesAdded) AS LinesAdded,
-                        SUM(c.CodeLinesRemoved) AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("code", "LinesAdded")} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("code", "LinesRemoved")} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -289,9 +342,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'data' AS FileType,
-                        COUNT(CASE WHEN c.DataLinesAdded > 0 OR c.DataLinesRemoved > 0 THEN 1 END) AS CommitCount,
-                        SUM(c.DataLinesAdded) AS LinesAdded,
-                        SUM(c.DataLinesRemoved) AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("data", "LinesAdded")} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("data", "LinesRemoved")} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -302,9 +356,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'config' AS FileType,
-                        COUNT(CASE WHEN c.ConfigLinesAdded > 0 OR c.ConfigLinesRemoved > 0 THEN 1 END) AS CommitCount,
-                        SUM(c.ConfigLinesAdded) AS LinesAdded,
-                        SUM(c.ConfigLinesRemoved) AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("config", "LinesAdded")} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("config", "LinesRemoved")} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -315,9 +370,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'docs' AS FileType,
-                        COUNT(CASE WHEN c.DocsLinesAdded > 0 OR c.DocsLinesRemoved > 0 THEN 1 END) AS CommitCount,
-                        SUM(c.DocsLinesAdded) AS LinesAdded,
-                        SUM(c.DocsLinesRemoved) AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("docs", "LinesAdded")} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("docs", "LinesRemoved")} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -339,77 +395,148 @@ namespace BB.Api.Services
         }
 
         public async Task<TopCommittersResponseDto> GetTopBottomCommittersAsync(
-            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
-            bool includePR = true, bool includeData = true, bool includeConfig = true, int topCount = 3, int bottomCount = 3)
+            string? repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
+            bool includePR = true, bool includeData = true, bool includeConfig = true,
+            int topCount = 5, int bottomCount = 5)
         {
             using var connection = new SqlConnection(_connectionString);
 
-            // First, get the ranking of committers based on the filters
-            var rankingSql = GetCommitterRankingQuery(includePR, includeData, includeConfig);
-            
-            var allCommitters = await connection.QueryAsync<CommitterRankingDto>(rankingSql, 
-                new { repoSlug, workspace, startDate, endDate });
+            var query = @"
+                WITH CommitFiles_Aggregated AS (
+                    SELECT 
+                        cf.CommitId,
+                        cf.FileType,
+                        SUM(cf.LinesAdded) as LinesAdded,
+                        SUM(cf.LinesRemoved) as LinesRemoved
+                    FROM CommitFiles cf
+                    WHERE cf.ExcludeFromReporting = 0
+                    GROUP BY cf.CommitId, cf.FileType
+                ),
+                CommitterStats AS (
+                    SELECT 
+                        c.AuthorId as UserId,
+                        u.DisplayName,
+                        u.AvatarUrl,
+                        COUNT(DISTINCT c.Id) as TotalCommits,
+                        SUM(ISNULL(code.LinesAdded, 0)) as CodeLinesAdded,
+                        SUM(ISNULL(code.LinesRemoved, 0)) as CodeLinesRemoved,
+                        SUM(ISNULL(data.LinesAdded, 0)) as DataLinesAdded,
+                        SUM(ISNULL(data.LinesRemoved, 0)) as DataLinesRemoved,
+                        SUM(ISNULL(config.LinesAdded, 0)) as ConfigLinesAdded,
+                        SUM(ISNULL(config.LinesRemoved, 0)) as ConfigLinesRemoved,
+                        SUM(ISNULL(code.LinesAdded, 0) + ISNULL(data.LinesAdded, 0) + ISNULL(config.LinesAdded, 0)) as TotalLinesAdded,
+                        SUM(ISNULL(code.LinesRemoved, 0) + ISNULL(data.LinesRemoved, 0) + ISNULL(config.LinesRemoved, 0)) as TotalLinesRemoved
+                    FROM Commits c
+                    INNER JOIN Users u ON c.AuthorId = u.Id
+                    INNER JOIN Repositories r ON c.RepositoryId = r.Id
+                    LEFT JOIN CommitFiles_Aggregated code ON code.CommitId = c.Id AND code.FileType = 'code'
+                    LEFT JOIN CommitFiles_Aggregated data ON data.CommitId = c.Id AND data.FileType = 'data'
+                    LEFT JOIN CommitFiles_Aggregated config ON config.CommitId = c.Id AND config.FileType = 'config'
+                    WHERE (@repoSlug IS NULL OR r.Slug = @repoSlug)
+                        AND r.Workspace = @workspace
+                        AND (@startDate IS NULL OR c.Date >= @startDate)
+                        AND (@endDate IS NULL OR c.Date <= @endDate)
+                        AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
+                    GROUP BY c.AuthorId, u.DisplayName, u.AvatarUrl
+                ),
+                ActivityData AS (
+                    SELECT 
+                        c.AuthorId as UserId,
+                        DATEADD(DAY, DATEDIFF(DAY, 0, c.Date), 0) as Date,
+                        COUNT(DISTINCT c.Id) as CommitCount,
+                        SUM(ISNULL(code.LinesAdded, 0)) as CodeLinesAdded,
+                        SUM(ISNULL(code.LinesRemoved, 0)) as CodeLinesRemoved,
+                        SUM(ISNULL(data.LinesAdded, 0)) as DataLinesAdded,
+                        SUM(ISNULL(data.LinesRemoved, 0)) as DataLinesRemoved,
+                        SUM(ISNULL(config.LinesAdded, 0)) as ConfigLinesAdded,
+                        SUM(ISNULL(config.LinesRemoved, 0)) as ConfigLinesRemoved
+                    FROM Commits c
+                    INNER JOIN Repositories r ON c.RepositoryId = r.Id
+                    LEFT JOIN CommitFiles_Aggregated code ON code.CommitId = c.Id AND code.FileType = 'code'
+                    LEFT JOIN CommitFiles_Aggregated data ON data.CommitId = c.Id AND data.FileType = 'data'
+                    LEFT JOIN CommitFiles_Aggregated config ON config.CommitId = c.Id AND config.FileType = 'config'
+                    WHERE (@repoSlug IS NULL OR r.Slug = @repoSlug)
+                        AND r.Workspace = @workspace
+                        AND (@startDate IS NULL OR c.Date >= @startDate)
+                        AND (@endDate IS NULL OR c.Date <= @endDate)
+                        AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
+                    GROUP BY c.AuthorId, DATEADD(DAY, DATEDIFF(DAY, 0, c.Date), 0)
+                ),
+                TopCommitters AS (
+                    SELECT TOP (@topCount) *
+                    FROM CommitterStats
+                    ORDER BY TotalLinesAdded DESC
+                ),
+                BottomCommitters AS (
+                    SELECT TOP (@bottomCount) *
+                    FROM CommitterStats cs
+                    WHERE cs.UserId NOT IN (SELECT UserId FROM TopCommitters)
+                    ORDER BY TotalLinesAdded ASC
+                )
+                SELECT 
+                    cs.*,
+                    'top' as CommitterType,
+                    (
+                        SELECT CAST(
+                            (
+                                SELECT 
+                                    ad.Date,
+                                    ad.CommitCount,
+                                    ad.CodeLinesAdded,
+                                    ad.CodeLinesRemoved,
+                                    ad.DataLinesAdded,
+                                    ad.DataLinesRemoved,
+                                    ad.ConfigLinesAdded,
+                                    ad.ConfigLinesRemoved
+                                FROM ActivityData ad
+                                WHERE ad.UserId = cs.UserId
+                                ORDER BY ad.Date
+                                FOR JSON PATH
+                            ) as nvarchar(max)
+                        )
+                    ) as ActivityData
+                FROM TopCommitters cs
+                UNION ALL
+                SELECT 
+                    cs.*,
+                    'bottom' as CommitterType,
+                    (
+                        SELECT CAST(
+                            (
+                                SELECT 
+                                    ad.Date,
+                                    ad.CommitCount,
+                                    ad.CodeLinesAdded,
+                                    ad.CodeLinesRemoved,
+                                    ad.DataLinesAdded,
+                                    ad.DataLinesRemoved,
+                                    ad.ConfigLinesAdded,
+                                    ad.ConfigLinesRemoved
+                                FROM ActivityData ad
+                                WHERE ad.UserId = cs.UserId
+                                ORDER BY ad.Date
+                                FOR JSON PATH
+                            ) as nvarchar(max)
+                        )
+                    ) as ActivityData
+                FROM BottomCommitters cs;";
 
-            var committersList = allCommitters.ToList();
-            
-            // Get top and bottom committers
-            var topCommitters = committersList.Take(topCount).ToList();
-            var bottomCommitters = committersList.TakeLast(bottomCount).ToList();
-
-            // Now get detailed activity data for each committer
-            var result = new TopCommittersResponseDto();
-
-            // Process top committers
-            foreach (var committer in topCommitters)
+            var results = (await connection.QueryAsync<TopCommittersDto>(query, new
             {
-                var activityData = await GetContributorActivityAsync(repoSlug!, workspace!, startDate, endDate, groupBy, committer.UserId, includePR, includeData, includeConfig);
-                
-                result.TopCommitters.Add(new TopCommittersDto
-                {
-                    UserId = committer.UserId,
-                    DisplayName = committer.DisplayName,
-                    AvatarUrl = committer.AvatarUrl,
-                    TotalCommits = committer.TotalCommits,
-                    TotalLinesAdded = committer.TotalLinesAdded,
-                    TotalLinesRemoved = committer.TotalLinesRemoved,
-                    CodeLinesAdded = committer.CodeLinesAdded,
-                    CodeLinesRemoved = committer.CodeLinesRemoved,
-                    DataLinesAdded = committer.DataLinesAdded,
-                    DataLinesRemoved = committer.DataLinesRemoved,
-                    ConfigLinesAdded = committer.ConfigLinesAdded,
-                    ConfigLinesRemoved = committer.ConfigLinesRemoved,
-                    DocsLinesAdded = committer.DocsLinesAdded,
-                    DocsLinesRemoved = committer.DocsLinesRemoved,
-                    ActivityData = activityData.ToList()
-                });
-            }
+                repoSlug,
+                workspace,
+                startDate,
+                endDate,
+                includePR,
+                topCount,
+                bottomCount
+            })).ToList();
 
-            // Process bottom committers
-            foreach (var committer in bottomCommitters)
+            return new TopCommittersResponseDto
             {
-                var activityData = await GetContributorActivityAsync(repoSlug!, workspace!, startDate, endDate, groupBy, committer.UserId, includePR, includeData, includeConfig);
-                
-                result.BottomCommitters.Add(new TopCommittersDto
-                {
-                    UserId = committer.UserId,
-                    DisplayName = committer.DisplayName,
-                    AvatarUrl = committer.AvatarUrl,
-                    TotalCommits = committer.TotalCommits,
-                    TotalLinesAdded = committer.TotalLinesAdded,
-                    TotalLinesRemoved = committer.TotalLinesRemoved,
-                    CodeLinesAdded = committer.CodeLinesAdded,
-                    CodeLinesRemoved = committer.CodeLinesRemoved,
-                    DataLinesAdded = committer.DataLinesAdded,
-                    DataLinesRemoved = committer.DataLinesRemoved,
-                    ConfigLinesAdded = committer.ConfigLinesAdded,
-                    ConfigLinesRemoved = committer.ConfigLinesRemoved,
-                    DocsLinesAdded = committer.DocsLinesAdded,
-                    DocsLinesRemoved = committer.DocsLinesRemoved,
-                    ActivityData = activityData.ToList()
-                });
-            }
-
-            return result;
+                TopCommitters = results.Where(x => x.CommitterType == "top").ToList(),
+                BottomCommitters = results.Where(x => x.CommitterType == "bottom").ToList()
+            };
         }
 
         public async Task<IEnumerable<PullRequestAnalysisDto>> GetPullRequestAnalysisAsync(
@@ -588,20 +715,24 @@ namespace BB.Api.Services
 
         private string GetCommitterRankingQuery(bool includePR, bool includeData, bool includeConfig)
         {
-            // Build the ranking criteria based on filters
-            var rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded)"; // Default: Total + Code
+            // Build the ranking criteria based on filters using subqueries
+            var codeAdded = GetAggregatedLineCountSubquery("code", "LinesAdded");
+            var dataAdded = GetAggregatedLineCountSubquery("data", "LinesAdded");
+            var configAdded = GetAggregatedLineCountSubquery("config", "LinesAdded");
+            
+            var rankingCriteria = $"SUM(c.LinesAdded) + ({codeAdded})"; // Default: Total + Code
             
             if (includeData && includeConfig)
             {
-                rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded + c.DataLinesAdded + c.ConfigLinesAdded)";
+                rankingCriteria = $"SUM(c.LinesAdded) + ({codeAdded}) + ({dataAdded}) + ({configAdded})";
             }
             else if (includeData)
             {
-                rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded + c.DataLinesAdded)";
+                rankingCriteria = $"SUM(c.LinesAdded) + ({codeAdded}) + ({dataAdded})";
             }
             else if (includeConfig)
             {
-                rankingCriteria = "SUM(c.LinesAdded + c.CodeLinesAdded + c.ConfigLinesAdded)";
+                rankingCriteria = $"SUM(c.LinesAdded) + ({codeAdded}) + ({configAdded})";
             }
 
             // Create a custom filter clause without the userId parameter for ranking
@@ -622,14 +753,14 @@ namespace BB.Api.Services
                     COUNT(c.Id) AS TotalCommits,
                     SUM(c.LinesAdded) AS TotalLinesAdded,
                     SUM(c.LinesRemoved) AS TotalLinesRemoved,
-                    SUM(c.CodeLinesAdded) AS CodeLinesAdded,
-                    SUM(c.CodeLinesRemoved) AS CodeLinesRemoved,
-                    SUM(c.DataLinesAdded) AS DataLinesAdded,
-                    SUM(c.DataLinesRemoved) AS DataLinesRemoved,
-                    SUM(c.ConfigLinesAdded) AS ConfigLinesAdded,
-                    SUM(c.ConfigLinesRemoved) AS ConfigLinesRemoved,
-                    SUM(c.DocsLinesAdded) AS DocsLinesAdded,
-                    SUM(c.DocsLinesRemoved) AS DocsLinesRemoved,
+                    {GetAggregatedLineCountSubquery("code", "LinesAdded")} AS CodeLinesAdded,
+                    {GetAggregatedLineCountSubquery("code", "LinesRemoved")} AS CodeLinesRemoved,
+                    {GetAggregatedLineCountSubquery("data", "LinesAdded")} AS DataLinesAdded,
+                    {GetAggregatedLineCountSubquery("data", "LinesRemoved")} AS DataLinesRemoved,
+                    {GetAggregatedLineCountSubquery("config", "LinesAdded")} AS ConfigLinesAdded,
+                    {GetAggregatedLineCountSubquery("config", "LinesRemoved")} AS ConfigLinesRemoved,
+                    {GetAggregatedLineCountSubquery("docs", "LinesAdded")} AS DocsLinesAdded,
+                    {GetAggregatedLineCountSubquery("docs", "LinesRemoved")} AS DocsLinesRemoved,
                     {rankingCriteria} AS RankingScore
                 FROM Commits c
                 JOIN Repositories r ON c.RepositoryId = r.Id

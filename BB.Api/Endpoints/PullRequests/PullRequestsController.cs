@@ -44,7 +44,7 @@ namespace BB.Api.Endpoints.PullRequests
                 // Query paginated PRs with author, repo, workspace, and approval info
                 var sqlAll = @"
                     SELECT 
-                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergedOn, pr.ClosedOn,
+                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergedOn, pr.ClosedOn, pr.IsRevert,
                         u.DisplayName AS AuthorName, r.Name AS RepositoryName, r.Slug AS RepositorySlug, r.Workspace,
                         pa.DisplayName, pa.Role, pa.Approved, pa.ApprovedOn -- Approval details
                     FROM PullRequests pr
@@ -96,7 +96,7 @@ namespace BB.Api.Endpoints.PullRequests
                 // Query paginated PRs with author info, repo slug, workspace, and approval info
                 var sql = @"
                     SELECT 
-                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergedOn, pr.ClosedOn,
+                        pr.Id, pr.BitbucketPrId, pr.Title, pr.State, pr.CreatedOn, pr.UpdatedOn, pr.MergedOn, pr.ClosedOn, pr.IsRevert,
                         u.DisplayName AS AuthorName, r.Name AS RepositoryName, r.Slug AS RepositorySlug, r.Workspace,
                         pa.DisplayName, pa.Role, pa.Approved, pa.ApprovedOn -- Approval details
                     FROM PullRequests pr
@@ -169,7 +169,7 @@ namespace BB.Api.Endpoints.PullRequests
             public List<ApprovalDto> Approvals { get; set; } = new(); // Added for frontend
             public DateTime? MergedOn { get; set; } // Added to DTO
             public DateTime? ClosedOn { get; set; } // Added to DTO
-
+            public bool IsRevert { get; set; } // Added to DTO
         }
 
         public class ApprovalDto

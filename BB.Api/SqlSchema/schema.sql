@@ -55,6 +55,7 @@ CREATE TABLE PullRequests (
     UpdatedOn DATETIME2,
     MergedOn DATETIME2,
     ClosedOn DATETIME2, -- New column for when the PR was closed
+    IsRevert BIT NOT NULL DEFAULT 0, -- New column to track if PR is a revert
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id),
     FOREIGN KEY (AuthorId) REFERENCES Users(Id),
     UNIQUE (RepositoryId, BitbucketPrId) -- Composite unique key
@@ -86,10 +87,12 @@ CREATE INDEX IX_Commits_DocsLines ON Commits(DocsLinesAdded, DocsLinesRemoved);
 CREATE INDEX IX_PullRequests_RepositoryId ON PullRequests(RepositoryId);
 CREATE INDEX IX_PullRequests_AuthorId ON PullRequests(AuthorId);
 CREATE INDEX IX_PullRequests_State ON PullRequests(State);
+CREATE INDEX IX_PullRequests_IsRevert ON PullRequests(IsRevert);
 CREATE INDEX IX_CommitFiles_CommitId ON CommitFiles(CommitId);
 CREATE INDEX IX_CommitFiles_FileType ON CommitFiles(FileType);
 CREATE INDEX IX_CommitFiles_ChangeStatus ON CommitFiles(ChangeStatus);
 CREATE INDEX IX_CommitFiles_FileExtension ON CommitFiles(FileExtension);
+CREATE INDEX IX_CommitFiles_ExcludeFromReporting ON CommitFiles(ExcludeFromReporting);
 
 -- PullRequestCommits join table
 CREATE TABLE PullRequestCommits (
@@ -113,6 +116,7 @@ CREATE TABLE CommitFiles (
     LinesRemoved INT NOT NULL DEFAULT 0,
     FileExtension NVARCHAR(50),
     CreatedOn DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    ExcludeFromReporting BIT NOT NULL DEFAULT 0, -- New column to exclude files from reporting
     FOREIGN KEY (CommitId) REFERENCES Commits(Id) ON DELETE CASCADE
 );
 

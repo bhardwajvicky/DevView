@@ -6,209 +6,308 @@ window.setTopCommittersDotNetRef = (dotNetRef) => {
     window.topCommittersDotNetRef = dotNetRef;
 };
 
-window.initializeCommitterChart = (canvasId, data, displayName, isTopCommitter) => {
-    // Validate data is an array
-    if (!Array.isArray(data)) {
-        console.error('Data is not an array:', typeof data, data);
-        return;
-    }
-    
-    if (data.length === 0) {
-        console.warn('Data array is empty for canvas:', canvasId);
-        return;
-    }
-    
-    // Function to wait for DOM element with retries
-    const waitForElement = (elementId, maxRetries = 10, retryDelay = 100) => {
-        return new Promise((resolve, reject) => {
-            let retries = 0;
-            
-            const checkElement = () => {
-                const element = document.getElementById(elementId);
-                if (element) {
-                    resolve(element);
-                } else if (retries < maxRetries) {
-                    retries++;
-                    console.log(`Waiting for element ${elementId}, retry ${retries}/${maxRetries}`);
-                    setTimeout(checkElement, retryDelay);
-                } else {
-                    reject(new Error(`Element ${elementId} not found after ${maxRetries} retries`));
-                }
-            };
-            
-            checkElement();
-        });
-    };
-    
-    // Wait for the canvas element to be available
-    waitForElement(canvasId)
-        .then(chartElement => {
-            // Check if Chart.js is loaded
+// Function to wait for DOM element with retries
+window.waitForElement = (elementId, maxRetries = 10, retryDelay = 100) => {
+    return new Promise((resolve, reject) => {
+        let retries = 0;
+        
+        const checkElement = () => {
+            const element = document.getElementById(elementId);
+            if (element) {
+                resolve(element);
+            } else if (retries < maxRetries) {
+                retries++;
+                console.log(`Waiting for element ${elementId}, retry ${retries}/${maxRetries}`);
+                setTimeout(checkElement, retryDelay);
+            } else {
+                reject(new Error(`Element ${elementId} not found after ${maxRetries} retries`));
+            }
+        };
+        
+        checkElement();
+    });
+};
+
+window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCommitter) => {
+    try {
+        console.log('Initializing chart:', canvasId, 'Raw Data:', rawData);
+        
+        // Parse data if it's a string
+        let data;
+        try {
+            data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+            console.log('Parsed data:', data);
+        } catch (parseError) {
+            console.error('Error parsing data:', parseError);
+            return;
+        }
+        
+        // Validate data
+        if (!Array.isArray(data)) {
+            console.error('Data is not an array after parsing:', typeof data, data);
+            return;
+        }
+        
+        if (data.length === 0) {
+            console.warn('Data array is empty for canvas:', canvasId);
+            return;
+        }
+
+        // Wait for Chart.js to be loaded
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js not loaded, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 500));
             if (typeof Chart === 'undefined') {
-                console.error('Chart.js is not loaded yet. Retrying...');
-                setTimeout(() => {
-                    window.initializeCommitterChart(canvasId, data, displayName, isTopCommitter);
-                }, 500);
-                return;
+                throw new Error('Chart.js failed to load');
             }
+        }
 
-            // Destroy existing chart if it exists
-            if (window.committerCharts[canvasId]) {
-                window.committerCharts[canvasId].destroy();
+        // Wait for the canvas element
+        const chartElement = await window.waitForElement(canvasId);
+        
+        // Destroy existing chart if it exists
+        if (window.committerCharts[canvasId] && typeof window.committerCharts[canvasId].destroy === 'function') {
+            window.committerCharts[canvasId].destroy();
+            delete window.committerCharts[canvasId];
+        }
+
+        // Format dates based on grouping
+        const grouping = window.selectedGrouping || 'Day';
+        const labels = data.map(d => {
+            const date = new Date(d.date);
+            if (isNaN(date.getTime())) {
+                console.warn('Invalid date:', d.date);
+                return 'Invalid Date';
             }
+            switch (grouping) {
+                case 'Month':
+                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                case 'Week':
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                case 'Day':
+                default:
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        });
 
-            // Format dates based on grouping
-            const grouping = window.selectedGrouping || 'Day';
-            const dates = data.map(d => {
-                const date = new Date(d.date);
-                switch (grouping) {
-                    case 'Month':
-                        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
-                    case 'Week':
-                        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                    case 'Day':
-                    default:
-                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                }
-            });
+        // Prepare data with proper scaling
+        const commitCounts = data.map(d => d.commitCount || 0);
+        const totalAdded = data.map(d => d.totalLinesAdded || 0);
+        const totalRemoved = data.map(d => d.totalLinesRemoved || 0);
+        const codeAdded = data.map(d => d.codeLinesAdded || 0);
+        const codeRemoved = data.map(d => d.codeLinesRemoved || 0);
+        const dataAdded = data.map(d => d.dataLinesAdded || 0);
+        const dataRemoved = data.map(d => d.dataLinesRemoved || 0);
+        const configAdded = data.map(d => d.configLinesAdded || 0);
+        const configRemoved = data.map(d => d.configLinesRemoved || 0);
 
-            // Prepare datasets
-            const datasets = [
-                {
-                    label: 'Code Added',
-                    data: data.map(d => d.codeLinesAdded),
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1,
-                    fill: true
-                },
-                {
-                    label: 'Code Removed',
-                    data: data.map(d => -d.codeLinesRemoved),
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1,
-                    fill: true
-                }
-            ];
-
-            // Add data lines if enabled
-            if (window.includeData) {
-                datasets.push(
+        // Create chart with Dashboard-style configuration
+        const ctx = chartElement.getContext('2d');
+        window.committerCharts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
                     {
-                        label: 'Data Added',
-                        data: data.map(d => d.dataLinesAdded),
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1,
-                        fill: true
+                        label: 'Commits',
+                        data: commitCounts,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        borderWidth: 2,
+                        hidden: false
                     },
                     {
-                        label: 'Data Removed',
-                        data: data.map(d => -d.dataLinesRemoved),
-                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
-                        borderColor: 'rgba(255, 159, 64, 1)',
-                        borderWidth: 1,
-                        fill: true
+                        label: 'Total ++',
+                        data: totalAdded,
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: false
+                    },
+                    {
+                        label: 'Total --',
+                        data: totalRemoved,
+                        borderColor: 'rgb(239, 68, 68)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: false
+                    },
+                    {
+                        label: '🧑‍💻 Code ++',
+                        data: codeAdded,
+                        borderColor: 'rgb(22, 163, 74)',
+                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: true
+                    },
+                    {
+                        label: '🧑‍💻 Code --',
+                        data: codeRemoved,
+                        borderColor: 'rgb(220, 38, 38)',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: true
+                    },
+                    {
+                        label: '🗄️ Data ++',
+                        data: dataAdded,
+                        borderColor: 'rgb(147, 51, 234)',
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: true
+                    },
+                    {
+                        label: '🗄️ Data --',
+                        data: dataRemoved,
+                        borderColor: 'rgb(126, 34, 206)',
+                        backgroundColor: 'rgba(126, 34, 206, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: true
+                    },
+                    {
+                        label: '🛠️ Config ++',
+                        data: configAdded,
+                        borderColor: 'rgb(245, 158, 11)',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: true
+                    },
+                    {
+                        label: '🛠️ Config --',
+                        data: configRemoved,
+                        borderColor: 'rgb(217, 119, 6)',
+                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderWidth: 1.5,
+                        hidden: true
                     }
-                );
-            }
-
-            // Add config lines if enabled
-            if (window.includeConfig) {
-                datasets.push(
-                    {
-                        label: 'Config Added',
-                        data: data.map(d => d.configLinesAdded),
-                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                        borderColor: 'rgba(153, 102, 255, 1)',
-                        borderWidth: 1,
-                        fill: true
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: {
+                                size: 10
+                            },
+                            padding: 10
+                        }
                     },
-                    {
-                        label: 'Config Removed',
-                        data: data.map(d => -d.configLinesRemoved),
-                        backgroundColor: 'rgba(255, 206, 86, 0.2)',
-                        borderColor: 'rgba(255, 206, 86, 1)',
-                        borderWidth: 1,
-                        fill: true
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const dataIndex = context[0].dataIndex;
+                                const date = new Date(data[dataIndex].date);
+                                return date.toLocaleDateString('en-US', { 
+                                    weekday: 'short', 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                });
+                            },
+                            label: function(context) {
+                                const dataIndex = context.dataIndex;
+                                const item = data[dataIndex];
+                                const label = context.dataset.label;
+                                switch(label) {
+                                    case 'Commits':
+                                        return `📝 Commits: ${item.commitCount}`;
+                                    case 'Total ++':
+                                        return `➕ Total ++: ${item.totalLinesAdded.toLocaleString()} lines`;
+                                    case 'Total --':
+                                        return `➖ Total --: ${item.totalLinesRemoved.toLocaleString()} lines`;
+                                    case '🧑‍💻 Code ++':
+                                        return `🧑‍💻 Code ++: ${item.codeLinesAdded.toLocaleString()} lines`;
+                                    case '🧑‍💻 Code --':
+                                        return `🧑‍💻 Code --: ${item.codeLinesRemoved.toLocaleString()} lines`;
+                                    case '🗄️ Data ++':
+                                        return `🗄️ Data ++: ${item.dataLinesAdded.toLocaleString()} lines`;
+                                    case '🗄️ Data --':
+                                        return `🗄️ Data --: ${item.dataLinesRemoved.toLocaleString()} lines`;
+                                    case '🛠️ Config ++':
+                                        return `🛠️ Config ++: ${item.configLinesAdded.toLocaleString()} lines`;
+                                    case '🛠️ Config --':
+                                        return `🛠️ Config --: ${item.configLinesRemoved.toLocaleString()} lines`;
+                                    default:
+                                        return `${label}: ${context.parsed.y.toLocaleString()}`;
+                                }
+                            }
+                        }
                     }
-                );
-            }
-
-            // Create chart
-            const ctx = chartElement.getContext('2d');
-            window.committerCharts[canvasId] = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dates,
-                    datasets: datasets
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
-                    plugins: {
-                        title: {
+                scales: {
+                    x: {
+                        display: true,
+                        grid: {
                             display: false
                         },
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: {
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                font: { size: 12 },
-                                padding: 10
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                title: (tooltipItems) => {
-                                    return tooltipItems[0].label;
-                                },
-                                label: (context) => {
-                                    let label = context.dataset.label || '';
-                                    let value = context.raw;
-                                    if (value < 0) {
-                                        value = -value; // Convert back to positive for display
-                                    }
-                                    return `${label}: ${value}`;
-                                }
+                        ticks: {
+                            maxTicksLimit: 6,
+                            font: {
+                                size: 10
                             }
                         }
                     },
-                    scales: {
-                        x: {
-                            display: true,
-                            grid: {
-                                display: false
-                            }
+                    y: {
+                        display: true,
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
                         },
-                        y: {
-                            display: true,
-                            grid: {
-                                display: true,
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return Math.abs(value); // Show absolute values
-                                }
+                        ticks: {
+                            font: {
+                                size: 10
                             }
                         }
                     }
                 }
-            });
-            
-            console.log(`Successfully initialized chart for ${canvasId}`);
-        })
-        .catch(error => {
-            console.error('Chart canvas element not found:', canvasId, error.message);
+            }
         });
+        
+        console.log(`Successfully initialized chart for ${canvasId}`);
+    } catch (error) {
+        console.error('Error initializing chart:', canvasId, error);
+    }
 };
 
 window.toggleCommitterDataset = function(canvasId, datasetIndex) {

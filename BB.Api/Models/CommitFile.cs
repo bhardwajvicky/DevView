@@ -29,6 +29,8 @@ namespace BB.Api.Models
         
         public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
         
+        public bool ExcludeFromReporting { get; set; } = false;
+        
         // Navigation property
         // public virtual Commit Commit { get; set; }
     }
