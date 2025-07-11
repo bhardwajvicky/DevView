@@ -122,9 +122,18 @@
                                     
                                     <tr>
                                         <td>
-                                            <a href="#" @onclick="() => OpenBitbucketCommit(commit.Hash)" @onclick:preventDefault>
-                                                @commit.Hash[..7]
-                                            </a>
+                                            @if (!string.IsNullOrEmpty(commit.RepositorySlug))
+                                            {
+                                                <a href="#" @onclick="() => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug)" @onclick:preventDefault>
+                                                    @commit.Hash[..7]
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span title="Repository information not available for this commit.">
+                                                    @commit.Hash[..7]
+                                                </span>
+                                            }
                                         </td>
                                         <td>@commit.RepositoryName</td>
                                         <td>@commit.AuthorName</td>
@@ -356,7 +365,7 @@
         await LoadCommits();
     }
 
-    private void OpenBitbucketCommit(string hash)
+    private void OpenBitbucketCommit(string hash, string? commitRepoSlug = null)
     {
         var workspace = WorkspaceService.SelectedWorkspace;
         if (string.IsNullOrEmpty(workspace))
@@ -365,9 +374,19 @@
             return;
         }
 
+        // Use the commit's own repository slug if available, otherwise fall back to selectedRepoSlug
+        var repoToUse = commitRepoSlug ?? selectedRepoSlug;
+
+        if (string.IsNullOrEmpty(repoToUse) || repoToUse == "all")
+        {
+            errorMessage = "Cannot open Bitbucket link: A specific repository is required.";
+            return;
+        }
+
         // Use the new service to compose the URL
-        var url = BitbucketUrlService.GetCommitUrl(workspace, selectedRepoSlug ?? "all", hash);
-        JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
+        var url = BitbucketUrlService.GetCommitUrl(workspace, repoToUse, hash);
+        Logger.LogInformation($"Opening Bitbucket Commit URL: {url}");
+        JSRuntime.InvokeVoidAsync("window.openExternalUrl", url, "bitbucketCommitPopup"); // Use a named target
     }
 
     private void NavigateToSettings()

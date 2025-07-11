@@ -6,6 +6,22 @@ window.setTopCommittersDotNetRef = (dotNetRef) => {
     window.topCommittersDotNetRef = dotNetRef;
 };
 
+window.openExternalUrl = (url, target = '_blank') => {
+    try {
+        const newWindow = window.open(url, target);
+        if (newWindow) {
+            newWindow.focus();
+            console.log(`Successfully opened URL: ${url}`);
+        } else {
+            console.warn(`Failed to open URL: ${url}. Pop-up blocked or similar issue.`);
+            alert(`Failed to open link. Please check your browser's pop-up blocker settings or try again.\n\nURL: ${url}`);
+        }
+    } catch (error) {
+        console.error(`Error opening URL ${url}:`, error);
+        alert(`An error occurred while trying to open the link. Please try again.\n\nURL: ${url}`);
+    }
+};
+
 // Function to wait for DOM element with retries
 window.waitForElement = (elementId, maxRetries = 10, retryDelay = 100) => {
     return new Promise((resolve, reject) => {
