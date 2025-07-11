@@ -11,6 +11,7 @@
 @inject WorkspaceService WorkspaceService
 @inject NavigationManager Navigation
 @inject ILogger<Commits> Logger
+@inject BitbucketUrlService BitbucketUrlService
 @rendermode InteractiveServer
 
 <PageTitle>Repository Commits</PageTitle>
@@ -364,7 +365,8 @@
             return;
         }
 
-        var url = $"https://bitbucket.org/{workspace}/{selectedRepoSlug}/commits/{hash}";
+        // Use the new service to compose the URL
+        var url = BitbucketUrlService.GetCommitUrl(workspace, selectedRepoSlug ?? "all", hash);
         JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
     }
 

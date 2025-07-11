@@ -18,7 +18,7 @@ namespace BB.Api.Endpoints.PullRequests
 
         public PullRequestsController(IConfiguration config)
         {
-            _connectionString = config.GetConnectionString("DefaultConnection");
+            _connectionString = config.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("DefaultConnection connection string not found.");
         }
 
         [HttpGet("{repoSlug}")]
@@ -152,38 +152,6 @@ namespace BB.Api.Endpoints.PullRequests
                 TotalPages = totalPages // Now accessible
             };
             return Ok(response);
-        }
-
-        public class PullRequestListItemDto
-        {
-            public int Id { get; set; }
-            public string Title { get; set; } = string.Empty;
-            public string AuthorName { get; set; } = string.Empty;
-            public string State { get; set; } = string.Empty;
-            public DateTime CreatedOn { get; set; }
-            public DateTime? UpdatedOn { get; set; }
-            public string RepositorySlug { get; set; } = string.Empty;
-            public string Workspace { get; set; } = string.Empty;
-            public string BitbucketPrId { get; set; } = string.Empty;
-            public int ApprovalCount { get; set; } // Added for frontend
-            public List<ApprovalDto> Approvals { get; set; } = new(); // Added for frontend
-            public DateTime? MergedOn { get; set; } // Added to DTO
-            public DateTime? ClosedOn { get; set; } // Added to DTO
-            public bool IsRevert { get; set; } // Added to DTO
-        }
-
-        public class ApprovalDto
-        {
-            public string DisplayName { get; set; } = string.Empty;
-            public string Role { get; set; } = string.Empty;
-            public bool Approved { get; set; }
-            public DateTime? ApprovedOn { get; set; }
-        }
-
-        public class PaginatedPullRequestsResponse
-        {
-            public List<PullRequestListItemDto> PullRequests { get; set; } = new();
-            public int TotalPages { get; set; }
         }
     }
 }

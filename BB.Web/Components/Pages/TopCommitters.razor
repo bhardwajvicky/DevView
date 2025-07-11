@@ -169,7 +169,6 @@
     private string? selectedRepoSlug;
     private DateTime? startDate;
     private DateTime? endDate;
-    private bool chartInitialized = false;
     private bool includePR = true;
     private bool includeData = true;
     private bool includeConfig = true;
@@ -250,7 +249,6 @@
     private async Task OnRepositorySelected(string repoSlug)
     {
         selectedRepoSlug = repoSlug;
-        chartInitialized = false;
         
         await JSRuntime.InvokeVoidAsync("eval", $"window.selectedRepoSlug = '{selectedRepoSlug}';");
         await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
@@ -264,13 +262,11 @@
     {
         startDate = range.start;
         endDate = range.end;
-        chartInitialized = false;
         await RefreshData();
     }
 
     private async Task OnFiltersChanged()
     {
-        chartInitialized = false;
         await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
         await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
         await RefreshData();
@@ -279,7 +275,6 @@
     private async Task OnGroupingUpdated(string grouping)
     {
         selectedGrouping = grouping;
-        chartInitialized = false;
         await RefreshData();
     }
 
@@ -302,7 +297,6 @@
     {
         try
         {
-            chartInitialized = false;
             if (string.IsNullOrEmpty(workspace))
             {
                 errorMessage = "No workspace selected. Please configure workspace in Settings.";
@@ -354,7 +348,6 @@
                  (topCommittersData.BottomCommitters != null && topCommittersData.BottomCommitters.Any())))
             {
                 // Don't initialize charts here - let OnAfterRenderAsync handle it after DOM is rendered
-                chartInitialized = false;
             }
             else
             {

@@ -48,7 +48,7 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, 
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, 
             bool includePR = true, bool includeData = true, bool includeConfig = true)
         {
             using var connection = new SqlConnection(_connectionString);
@@ -108,7 +108,7 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<ContributorActivityDto>> GetContributorActivityAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId,
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId,
             bool includePR = true, bool includeData = true, bool includeConfig = true)
         {
             using var connection = new SqlConnection(_connectionString);
@@ -173,7 +173,7 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<CommitPunchcardDto>> GetCommitPunchcardAsync(
-            string repoSlug, string workspace, DateTime? startDate, DateTime? endDate, int? userId, bool includePR = true)
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, int? userId, bool includePR = true)
         {
             using var connection = new SqlConnection(_connectionString);
 
@@ -395,7 +395,7 @@ namespace BB.Api.Services
         }
 
         public async Task<TopCommittersResponseDto> GetTopBottomCommittersAsync(
-            string? repoSlug, string workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
             bool includePR = true, bool includeData = true, bool includeConfig = true,
             int topCount = 5, int bottomCount = 5)
         {

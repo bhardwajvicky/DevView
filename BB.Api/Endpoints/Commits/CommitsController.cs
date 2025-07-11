@@ -18,7 +18,7 @@ namespace BB.Api.Endpoints.Commits
 
         public CommitsController(IConfiguration config)
         {
-            _connectionString = config.GetConnectionString("DefaultConnection");
+            _connectionString = config.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("DefaultConnection connection string not found.");
         }
 
         [HttpGet("{repoSlug}")]

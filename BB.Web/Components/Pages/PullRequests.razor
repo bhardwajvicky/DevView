@@ -5,14 +5,16 @@
 @using Radzen.Blazor
 @using BB.Web.Components.Common
 @using BB.Api.Endpoints.Analytics
+@using BB.Api.Endpoints.PullRequests
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
 @inject NavigationManager Navigation
 @inject ILogger<PullRequests> Logger
+@inject BitbucketUrlService BitbucketUrlService
 @rendermode InteractiveServer
 
-<PageTitle>Pull Requests</PageTitle>
+<PageTitle>Pull Request Analysis</PageTitle>
 
 <div class="container-fluid">
     <div class="row">
@@ -125,8 +127,8 @@
                                     
                                     <tr>
                                         <td>
-                                            <a href="https://bitbucket.org/@pr.Workspace/@pr.RepositorySlug/pull-requests/@pr.BitbucketPrId" target="_blank" rel="noopener noreferrer">
-                                                #@pr.BitbucketPrId
+                                            <a href="@BitbucketUrlService.GetPullRequestUrl(pr.Workspace, pr.RepositorySlug, (long)pr.Id)" target="_blank" rel="noopener noreferrer">
+                                                #@pr.Id
                                             </a>
                                         </td>
                                         <td>@pr.RepositoryName</td>
@@ -270,7 +272,7 @@
 
 @code {
     private IEnumerable<BB.Api.Endpoints.Analytics.RepositorySummaryDto>? repositories;
-    private List<PullRequestDto> pullRequests = new();
+    private List<PullRequestListItemDto> pullRequests = new();
     private bool isLoadingRepos = true;
     private bool isLoadingPRs = false;
     private string? selectedRepoSlug;
@@ -281,7 +283,7 @@
     private int totalPages = 1;
     private int pageSize = 25;
     private bool showApprovalsModal = false;
-    private PullRequestDto? selectedPR;
+    private PullRequestListItemDto? selectedPR;
 
     protected override async Task OnInitializedAsync()
     {
@@ -366,7 +368,7 @@
         Navigation.NavigateTo("admin/settings");
     }
 
-    private void ShowApprovals(PullRequestDto pr)
+    private void ShowApprovals(PullRequestListItemDto pr)
     {
         selectedPR = pr;
         showApprovalsModal = true;
@@ -376,36 +378,5 @@
     {
         showApprovalsModal = false;
         selectedPR = null;
-    }
-
-    public class PullRequestDto
-    {
-        public string BitbucketPrId { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string AuthorName { get; set; } = string.Empty;
-        public string State { get; set; } = string.Empty;
-        public DateTime CreatedOn { get; set; }
-        public DateTime? UpdatedOn { get; set; }
-        public string RepositoryName { get; set; } = string.Empty;
-        public int ApprovalCount { get; set; }
-        public List<ApprovalDto> Approvals { get; set; } = new();
-        public string Workspace { get; set; } = string.Empty;
-        public string RepositorySlug { get; set; } = string.Empty;
-        public DateTime? MergedOn { get; set; }
-        public DateTime? ClosedOn { get; set; }
-    }
-
-    public class ApprovalDto
-    {
-        public string DisplayName { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
-        public bool Approved { get; set; }
-        public DateTime? ApprovedOn { get; set; }
-    }
-
-    public class PaginatedPullRequestsResponse
-    {
-        public List<PullRequestDto> PullRequests { get; set; } = new();
-        public int TotalPages { get; set; }
     }
 } 

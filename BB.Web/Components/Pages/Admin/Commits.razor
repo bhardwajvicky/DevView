@@ -102,7 +102,7 @@
         await GoToPage(page);
     }
 
-    private async void OpenBitbucketPopup(string hash)
+    private async Task OpenBitbucketPopup(string hash)
     {
         var workspace = WorkspaceService.SelectedWorkspace;
         if (string.IsNullOrEmpty(workspace))
@@ -114,7 +114,7 @@
         
         var url = $"https://bitbucket.org/{workspace}/{RepoSlug}/commits/{hash}";
         Console.WriteLine($"Opening Bitbucket URL: {url}");
-        _ = JS.InvokeVoidAsync("window.open", url, "bitbucketPopup", "width=1000,height=800,noopener");
+        await JS.InvokeVoidAsync("window.open", url, "bitbucketPopup", "width=1000,height=800,noopener");
     }
 
     private async Task OnIncludePRChanged(ChangeEventArgs e)
