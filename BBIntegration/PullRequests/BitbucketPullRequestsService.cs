@@ -80,8 +80,8 @@ namespace BBIntegration.PullRequests
 
                     foreach (var pr in prPagedResponse.Values)
                     {
-                        var effectiveMergedDate = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn) : null;
-                        var effectiveClosedDate = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn : null;
+                        var effectiveMergedDate = pr.State == "MERGED" ? (pr.MergeCommit?.Date != DateTime.MinValue ? pr.MergeCommit?.Date : pr.UpdatedOn).SafeDateTime() : null;
+                        var effectiveClosedDate = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null;
 
                         if (pr.CreatedOn < startDate)
                         {
@@ -91,9 +91,6 @@ namespace BBIntegration.PullRequests
                         }
 
                         if (pr.CreatedOn > endDate) continue;
-
-                        // Log PR insertion/update
-                        _logger.LogInformation("PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug} was inserted/updated. DB ID: {PrDbId}", pr.Id, pr.Title, workspace, repoSlug, prDbId);
 
                         if (pr.Author?.Uuid == null)
                         {
@@ -136,7 +133,7 @@ namespace BBIntegration.PullRequests
                             ClosedOn = (pr.State == "DECLINED" || pr.State == "SUPERSEDED") ? pr.ClosedOn.SafeDateTime() : null
                         });
 
-                        // Log PR insertion/update
+                        // Log PR insertion/update - moved to here to ensure prDbId is declared
                         _logger.LogInformation("PR {PrId} ({PrTitle}) in {Workspace}/{RepoSlug} was inserted/updated. DB ID: {PrDbId}", pr.Id, pr.Title, workspace, repoSlug, prDbId);
 
                         // After inserting/updating the pull request and before syncing commits, fetch PR activity and extract approvals
