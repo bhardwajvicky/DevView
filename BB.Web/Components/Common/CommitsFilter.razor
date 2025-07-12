@@ -116,6 +116,10 @@
                         <input class="form-check-input" type="checkbox" id="includeConfig" @bind="IncludeConfig" @bind:after="OnFilterChanged">
                         <label class="form-check-label" for="includeConfig">Show Config</label>
                     </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showExcluded" @bind="ShowExcluded" @bind:after="HandleShowExcludedChanged">
+                        <label class="form-check-label" for="showExcluded">Show Excluded</label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -172,6 +176,9 @@
     public bool IncludeConfig { get; set; } = true;
 
     [Parameter]
+    public bool ShowExcluded { get; set; }
+
+    [Parameter]
     public string GroupBy { get; set; } = "Day";
 
     [Parameter]
@@ -191,6 +198,9 @@
 
     [Parameter]
     public EventCallback<string> OnGroupingUpdated { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnShowExcludedChanged { get; set; }
 
     private async Task OnRepositoryChanged(object? value)
     {
@@ -234,5 +244,10 @@
     private async Task OnGroupingChanged()
     {
         await OnGroupingUpdated.InvokeAsync(GroupBy);
+    }
+
+    private async Task HandleShowExcludedChanged()
+    {
+        await OnShowExcludedChanged.InvokeAsync(ShowExcluded);
     }
 } 

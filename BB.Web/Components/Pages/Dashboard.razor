@@ -52,10 +52,12 @@
             IncludeConfig="@includeConfig"
             GroupBy="@selectedGrouping"
             ShowGrouping="true"
+            ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
             OnDateRangeUpdated="OnDateRangeUpdated"
             OnFiltersChanged="OnFiltersChanged"
-            OnGroupingUpdated="OnGroupingUpdated" />
+            OnGroupingUpdated="OnGroupingUpdated"
+            OnShowExcludedChanged="OnShowExcludedChanged" />
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
@@ -1266,6 +1268,7 @@
     private bool includeConfig = true;
     private string selectedGrouping = "Day";
     private Dictionary<int, List<BB.Api.Endpoints.Analytics.CommitActivityDto>> _individualContributorCommitActivity = new();
+    private bool showExcluded = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1400,6 +1403,12 @@
         await RefreshDashboardData();
     }
 
+    private async Task OnShowExcludedChanged(bool value)
+    {
+        showExcluded = value;
+        await RefreshDashboardData();
+    }
+
     private async Task RefreshDashboardData()
     {
         if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
@@ -1462,7 +1471,7 @@
             url += $"&includePR={includePR}";
             url += $"&includeData={includeData}";
             url += $"&includeConfig={includeConfig}";
-
+            if (showExcluded) url += "&showExcluded=true";
             commitActivity = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.CommitActivityDto[]>(url);
 
             // Also load contributor data
@@ -1471,7 +1480,7 @@
             if (startDate.HasValue) contributorUrl += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) contributorUrl += $"&endDate={endDate.Value:yyyy-MM-dd}";
             contributorUrl += $"&groupBy={selectedGrouping}"; // Grouping applies to contributor activity as well
-
+            if (showExcluded) contributorUrl += "&showExcluded=true";
             contributorData = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.ContributorActivityDto[]>(contributorUrl);
 
             // Fetch individual commit activity for each contributor
@@ -1487,7 +1496,7 @@
                     individualCommitActivityUrl += $"&includePR={includePR}";
                     individualCommitActivityUrl += $"&includeData={includeData}";
                     individualCommitActivityUrl += $"&includeConfig={includeConfig}";
-
+                    if (showExcluded) individualCommitActivityUrl += "&showExcluded=true";
                     var individualActivity = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.CommitActivityDto[]>(individualCommitActivityUrl);
                     if (individualActivity != null) {
                         _individualContributorCommitActivity[contributor.UserId] = individualActivity.ToList();

@@ -31,7 +31,8 @@ namespace BB.Api.Endpoints.Commits
             bool includeConfig = true,
             int? userId = null,
             DateTime? startDate = null,
-            DateTime? endDate = null)
+            DateTime? endDate = null,
+            bool showExcluded = false)
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = DefaultPageSize;
@@ -69,9 +70,8 @@ namespace BB.Api.Endpoints.Commits
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
             // Query paginated commits with author info and repository info
-            // Recalculate line counts excluding files with ExcludeFromReporting = true
             var sql = $@"
-                SELECT c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
+                SELECT c.Id, c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
                        c.LinesAdded, c.LinesRemoved,
                        ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesAdded,
                        ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesRemoved,
@@ -98,6 +98,43 @@ namespace BB.Api.Endpoints.Commits
                 offset = (page - 1) * pageSize,
                 pageSize
             })).ToList();
+
+            if (showExcluded && commitList.Any())
+            {
+                // For each commit, get excluded files and add their lines to the correct fields
+                var commitIds = commitList.Select(c => c.Hash).ToList();
+                var fileSql = @"SELECT c.BitbucketCommitHash AS Hash, cf.FileType, cf.LinesAdded, cf.LinesRemoved FROM CommitFiles cf JOIN Commits c ON cf.CommitId = c.Id WHERE c.BitbucketCommitHash IN @commitIds AND cf.ExcludeFromReporting = 1";
+                var excludedFiles = (await connection.QueryAsync<(string Hash, string FileType, int LinesAdded, int LinesRemoved)>(fileSql, new { commitIds })).ToList();
+                foreach (var commit in commitList)
+                {
+                    var files = excludedFiles.Where(f => f.Hash == commit.Hash);
+                    foreach (var file in files)
+                    {
+                        switch (file.FileType)
+                        {
+                            case "code":
+                                commit.CodeLinesAdded += file.LinesAdded;
+                                commit.CodeLinesRemoved += file.LinesRemoved;
+                                break;
+                            case "data":
+                                commit.DataLinesAdded += file.LinesAdded;
+                                commit.DataLinesRemoved += file.LinesRemoved;
+                                break;
+                            case "config":
+                                commit.ConfigLinesAdded += file.LinesAdded;
+                                commit.ConfigLinesRemoved += file.LinesRemoved;
+                                break;
+                            case "docs":
+                                commit.DocsLinesAdded += file.LinesAdded;
+                                commit.DocsLinesRemoved += file.LinesRemoved;
+                                break;
+                        }
+                    }
+                    // Adjust total lines
+                    commit.LinesAdded = commit.CodeLinesAdded + commit.DataLinesAdded + commit.ConfigLinesAdded + commit.DocsLinesAdded;
+                    commit.LinesRemoved = commit.CodeLinesRemoved + commit.DataLinesRemoved + commit.ConfigLinesRemoved + commit.DocsLinesRemoved;
+                }
+            }
 
             var response = new PaginatedCommitsResponse
             {

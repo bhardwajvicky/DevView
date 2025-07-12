@@ -52,11 +52,13 @@
             IncludeConfig="@includeConfig"
             GroupBy="@groupBy"
             ShowGrouping="false"
+            ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
             OnUserSelected="OnUserSelected"
             OnDateRangeUpdated="@((dateRange) => OnDateRangeUpdated(dateRange.start, dateRange.end))"
             OnFiltersChanged="OnFiltersChanged"
-            OnGroupingUpdated="OnGroupingUpdated" />
+            OnGroupingUpdated="OnGroupingUpdated"
+            OnShowExcludedChanged="OnShowExcludedChanged" />
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
@@ -229,7 +231,7 @@
 
 <CommitFilesModal
     IsOpen="@showCommitFilesModal"
-    IsOpenChanged="@((value) => showCommitFilesModal = value)"
+    IsOpenChanged="@OnCommitFilesModalChanged"
     CommitHash="@(selectedCommitHashForModal ?? string.Empty)" />
 
 @code {
@@ -255,6 +257,7 @@
     private bool showMessageModal;
     private bool showCommitFilesModal = false;
     private string? selectedCommitHashForModal;
+    private bool showExcluded = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -313,6 +316,7 @@
             if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             if (selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            if (showExcluded) url += "&showExcluded=true";
 
             var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
             if (response != null)
@@ -372,6 +376,12 @@
         await LoadCommits();
     }
 
+    private async Task OnShowExcludedChanged(bool value)
+    {
+        showExcluded = value;
+        await LoadCommits();
+    }
+
     private async Task GoToPage(int page)
     {
         if (page < 1 || page > totalPages) return;
@@ -425,6 +435,15 @@
     {
         showCommitFilesModal = false;
         selectedCommitHashForModal = null;
+    }
+
+    private async Task OnCommitFilesModalChanged(bool isOpen)
+    {
+        showCommitFilesModal = isOpen;
+        if (!isOpen)
+        {
+            await LoadCommits();
+        }
     }
 
     private void NavigateToSettings()

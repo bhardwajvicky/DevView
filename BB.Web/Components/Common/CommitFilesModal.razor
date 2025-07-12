@@ -86,7 +86,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && CommitFiles == null)
+        if (IsOpen)
         {
             await LoadCommitFiles();
         }
@@ -118,6 +118,9 @@
 
             var response = await Http.PutAsJsonAsync("api/Analytics/commit-files", updateDto);
             response.EnsureSuccessStatusCode();
+
+            // After update, reload the commit files to get the latest state from DB
+            await LoadCommitFiles();
 
             ShowAlert = true;
             StateHasChanged();

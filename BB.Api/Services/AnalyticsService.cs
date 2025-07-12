@@ -21,17 +21,19 @@ namespace BB.Api.Services
         /// <summary>
         /// Generates SQL subqueries for line counts that exclude files with ExcludeFromReporting = true
         /// </summary>
-        private static string GetLineCountSubquery(string fileType, string lineType, string commitAlias = "c")
+        private static string GetLineCountSubquery(string fileType, string lineType, bool showExcluded = false, string commitAlias = "c")
         {
-            return $"ISNULL((SELECT SUM(cf.{lineType}) FROM CommitFiles cf WHERE cf.CommitId = {commitAlias}.Id AND cf.FileType = '{fileType}' AND cf.ExcludeFromReporting = 0), 0)";
+            var excludeClause = showExcluded ? "" : " AND cf.ExcludeFromReporting = 0";
+            return $"ISNULL((SELECT SUM(cf.{lineType}) FROM CommitFiles cf WHERE cf.CommitId = {commitAlias}.Id AND cf.FileType = '{fileType}'{excludeClause}), 0)";
         }
 
         /// <summary>
         /// Generates SQL subqueries for aggregated line counts that exclude files with ExcludeFromReporting = true
         /// </summary>
-        private static string GetAggregatedLineCountSubquery(string fileType, string lineType, string commitAlias = "c")
+        private static string GetAggregatedLineCountSubquery(string fileType, string lineType, bool showExcluded = false, string commitAlias = "c")
         {
-            return $"SUM(ISNULL((SELECT SUM(cf.{lineType}) FROM CommitFiles cf WHERE cf.CommitId = {commitAlias}.Id AND cf.FileType = '{fileType}' AND cf.ExcludeFromReporting = 0), 0))";
+            var excludeClause = showExcluded ? "" : " AND cf.ExcludeFromReporting = 0";
+            return $"SUM(ISNULL((SELECT SUM(cf.{lineType}) FROM CommitFiles cf WHERE cf.CommitId = {commitAlias}.Id AND cf.FileType = '{fileType}'{excludeClause}), 0))";
         }
 
         private static string GetFilterClause(bool includePR = true)
@@ -50,7 +52,7 @@ namespace BB.Api.Services
 
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
             string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, 
-            bool includePR = true, bool includeData = true, bool includeConfig = true)
+            bool includePR = true, bool includeData = true, bool includeConfig = true, bool showExcluded = false)
         {
             using var connection = new SqlConnection(_connectionString);
             
@@ -78,7 +80,7 @@ namespace BB.Api.Services
                         SUM(cf.LinesRemoved) AS LinesRemoved
                     FROM Commits c
                     JOIN CommitFiles cf ON c.Id = cf.CommitId
-                    WHERE cf.ExcludeFromReporting = 0
+                    {(showExcluded ? "" : "WHERE cf.ExcludeFromReporting = 0")}
                     GROUP BY c.Id, FileType
                 )
                 SELECT 
@@ -121,7 +123,7 @@ namespace BB.Api.Services
 
         public async Task<IEnumerable<ContributorActivityDto>> GetContributorActivityAsync(
             string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId,
-            bool includePR = true, bool includeData = true, bool includeConfig = true)
+            bool includePR = true, bool includeData = true, bool includeConfig = true, bool showExcluded = false)
         {
             using var connection = new SqlConnection(_connectionString);
 
@@ -150,7 +152,7 @@ namespace BB.Api.Services
                         SUM(cf.LinesRemoved) AS LinesRemoved
                     FROM Commits c
                     JOIN CommitFiles cf ON c.Id = cf.CommitId
-                    WHERE cf.ExcludeFromReporting = 0
+                    {(showExcluded ? "" : "WHERE cf.ExcludeFromReporting = 0")}
                     GROUP BY c.Id, c.AuthorId, FileType
                 )
                 SELECT 
@@ -330,10 +332,9 @@ namespace BB.Api.Services
         }
 
         public async Task<IEnumerable<FileTypeActivityDto>> GetFileTypeActivityAsync(
-            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, bool includePR = true)
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, bool includePR = true, bool showExcluded = false)
         {
             using var connection = new SqlConnection(_connectionString);
-
             string dateTrunc;
             switch (groupBy)
             {
@@ -348,16 +349,16 @@ namespace BB.Api.Services
                     dateTrunc = "week";
                     break;
             }
-
+            string exclude = showExcluded ? "" : "AND cf.ExcludeFromReporting = 0";
             var sql = $@"
                 WITH FileTypeData AS (
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'code' AS FileType,
-                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0) > 0 
-                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
-                        {GetAggregatedLineCountSubquery("code", "LinesAdded")} AS LinesAdded,
-                        {GetAggregatedLineCountSubquery("code", "LinesRemoved")} AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' {exclude}) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' {exclude}) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("code", "LinesAdded", showExcluded: showExcluded)} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("code", "LinesRemoved", showExcluded: showExcluded)} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -368,10 +369,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'data' AS FileType,
-                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0) > 0 
-                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
-                        {GetAggregatedLineCountSubquery("data", "LinesAdded")} AS LinesAdded,
-                        {GetAggregatedLineCountSubquery("data", "LinesRemoved")} AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' {exclude}) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' {exclude}) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("data", "LinesAdded", showExcluded: showExcluded)} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("data", "LinesRemoved", showExcluded: showExcluded)} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -382,10 +383,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'config' AS FileType,
-                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0) > 0 
-                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
-                        {GetAggregatedLineCountSubquery("config", "LinesAdded")} AS LinesAdded,
-                        {GetAggregatedLineCountSubquery("config", "LinesRemoved")} AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' {exclude}) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' {exclude}) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("config", "LinesAdded", showExcluded: showExcluded)} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("config", "LinesRemoved", showExcluded: showExcluded)} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -396,10 +397,10 @@ namespace BB.Api.Services
                     SELECT 
                         CAST(DATEADD({dateTrunc}, DATEDIFF({dateTrunc}, 0, c.Date), 0) AS DATE) AS Date,
                         'docs' AS FileType,
-                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0) > 0 
-                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' AND cf.ExcludeFromReporting = 0) > 0 THEN 1 END) AS CommitCount,
-                        {GetAggregatedLineCountSubquery("docs", "LinesAdded")} AS LinesAdded,
-                        {GetAggregatedLineCountSubquery("docs", "LinesRemoved")} AS LinesRemoved
+                        COUNT(CASE WHEN (SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' {exclude}) > 0 
+                                  OR (SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'docs' {exclude}) > 0 THEN 1 END) AS CommitCount,
+                        {GetAggregatedLineCountSubquery("docs", "LinesAdded", showExcluded: showExcluded)} AS LinesAdded,
+                        {GetAggregatedLineCountSubquery("docs", "LinesRemoved", showExcluded: showExcluded)} AS LinesRemoved
                     FROM Commits c
                     JOIN Repositories r ON c.RepositoryId = r.Id
                     {GetFilterClause(includePR)}
@@ -416,18 +417,18 @@ namespace BB.Api.Services
                 WHERE CommitCount > 0
                 ORDER BY Date, FileType;
             ";
-
             return await connection.QueryAsync<FileTypeActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
         }
 
         public async Task<TopCommittersResponseDto> GetTopBottomCommittersAsync(
             string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
             bool includePR = true, bool includeData = true, bool includeConfig = true,
-            int topCount = 5, int bottomCount = 5)
+            int topCount = 5, int bottomCount = 5, bool showExcluded = false)
         {
             using var connection = new SqlConnection(_connectionString);
 
-            var query = @"
+            var whereClause = showExcluded ? "" : "WHERE cf.ExcludeFromReporting = 0";
+            var query = $@"
                 WITH CommitFiles_Aggregated AS (
                     SELECT 
                         cf.CommitId,
@@ -435,7 +436,7 @@ namespace BB.Api.Services
                         SUM(cf.LinesAdded) as LinesAdded,
                         SUM(cf.LinesRemoved) as LinesRemoved
                     FROM CommitFiles cf
-                    WHERE cf.ExcludeFromReporting = 0
+                    {whereClause}
                     GROUP BY cf.CommitId, cf.FileType
                 ),
                 CommitterStats AS (
@@ -582,7 +583,8 @@ namespace BB.Api.Services
                 includeData,
                 includeConfig,
                 topCount,
-                bottomCount
+                bottomCount,
+                showExcluded
             })).ToList();
 
             return new TopCommittersResponseDto
