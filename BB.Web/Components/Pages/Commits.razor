@@ -4,8 +4,8 @@
 @using Radzen
 @using Radzen.Blazor
 @using BB.Web.Components.Common
-@using BB.Api.Endpoints.Analytics // For RepositorySummaryDto, UserDto
-@using BB.Api.Endpoints.Commits // For CommitListItemDto, PaginatedCommitsResponse
+@using BB.Api.Endpoints.Analytics 
+@using BB.Api.Endpoints.Commits
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
@@ -260,6 +260,7 @@
     {
         await LoadRepositories();
         await LoadUsers();
+        await LoadCommits();
     }
 
     private async Task LoadRepositories()
