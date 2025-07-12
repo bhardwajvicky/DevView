@@ -132,7 +132,7 @@
                                         <td>
                                             @if (!string.IsNullOrEmpty(commit.RepositorySlug))
                                             {
-                                                <a href="javascript:void(0);" @onclick="(e) => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug, e)" @onclick:preventDefault>
+                                                <a @onclick="(e) => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug, e)" @onclick:preventDefault style="cursor:pointer; text-decoration:underline; color:var(--bs-link-color);">
                                                     @commit.Hash[..7]
                                                 </a>
                                             }

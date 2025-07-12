@@ -51,7 +51,7 @@
                                             <td>@file.LinesRemoved</td>
                                             <td>
                                                 <div class="form-check form-switch">
-                                                    <input class="form-check-input" type="checkbox" role="switch" id="excludeSwitch_@file.Id" checked="@file.ExcludeFromReporting" @onchange="(e) => OnExcludeFromReportingChange(file, (bool)e.Value)" />
+                                                    <input class="form-check-input" type="checkbox" role="switch" id="excludeSwitch_@file.Id" checked="@file.ExcludeFromReporting" @onchange="(e) => OnExcludeFromReportingChange(file, (bool)(e.Value ?? false))" />
                                                     <label class="form-check-label" for="excludeSwitch_@file.Id"></label>
                                                 </div>
                                             </td>

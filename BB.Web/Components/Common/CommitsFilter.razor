@@ -5,39 +5,33 @@
 @using BB.Api.Endpoints.Analytics
 
 <div class="row mb-4">
-    <div class="col-md-4">
-        <div class="mb-3">
-            <label for="repoSelect" class="form-label fw-bold">Select Repository</label>
-            @if (IsLoadingRepos)
-            {
-                <div class="d-flex align-items-center">
-                    <div class="spinner-border spinner-border-sm me-2" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <span>Loading repositories...</span>
-                </div>
-            }
-            else if (Repositories != null && Repositories.Any())
-            {
-                <RadzenDropDown Data="@Repositories.OrderBy(r => r.Name)"
-                              TextProperty="Name"
-                              ValueProperty="Slug"
-                              AllowClear="true"
-                              AllowFiltering="true"
-                              FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                              Placeholder="Search repositories..."
-                              Value="@SelectedRepoSlug"
-                              Change="@(args => OnRepositoryChanged(args))"
-                              class="w-100" />
-            }
-            else
-            {
-                <div class="alert alert-warning">
-                    No repositories found. Please check your configuration.
-                </div>
-            }
+    @if (IsLoadingRepos)
+    {
+        <div class="col-md-3">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Repository</label>
+                <input type="text" class="form-control" value="Loading repositories..." disabled />
+            </div>
         </div>
-    </div>
+    }
+    else // Always show repository dropdown
+    {
+        <div class="col-md-3">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Repository</label>
+                <select class="form-control" @bind="SelectedRepoSlug" @bind:after="@(() => OnRepositorySelected.InvokeAsync(SelectedRepoSlug))">
+                    <option value="all">All Repositories</option>
+                    @if (Repositories != null)
+                    {
+                        @foreach (var repo in Repositories)
+                        {
+                            <option value="@repo.Slug">@repo.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+    }
 
     <div class="col-md-4">
         <div class="mb-3">

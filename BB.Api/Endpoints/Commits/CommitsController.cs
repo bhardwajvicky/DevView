@@ -69,6 +69,34 @@ namespace BB.Api.Endpoints.Commits
             var totalCount = await connection.QuerySingleAsync<int>(countSql, new { repoId, userId, startDate, endDate });
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
+            // Calculate aggregated line counts
+            var aggregatedLinesSql = $@"
+                SELECT 
+                    SUM(TotalLinesAdded) AS TotalLinesAdded,
+                    SUM(TotalLinesRemoved) AS TotalLinesRemoved,
+                    SUM(CodeLinesAdded) AS CodeLinesAdded,
+                    SUM(CodeLinesRemoved) AS CodeLinesRemoved,
+                    SUM(DataLinesAdded) AS DataLinesAdded,
+                    SUM(DataLinesRemoved) AS DataLinesRemoved,
+                    SUM(ConfigLinesAdded) AS ConfigLinesAdded,
+                    SUM(ConfigLinesRemoved) AS ConfigLinesRemoved
+                FROM (
+                    SELECT 
+                        c.LinesAdded AS TotalLinesAdded,
+                        c.LinesRemoved AS TotalLinesRemoved,
+                        ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesAdded,
+                        ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesRemoved,
+                        ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0), 0) AS DataLinesAdded,
+                        ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'data' AND cf.ExcludeFromReporting = 0), 0) AS DataLinesRemoved,
+                        ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0), 0) AS ConfigLinesAdded,
+                        ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'config' AND cf.ExcludeFromReporting = 0), 0) AS ConfigLinesRemoved
+                    FROM Commits c
+                    JOIN Repositories r ON c.RepositoryId = r.Id
+                    {where}
+                ) AS SubqueryAlias";
+            
+            var aggregatedData = await connection.QuerySingleOrDefaultAsync<dynamic>(aggregatedLinesSql, new { repoId, userId, startDate, endDate });
+
             // Query paginated commits with author info and repository info
             var sql = $@"
                 SELECT c.Id, c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
@@ -139,7 +167,16 @@ namespace BB.Api.Endpoints.Commits
             var response = new PaginatedCommitsResponse
             {
                 Commits = commitList,
-                TotalPages = totalPages
+                TotalPages = totalPages,
+                TotalCommitsCount = totalCount,
+                AggregatedLinesAdded = aggregatedData?.TotalLinesAdded ?? 0,
+                AggregatedLinesRemoved = aggregatedData?.TotalLinesRemoved ?? 0,
+                AggregatedCodeLinesAdded = aggregatedData?.CodeLinesAdded ?? 0,
+                AggregatedCodeLinesRemoved = aggregatedData?.CodeLinesRemoved ?? 0,
+                AggregatedDataLinesAdded = aggregatedData?.DataLinesAdded ?? 0,
+                AggregatedDataLinesRemoved = aggregatedData?.DataLinesRemoved ?? 0,
+                AggregatedConfigLinesAdded = aggregatedData?.ConfigLinesAdded ?? 0,
+                AggregatedConfigLinesRemoved = aggregatedData?.ConfigLinesRemoved ?? 0
             };
             return Ok(response);
         }

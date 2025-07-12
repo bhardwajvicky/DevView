@@ -5,9 +5,10 @@
 @using System.Globalization
 @using System.Linq
 @inject IJSRuntime JS
-@inject BB.Web.Services.WorkspaceService WorkspaceService // Explicitly injecting WorkspaceService
-@using BB.Api.Endpoints.Analytics // For RepositorySummaryDto, UserDto
-@using BB.Api.Endpoints.Commits // For CommitListItemDto, PaginatedCommitsResponse
+@inject BB.Web.Services.WorkspaceService WorkspaceService 
+@using BB.Api.Endpoints.Analytics
+@using BB.Api.Endpoints.Commits 
+@using BB.Web.Components.Common 
 @rendermode InteractiveServer
 
 @code {
@@ -26,25 +27,37 @@
     [SupplyParameterFromQuery]
     public string? RepoSlug { get; set; }
 
-    private List<CommitListItemDto> commits = new();
-    private List<RepositorySummaryDto> repositories = new();
-    private UserDto? selectedUser;
+    private List<BB.Api.Endpoints.Commits.CommitListItemDto> commits = new();
+    private List<BB.Api.Endpoints.Analytics.RepositorySummaryDto> repositories = new();
+    private BB.Api.Endpoints.Analytics.UserDto? selectedUser;
     private string? selectedRepoSlug;
-    private string? startDateString;
-    private string? endDateString;
     private bool includePR = false; // Default unchecked as requested
+    private bool includeData = true; // Added for CommitsFilter consistency
+    private bool includeConfig = true; // Added for CommitsFilter consistency
+    private bool showExcluded = false; // Added for CommitsFilter consistency
+    private DateTime? startDateObject; // New: for DateTime conversion
+    private DateTime? endDateObject;   // New: for DateTime conversion
+    private BB.Api.Endpoints.Commits.PaginatedCommitsResponse? paginatedCommitsResponse; // New variable to explicitly type the response
     private int currentPage = 1;
     private int totalPages = 1;
     private int pageSize = 25;
     private bool isLoading = true;
     private string? errorMessage;
+    private bool showCommitFilesModal = false; // New: For CommitFilesModal
+    private string? selectedCommitHashForModal; // New: For CommitFilesModal
+    private string? selectedMessage; // New: For message truncation and modal
+    private bool showMessageModal; // New: For message truncation and modal
 
     protected override async Task OnParametersSetAsync()
     {
-        // Initialize date strings from parameters
-        startDateString = StartDate;
-        endDateString = EndDate;
-        selectedRepoSlug = RepoSlug;
+        // Convert string dates from URL parameters to DateTime objects
+        if (DateTime.TryParse(StartDate, out var sd)) startDateObject = sd;
+        else startDateObject = DateTime.Today.AddDays(-7); // Default to 7 days if not provided
+
+        if (DateTime.TryParse(EndDate, out var ed)) endDateObject = ed;
+        else endDateObject = DateTime.Today; // Default to today if not provided
+
+        selectedRepoSlug = RepoSlug; // Keep existing repo slug
         
         await LoadRepositories();
         await LoadUser();
@@ -85,9 +98,26 @@
         await LoadCommits();
     }
 
-    private async Task OnDateRangeChanged(ChangeEventArgs? e = null)
+    private async Task OnDateRangeUpdated(DateTime? newStartDate, DateTime? newEndDate)
     {
+        startDateObject = newStartDate;
+        endDateObject = newEndDate;
         currentPage = 1;
+        await LoadCommits();
+    }
+
+    private async Task OnFiltersChanged((bool includePR, bool includeData, bool includeConfig) filters)
+    {
+        this.includePR = filters.includePR;
+        this.includeData = filters.includeData;
+        this.includeConfig = filters.includeConfig;
+        currentPage = 1;
+        await LoadCommits();
+    }
+
+    private async Task OnShowExcludedChanged(bool value)
+    {
+        showExcluded = value;
         await LoadCommits();
     }
 
@@ -101,16 +131,18 @@
             // Use the existing commits API endpoint with userId filter
             var url = $"/api/commits/{selectedRepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&userId={UserId}";
             
-            if (!string.IsNullOrEmpty(startDateString)) url += $"&startDate={startDateString}";
-            if (!string.IsNullOrEmpty(endDateString)) url += $"&endDate={endDateString}";
-            
+            if (startDateObject.HasValue) url += $"&startDate={startDateObject.Value:yyyy-MM-dd}";
+            if (endDateObject.HasValue) url += $"&endDate={endDateObject.Value:yyyy-MM-dd}";
+            if (showExcluded) url += "&showExcluded=true";
+
             Console.WriteLine($"API URL: {url}");
-            var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
+            var response = await Http.GetFromJsonAsync<BB.Api.Endpoints.Commits.PaginatedCommitsResponse>(url);
             if (response != null)
             {
                 Console.WriteLine($"Received {response.Commits.Count} commits, totalPages: {response.TotalPages}");
                 commits = response.Commits;
                 totalPages = response.TotalPages;
+                paginatedCommitsResponse = response; // Assign the full response to the new variable
             }
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -204,6 +236,21 @@
         Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
     }
 
+    private void ShowCommitFilesModal(string commitHash)
+    {
+        selectedCommitHashForModal = commitHash;
+        showCommitFilesModal = true;
+    }
+
+    private async Task OnCommitFilesModalChanged(bool isOpen)
+    {
+        showCommitFilesModal = isOpen;
+        if (!isOpen)
+        {
+            await LoadCommits(); // Reload commits when modal is closed
+        }
+    }
+
     private void NavigateBack()
     {
         if (!string.IsNullOrEmpty(selectedRepoSlug))
@@ -214,53 +261,6 @@
         {
             Navigation.NavigateTo("/dashboard");
         }
-    }
-
-    public class CommitListItemDto
-    {
-        public string Hash { get; set; } = string.Empty;
-        public string Message { get; set; } = string.Empty;
-        public string AuthorName { get; set; } = string.Empty;
-        public DateTime Date { get; set; }
-        public bool IsMerge { get; set; }
-        public bool IsPRMergeCommit { get; set; }
-        public int LinesAdded { get; set; }
-        public int LinesRemoved { get; set; }
-        public int CodeLinesAdded { get; set; }
-        public int CodeLinesRemoved { get; set; }
-        public int DataLinesAdded { get; set; }
-        public int DataLinesRemoved { get; set; }
-        public int ConfigLinesAdded { get; set; }
-        public int ConfigLinesRemoved { get; set; }
-        public int DocsLinesAdded { get; set; }
-        public int DocsLinesRemoved { get; set; }
-        public string? RepositoryName { get; set; }
-        public string? RepositorySlug { get; set; }
-    }
-    
-    public class PaginatedCommitsResponse
-    {
-        public List<CommitListItemDto> Commits { get; set; } = new();
-        public int TotalPages { get; set; }
-    }
-    
-    public class UserDto
-    {
-        public int Id { get; set; }
-        public string BitbucketUserId { get; set; } = string.Empty;
-        public string DisplayName { get; set; } = string.Empty;
-        public string AvatarUrl { get; set; } = string.Empty;
-        public DateTime? CreatedOn { get; set; }
-    }
-
-    public class RepositorySummaryDto
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Slug { get; set; } = string.Empty;
-        public string Workspace { get; set; } = string.Empty;
-        public int CommitCount { get; set; }
-        public int ContributorCount { get; set; }
-        public DateTime? LastCommitDate { get; set; }
     }
 }
 
@@ -301,49 +301,28 @@
 
     <!-- Date Range and Filters -->
     <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="mb-3">
-                <label class="form-label fw-bold">Start Date</label>
-                <input type="date" class="form-control" value="@startDateString" @onchange="@(async (e) => { startDateString = e.Value?.ToString(); await OnDateRangeChanged(e); })" />
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="mb-3">
-                <label class="form-label fw-bold">End Date</label>
-                <input type="date" class="form-control" value="@endDateString" @onchange="@(async (e) => { endDateString = e.Value?.ToString(); await OnDateRangeChanged(e); })" />
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="mb-3">
-                <label class="form-label fw-bold">Filters</label>
-                <div>
-                    <div class="mb-3">
-                        <label class="form-check-label">
-                            <input type="checkbox" class="form-check-input" checked="@includePR" @onchange="OnIncludePRChanged" /> Include PRs
-                        </label>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Repository</label>
-                        <select class="form-control" value="@(selectedRepoSlug ?? "all")" @onchange="OnRepositorySelected">
-                            <option value="all">All Repositories</option>
-                            @foreach (var repo in repositories)
-                            {
-                                <option value="@repo.Slug">@repo.Name</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="mb-3">
-                <label class="form-label fw-bold">Quick Ranges</label>
-                <div class="btn-group-vertical d-grid gap-1">
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => SetDateRange(30)">Last 30 Days</button>
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => SetDateRange(90)">Last 3 Months</button>
-                    <button class="btn btn-sm btn-outline-info" @onclick="() => ClearDateRange()">All Time</button>
-                </div>
-            </div>
+        <div class="col-12">
+            <CommitsFilter
+                IsLoadingRepos="false" // Repositories are loaded separately in this page
+                Repositories="@repositories"
+                SelectedRepoSlug="@selectedRepoSlug"
+                IsLoadingUsers="false" // Users are handled by UserId parameter
+                Users="@(new List<BB.Api.Endpoints.Analytics.UserDto>())" // Not used here as UserId is fixed
+                SelectedUserId="@UserId" // Pass the current User ID to the filter for display, though it's not changeable
+                StartDate="@startDateObject"
+                EndDate="@endDateObject"
+                IncludePR="@includePR"
+                IncludeData="true" // Always true for this page, can be parameterized if needed
+                IncludeConfig="true" // Always true for this page, can be parameterized if needed
+                GroupBy="Day" // Fixed grouping for this page, can be parameterized if needed
+                ShowGrouping="false"
+                ShowExcluded="@showExcluded"
+                OnRepositorySelected="OnRepositorySelected"
+                OnUserSelected="@((int? uId) => { /* User selection is not allowed */ })" // User selection not allowed
+                OnDateRangeUpdated="@((dateRange) => OnDateRangeUpdated(dateRange.start, dateRange.end))"
+                OnFiltersChanged="OnFiltersChanged"
+                OnGroupingUpdated="@((string? g) => { /* Grouping update not allowed */ })" // Grouping update not allowed
+                OnShowExcludedChanged="OnShowExcludedChanged" />
         </div>
     </div>
 
@@ -368,41 +347,14 @@
     else
     {
         <!-- Summary Info -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="alert alert-light border">
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <h5 class="mb-1">@commits.Count</h5>
-                            <small class="text-muted">Commits (Page @currentPage of @totalPages)</small>
-                        </div>
-                        <div class="col-md-3">
-                            <h5 class="mb-1 text-success">+@commits.Sum(c => c.LinesAdded)</h5>
-                            <small class="text-muted">Total Lines Added</small>
-                        </div>
-                        <div class="col-md-3">
-                            <h5 class="mb-1 text-danger">-@commits.Sum(c => c.LinesRemoved)</h5>
-                            <small class="text-muted">Total Lines Removed</small>
-                        </div>
-                        <div class="col-md-3">
-                            @{
-                                var netChange = commits.Sum(c => c.LinesAdded) - commits.Sum(c => c.LinesRemoved);
-                                var netClass = netChange >= 0 ? "text-success" : "text-danger";
-                                var netSign = netChange >= 0 ? "+" : "";
-                            }
-                            <h5 class="mb-1 @netClass">@netSign@netChange</h5>
-                            <small class="text-muted">Net Change</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <CommitSummary PaginatedCommitsResponse="@paginatedCommitsResponse" />
 
         <!-- Commits Table -->
         <div class="table-responsive">
             <table class="table table-striped table-hover align-middle">
                 <thead class="table-dark">
                     <tr>
+                        <th>Edit</th>
                         <th>Commit</th>
                         @if (string.IsNullOrEmpty(selectedRepoSlug) || selectedRepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
                         {
@@ -423,6 +375,11 @@
                     @foreach (var commit in commits)
                     {
                         <tr>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowCommitFilesModal(commit.Hash)">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </button>
+                            </td>
                             <td>
                                 <button type="button" class="btn btn-link p-0 text-decoration-underline" @onclick="() => OpenBitbucketPopup(commit.Hash, commit.RepositorySlug)" title="View on Bitbucket">@commit.Hash.Substring(0, 8)</button>
                             </td>
@@ -466,7 +423,9 @@
                                 {
                                     <span class="badge bg-primary me-2">PR</span>
                                 }
-                                <span>@commit.Message</span>
+                                <span title="@commit.Message" style="cursor: pointer" @onclick="() => ShowFullMessage(commit.Message)">
+                                    @(commit.Message.Length > 50 ? commit.Message.Substring(0, 50) + "..." : commit.Message)
+                                </span>
                             </td>
                         </tr>
                     }
@@ -531,19 +490,59 @@
     }
 </div>
 
+@if (showCommitFilesModal)
+{
+    <CommitFilesModal
+        IsOpen="@showCommitFilesModal"
+        IsOpenChanged="@OnCommitFilesModalChanged"
+        CommitHash="@(selectedCommitHashForModal ?? string.Empty)" />
+}
+
+@if (showMessageModal)
+{
+    <div class="modal show" style="display: block; background: rgba(0,0,0,0.5);" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Commit Message</h5>
+                    <button type="button" class="btn-close" @onclick="CloseMessageModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="white-space: pre-wrap;">@selectedMessage</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseMessageModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    private void ShowFullMessage(string message)
+    {
+        selectedMessage = message;
+        showMessageModal = true;
+    }
+
+    private void CloseMessageModal()
+    {
+        showMessageModal = false;
+        selectedMessage = null;
+    }
+
     private async Task SetDateRange(int days)
     {
-        endDateString = DateTime.Today.ToString("yyyy-MM-dd");
-        startDateString = DateTime.Today.AddDays(-days).ToString("yyyy-MM-dd");
+        endDateObject = DateTime.Today;
+        startDateObject = DateTime.Today.AddDays(-days);
         currentPage = 1;
         await LoadCommits();
     }
 
     private async Task ClearDateRange()
     {
-        startDateString = null;
-        endDateString = null;
+        startDateObject = null;
+        endDateObject = null;
         currentPage = 1;
         await LoadCommits();
     }

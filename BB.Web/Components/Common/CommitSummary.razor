@@ -1,0 +1,54 @@
+@using BB.Api.Endpoints.Commits
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-light border">
+            <div class="row text-center align-items-center">
+                <div class="col-md-2">
+                    <h5 class="mb-1">@PaginatedCommitsResponse.TotalCommitsCount</h5>
+                    <small class="text-muted">Commits</small>
+                </div>
+                <div class="col-md-3">
+                    <h5 class="mb-1">
+                        <span class="text-success">@string.Format("+{0}", TotalLinesAdded)</span>
+                        <span class="mx-1">|</span>
+                        <span class="text-danger">@string.Format("-{0}", TotalLinesRemoved)</span>
+                    </h5>
+                    <small class="text-muted">Total Lines</small>
+                </div>
+                <div class="col-md-2">
+                    @{ var netChange = TotalLinesAdded - TotalLinesRemoved; }
+                    <h5 class="mb-1 @(netChange >= 0 ? "text-success" : "text-danger")">@(netChange >= 0 ? "+" : "")@netChange</h5>
+                    <small class="text-muted">Net Change</small>
+                </div>
+                <div class="col-md-5">
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <h6 class="mb-0">C: <span class="text-success">+@CodeLinesAdded</span> | <span class="text-danger">-@CodeLinesRemoved</span></h6>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">D: <span class="text-success">+@DataLinesAdded</span> | <span class="text-danger">-@DataLinesRemoved</span></h6>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">F: <span class="text-success">+@ConfigLinesAdded</span> | <span class="text-danger">-@ConfigLinesRemoved</span></h6>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public PaginatedCommitsResponse PaginatedCommitsResponse { get; set; } = new();
+
+    private int TotalLinesAdded => PaginatedCommitsResponse.AggregatedLinesAdded;
+    private int TotalLinesRemoved => PaginatedCommitsResponse.AggregatedLinesRemoved;
+    private int CodeLinesAdded => PaginatedCommitsResponse.AggregatedCodeLinesAdded;
+    private int CodeLinesRemoved => PaginatedCommitsResponse.AggregatedCodeLinesRemoved;
+    private int DataLinesAdded => PaginatedCommitsResponse.AggregatedDataLinesAdded;
+    private int DataLinesRemoved => PaginatedCommitsResponse.AggregatedDataLinesRemoved;
+    private int ConfigLinesAdded => PaginatedCommitsResponse.AggregatedConfigLinesAdded;
+    private int ConfigLinesRemoved => PaginatedCommitsResponse.AggregatedConfigLinesRemoved;
+} 
