@@ -425,3 +425,89 @@ window.renderPrAgeChart = async (prAgeData) => {
         console.error('Error rendering PR Age Chart:', error);
     }
 }; 
+
+window.renderPrsMergedByWeekdayChart = async (chartData) => {
+    try {
+        if (!Array.isArray(chartData) || chartData.length === 0) {
+            console.warn('No PRs merged by weekday data provided or data is empty.');
+            return;
+        }
+
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js not loaded, waiting before rendering PRs Merged by Weekday chart...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (typeof Chart === 'undefined') {
+                throw new Error('Chart.js failed to load for PRs Merged by Weekday chart.');
+            }
+        }
+
+        const canvasId = 'prsMergedByWeekdayChart';
+        const chartElement = await window.waitForElement(canvasId);
+        const ctx = chartElement.getContext('2d');
+
+        // Destroy existing chart if it exists
+        if (window.committerCharts[canvasId] && typeof window.committerCharts[canvasId].destroy === 'function') {
+            window.committerCharts[canvasId].destroy();
+            delete window.committerCharts[canvasId];
+        }
+
+        const labels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dataPoints = new Array(7).fill(0);
+        
+        chartData.forEach(item => {
+            const index = labels.indexOf(item.dayOfWeek);
+            if (index !== -1) {
+                dataPoints[index] = item.prCount;
+            }
+        });
+
+        window.committerCharts[canvasId] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'PRs Merged',
+                    data: dataPoints,
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Day of Week'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of PRs'
+                        },
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error rendering PRs Merged by Weekday chart:', error);
+    }
+}; 

@@ -11,6 +11,7 @@ namespace BB.Api.Endpoints.Analytics
         public List<ContributorStats> TopContributors { get; set; } = new List<ContributorStats>();
         public int UsersWithNoActivity { get; set; }
         public List<ApproverStats> TopApprovers { get; set; } = new List<ApproverStats>();
+        public PrsMergedByWeekdayData PrsMergedByWeekdayData { get; set; } = new PrsMergedByWeekdayData();
     }
 
     public class PeriodStats
@@ -48,5 +49,16 @@ namespace BB.Api.Endpoints.Analytics
     {
         public string UserName { get; set; } = string.Empty;
         public int PrApprovalCount { get; set; }
+    }
+
+    public class PrsMergedByWeekdayData
+    {
+        public List<WeekdayPrCount> MergedPrsByWeekday { get; set; } = new List<WeekdayPrCount>();
+    }
+
+    public class WeekdayPrCount
+    {
+        public string DayOfWeek { get; set; } = string.Empty;
+        public int PrCount { get; set; }
     }
 } 

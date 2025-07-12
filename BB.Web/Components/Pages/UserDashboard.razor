@@ -3,8 +3,12 @@
 @using System.Net.Http.Json
 @using Radzen
 @using Radzen.Blazor
+@using BB.Web.Services
+@using BB.Web.Components.Common
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@inject WorkspaceService WorkspaceService
 @rendermode InteractiveServer
 
 <PageTitle>User Dashboard</PageTitle>
@@ -12,11 +16,23 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <h1 class="mb-4">
-                <i class="bi bi-speedometer2"></i> User Dashboard
-            </h1>
+            <!-- Removed: <h1 class="mb-4"><i class="bi bi-speedometer2"></i> User Dashboard</h1> -->
         </div>
     </div>
+
+    <CommitsFilter
+        IsLoadingRepos="@isLoadingRepos"
+        Repositories="@repositories"
+        SelectedRepoSlug="@selectedRepoSlug"
+        StartDate="@startDate"
+        EndDate="@endDate"
+        ShowGrouping="false"
+        ShowExcluded="false"
+        OnRepositorySelected="OnRepositorySelected"
+        OnDateRangeUpdated="OnDateRangeUpdated"
+        OnFiltersChanged="OnFiltersChanged"
+        OnGroupingUpdated="OnGroupingUpdated"
+        OnShowExcludedChanged="OnShowExcludedChanged" />
 
     @if (isLoading)
     {
@@ -41,25 +57,25 @@
             <div class="col-lg-4 col-md-6 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-0">Active Contributing Users</h5>
-                            <i class="bi bi-person-check-fill text-primary fs-4"></i>
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">Active Contributing Users</h5>
+                            <i class="bi bi-people-fill fs-3 text-primary"></i>
                         </div>
                         <h2 class="fw-bold mb-3">
-                            @dashboardData.CurrentPeriod.ActiveContributingUsers / @dashboardData.CurrentPeriod.TotalLicensedUsers
+                            @dashboardData.CurrentPeriod.ActiveContributingUsers
                             @{
                                 var userChange = (double)dashboardData.CurrentPeriod.ActiveContributingUsers - dashboardData.PreviousPeriod.ActiveContributingUsers;
-                                var userPercentageChange = dashboardData.PreviousPeriod.ActiveContributingUsers > 0 
-                                    ? (userChange / dashboardData.PreviousPeriod.ActiveContributingUsers) * 100 
+                                var userPercentageChange = dashboardData.PreviousPeriod.ActiveContributingUsers > 0
+                                    ? (userChange / dashboardData.PreviousPeriod.ActiveContributingUsers) * 100
                                     : 0;
                                 var userChangeClass = userPercentageChange >= 0 ? "text-success" : "text-danger";
                                 var userChangeIcon = userPercentageChange >= 0 ? "bi-arrow-up" : "bi-arrow-down";
                             }
-                            <span class="fs-6 @userChangeClass">
-                                <i class="bi @userChangeIcon"></i> @userPercentageChange.ToString("0.0")%
+                            <span class="small @userChangeClass">
+                                <i class="bi @userChangeIcon"></i> @userPercentageChange.ToString("F1")%
                             </span>
                         </h2>
-                        <p class="text-muted small mb-0">Last period: @dashboardData.PreviousPeriod.ActiveContributingUsers / @dashboardData.PreviousPeriod.TotalLicensedUsers</p>
+                        <p class="text-muted small mb-0">Last period: @dashboardData.PreviousPeriod.ActiveContributingUsers</p>
                         <p class="text-muted small mb-0">@dashboardData.CurrentPeriod.StartDate.ToString("MMM dd") - @dashboardData.CurrentPeriod.EndDate.ToString("MMM dd")</p>
                     </div>
                 </div>
@@ -77,8 +93,8 @@
                             @dashboardData.CurrentPeriod.TotalCommits
                             @{
                                 var commitChange = (double)dashboardData.CurrentPeriod.TotalCommits - dashboardData.PreviousPeriod.TotalCommits;
-                                var commitPercentageChange = dashboardData.PreviousPeriod.TotalCommits > 0 
-                                    ? (commitChange / dashboardData.PreviousPeriod.TotalCommits) * 100 
+                                var commitPercentageChange = dashboardData.PreviousPeriod.TotalCommits > 0
+                                    ? (commitChange / dashboardData.PreviousPeriod.TotalCommits) * 100
                                     : 0;
                                 var commitChangeClass = commitPercentageChange >= 0 ? "text-success" : "text-danger";
                                 var commitChangeIcon = commitPercentageChange >= 0 ? "bi-arrow-up" : "bi-arrow-down";
@@ -105,8 +121,8 @@
                             @dashboardData.CurrentPeriod.RepositoriesUpdated
                             @{
                                 var repoChange = (double)dashboardData.CurrentPeriod.RepositoriesUpdated - dashboardData.PreviousPeriod.RepositoriesUpdated;
-                                var repoPercentageChange = dashboardData.PreviousPeriod.RepositoriesUpdated > 0 
-                                    ? (repoChange / dashboardData.PreviousPeriod.RepositoriesUpdated) * 100 
+                                var repoPercentageChange = dashboardData.PreviousPeriod.RepositoriesUpdated > 0
+                                    ? (repoChange / dashboardData.PreviousPeriod.RepositoriesUpdated) * 100
                                     : 0;
                                 var repoChangeClass = repoPercentageChange >= 0 ? "text-success" : "text-danger";
                                 var repoChangeIcon = repoPercentageChange >= 0 ? "bi-arrow-up" : "bi-arrow-down";
@@ -231,6 +247,18 @@
                     </div>
                 </div>
             </div>
+
+            <!-- PRs Merged by Weekday Chart -->
+            <div class="col-lg-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">PRs Merged by Weekday</h5>
+                        <div class="flex-grow-1">
+                            <canvas id="prsMergedByWeekdayChart" class="w-100 h-100"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 </div>
@@ -239,9 +267,55 @@
     private UserDashboardResponseDto? dashboardData;
     private bool isLoading = true;
     private string? errorMessage;
+    private BB.Api.Endpoints.Analytics.RepositorySummaryDto[]? repositories;
+    private bool isLoadingRepos = true;
+    private string? selectedRepoSlug;
+    private DateTime? startDate;
+    private DateTime? endDate;
 
     protected override async Task OnInitializedAsync()
     {
+        // Set default date range to the last 30 days
+        endDate = DateTime.Now;
+        startDate = endDate.Value.AddDays(-30);
+
+        // Load all available repositories first
+        await LoadRepositories();
+
+        if (repositories != null && repositories.Any())
+        {
+            // If no workspace is selected in WorkspaceService, try to auto-select one
+            if (!WorkspaceService.HasSelectedWorkspace)
+            {
+                // Find the first actual repository (not the "All Repositories" option)
+                var firstActualRepo = repositories.FirstOrDefault(r => r.Slug != "ALL");
+                if (firstActualRepo != null)
+                {
+                    WorkspaceService.SelectedWorkspace = firstActualRepo.Workspace;
+                }
+            }
+
+            // Now, if a workspace is selected (either previously or auto-selected), filter the repositories for the UI
+            if (WorkspaceService.HasSelectedWorkspace && repositories != null)
+            {
+                // Filter repositories by the selected workspace, always including the "ALL" option
+                repositories = repositories
+                    .Where(r => r.Workspace == WorkspaceService.SelectedWorkspace || r.Slug == "ALL")
+                    .ToArray();
+
+                // If selectedRepoSlug is not set or invalid for the current workspace, default to "ALL"
+                if (string.IsNullOrEmpty(selectedRepoSlug) || (repositories != null && !repositories.Any(r => r.Slug == selectedRepoSlug)))
+                {
+                    selectedRepoSlug = "ALL";
+                }
+            }
+            else // If still no workspace is selected (e.g., no repositories at all), redirect to settings
+            {
+                Navigation.NavigateTo("/admin/settings");
+                return;
+            }
+        }
+
         await LoadDashboardData();
     }
 
@@ -251,7 +325,28 @@
         errorMessage = null;
         try
         {
-            dashboardData = await Http.GetFromJsonAsync<UserDashboardResponseDto>("api/userdashboard");
+            var url = "api/userdashboard";
+            var queryParams = new List<string>();
+
+            if (startDate.HasValue)
+            {
+                queryParams.Add($"startDate={startDate.Value:yyyy-MM-dd}");
+            }
+            if (endDate.HasValue)
+            {
+                queryParams.Add($"endDate={endDate.Value:yyyy-MM-dd}");
+            }
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+            {
+                queryParams.Add($"repoSlug={selectedRepoSlug}");
+            }
+
+            if (queryParams.Any())
+            {
+                url += "?" + string.Join("&", queryParams);
+            }
+
+            dashboardData = await Http.GetFromJsonAsync<UserDashboardResponseDto>(url);
         }
         catch (Exception ex)
         {
@@ -264,11 +359,46 @@
         }
     }
 
+    private async Task LoadRepositories()
+    {
+        isLoadingRepos = true;
+        try
+        {
+            var fetchedRepos = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.RepositorySummaryDto[]>("api/analytics/repositories");
+            if (fetchedRepos != null)
+            {
+                repositories = fetchedRepos.ToArray();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading repositories: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingRepos = false;
+        }
+    }
+
+    private async Task OnRepositorySelected(string? repoSlug)
+    {
+        selectedRepoSlug = repoSlug;
+        await LoadDashboardData();
+    }
+
+    private async Task OnDateRangeUpdated((DateTime? start, DateTime? end) dates)
+    {
+        startDate = dates.start;
+        endDate = dates.end;
+        await LoadDashboardData();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && dashboardData != null)
         {
             await RenderPrAgeChart();
+            await RenderPrsMergedByWeekdayChart();
         }
     }
 
@@ -285,5 +415,37 @@
 
         // Pass data to JavaScript for chart rendering
         await JSRuntime.InvokeVoidAsync("renderPrAgeChart", new { openPrData, mergedPrData });
+    }
+
+    private async Task RenderPrsMergedByWeekdayChart()
+    {
+        if (dashboardData == null || dashboardData.PrsMergedByWeekdayData.MergedPrsByWeekday.Count == 0)
+        {
+            return;
+        }
+
+        var chartData = dashboardData.PrsMergedByWeekdayData.MergedPrsByWeekday.Select(p => new { dayOfWeek = p.DayOfWeek, prCount = p.PrCount }).ToList();
+
+        await JSRuntime.InvokeVoidAsync("renderPrsMergedByWeekdayChart", chartData);
+    }
+
+    // These methods are not directly used by UserDashboard, but are required by CommitsFilter component
+    // They can be left as empty implementations or throw NotImplementedException if not relevant for this dashboard
+    private Task OnFiltersChanged((bool includePR, bool includeData, bool includeConfig) filters)
+    {
+        // No filters to apply on User Dashboard, so this can be empty
+        return Task.CompletedTask;
+    }
+
+    private Task OnGroupingUpdated(string grouping)
+    {
+        // Grouping is not applicable for User Dashboard, so this can be empty
+        return Task.CompletedTask;
+    }
+
+    private Task OnShowExcludedChanged(bool value)
+    {
+        // ShowExcluded is not applicable for User Dashboard, so this can be empty
+        return Task.CompletedTask;
     }
 } 

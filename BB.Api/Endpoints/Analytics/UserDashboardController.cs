@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 
 namespace BB.Api.Endpoints.Analytics
 {
@@ -14,17 +15,20 @@ namespace BB.Api.Endpoints.Analytics
     public class UserDashboardController : ControllerBase
     {
         private readonly string _connectionString;
+        private readonly ILogger<UserDashboardController> _logger;
 
-        public UserDashboardController(IConfiguration config)
+        public UserDashboardController(IConfiguration config, ILogger<UserDashboardController> logger)
         {
             _connectionString = config.GetConnectionString("DefaultConnection") ??
                                 throw new InvalidOperationException("DefaultConnection connection string not found.");
+            _logger = logger;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetUserDashboard(
             DateTime? startDate = null,
-            DateTime? endDate = null)
+            DateTime? endDate = null,
+            string? repoSlug = null)
         {
             if (!startDate.HasValue || !endDate.HasValue)
             {
@@ -40,12 +44,13 @@ namespace BB.Api.Endpoints.Analytics
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            var currentPeriodStats = await GetPeriodStats(connection, startDate.Value, endDate.Value);
-            var previousPeriodStats = await GetPeriodStats(connection, previousPeriodStartDate, previousPeriodEndDate);
-            var prAgeGraphData = await GetPrAgeGraphData(connection, startDate.Value, endDate.Value);
-            var topContributors = await GetTopContributors(connection, startDate.Value, endDate.Value);
-            var usersWithNoActivity = await GetUsersWithNoActivity(connection, startDate.Value, endDate.Value);
-            var topApprovers = await GetTopApprovers(connection, startDate.Value, endDate.Value);
+            var currentPeriodStats = await GetPeriodStats(connection, startDate.Value, endDate.Value, repoSlug);
+            var previousPeriodStats = await GetPeriodStats(connection, previousPeriodStartDate, previousPeriodEndDate, repoSlug);
+            var prAgeGraphData = await GetPrAgeGraphData(connection, startDate.Value, endDate.Value, repoSlug);
+            var topContributors = await GetTopContributors(connection, startDate.Value, endDate.Value, repoSlug);
+            var usersWithNoActivity = await GetUsersWithNoActivity(connection, startDate.Value, endDate.Value, repoSlug);
+            var topApprovers = await GetTopApprovers(connection, startDate.Value, endDate.Value, repoSlug);
+            var prsMergedByWeekdayData = await GetPrsMergedByWeekdayData(connection, startDate.Value, endDate.Value, repoSlug);
 
             var response = new UserDashboardResponseDto
             {
@@ -54,40 +59,41 @@ namespace BB.Api.Endpoints.Analytics
                 PrAgeGraphData = prAgeGraphData,
                 TopContributors = topContributors,
                 UsersWithNoActivity = usersWithNoActivity,
-                TopApprovers = topApprovers
+                TopApprovers = topApprovers,
+                PrsMergedByWeekdayData = prsMergedByWeekdayData
             };
 
             return Ok(response);
         }
 
-        private async Task<PeriodStats> GetPeriodStats(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate)
+        private async Task<PeriodStats> GetPeriodStats(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate, string? repoSlug)
         {
-            // Implement logic to calculate KPIs for a given period
-            // This will include ActiveContributingUsers, TotalLicensedUsers, TotalCommits, RepositoriesUpdated, PrsNotApprovedAndMerged
+            var repoWhereClause = string.IsNullOrEmpty(repoSlug) ? "" : " AND RepositoryId = (SELECT Id FROM Repositories WHERE Slug = @repoSlug)";
 
             // Total Commits
             var totalCommits = await connection.QuerySingleOrDefaultAsync<int>(
-                "SELECT COUNT(*) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0", 
-                new { periodStartDate, periodEndDate });
+                $"SELECT COUNT(*) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0{repoWhereClause}", 
+                new { periodStartDate, periodEndDate, repoSlug });
 
             // Repositories Updated
             var repositoriesUpdated = await connection.QuerySingleOrDefaultAsync<int>(
-                "SELECT COUNT(DISTINCT RepositoryId) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0", 
-                new { periodStartDate, periodEndDate });
+                $"SELECT COUNT(DISTINCT RepositoryId) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0{repoWhereClause}", 
+                new { periodStartDate, periodEndDate, repoSlug });
 
             // Active Contributing Users
             var activeContributingUsers = await connection.QuerySingleOrDefaultAsync<int>(
-                "SELECT COUNT(DISTINCT AuthorId) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0", 
-                new { periodStartDate, periodEndDate });
+                $"SELECT COUNT(DISTINCT AuthorId) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0{repoWhereClause}", 
+                new { periodStartDate, periodEndDate, repoSlug });
 
             // Total Licensed Users - This needs to be determined. For now, let's assume it's the total number of users in the system.
+            // This query does not depend on repoSlug
             var totalLicensedUsers = await connection.QuerySingleOrDefaultAsync<int>(
                 "SELECT COUNT(*) FROM Users WHERE CreatedOn <= @periodEndDate", new { periodEndDate });
 
             // PRs Not Approved and Merged
             var prsNotApprovedAndMerged = await connection.QuerySingleOrDefaultAsync<int>(
-                "SELECT COUNT(*) FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate AND State != 'MERGED' AND State != 'DECLINED'", 
-                new { periodStartDate, periodEndDate });
+                $"SELECT COUNT(*) FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate AND State != 'MERGED' AND State != 'DECLINED'{repoWhereClause}", 
+                new { periodStartDate, periodEndDate, repoSlug });
 
             return new PeriodStats
             {
@@ -101,15 +107,20 @@ namespace BB.Api.Endpoints.Analytics
             };
         }
 
-        private async Task<PrAgeGraph> GetPrAgeGraphData(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate)
+        private async Task<PrAgeGraph> GetPrAgeGraphData(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate, string? repoSlug)
         {
             var openPrAgeData = new List<PrAgeDataPoint>();
             var mergedPrAgeData = new List<PrAgeDataPoint>();
 
+            var repoWhereClause = string.IsNullOrEmpty(repoSlug) ? "" : " AND RepositoryId = (SELECT Id FROM Repositories WHERE Slug = @repoSlug)";
+
             // Open PRs Age
+            _logger.LogInformation("Fetching open PRs from {PeriodStartDate} to {PeriodEndDate} for repo {RepoSlug}", periodStartDate, periodEndDate, repoSlug);
             var openPrs = await connection.QueryAsync<DateTime>(
-                "SELECT CreatedOn FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate AND State = 'OPEN'",
-                new { periodStartDate, periodEndDate });
+                $"SELECT CreatedOn FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate AND State = 'OPEN'{repoWhereClause}",
+                new { periodStartDate, periodEndDate, repoSlug });
+
+            _logger.LogInformation("Found {Count} open PRs", openPrs.Count());
 
             foreach (var createdOn in openPrs)
             {
@@ -127,9 +138,12 @@ namespace BB.Api.Endpoints.Analytics
             openPrAgeData = openPrAgeData.OrderBy(p => p.Days).ToList();
 
             // Merged PRs Age
+            _logger.LogInformation("Fetching merged PRs from {PeriodStartDate} to {PeriodEndDate} for repo {RepoSlug}", periodStartDate, periodEndDate, repoSlug);
             var mergedPrs = await connection.QueryAsync<(DateTime CreatedOn, DateTime MergedOn)>(
-                "SELECT CreatedOn, MergedOn FROM PullRequests WHERE MergedOn >= @periodStartDate AND MergedOn <= @periodEndDate AND State = 'MERGED'",
-                new { periodStartDate, periodEndDate });
+                $"SELECT CreatedOn, MergedOn FROM PullRequests WHERE MergedOn >= @periodStartDate AND MergedOn <= @periodEndDate AND State = 'MERGED'{repoWhereClause}",
+                new { periodStartDate, periodEndDate, repoSlug });
+            
+            _logger.LogInformation("Found {Count} merged PRs", mergedPrs.Count());
 
             foreach (var pr in mergedPrs)
             {
@@ -153,49 +167,75 @@ namespace BB.Api.Endpoints.Analytics
             };
         }
 
-        private async Task<List<ContributorStats>> GetTopContributors(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate)
+        private async Task<List<ContributorStats>> GetTopContributors(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate, string? repoSlug)
         {
-            var topContributors = await connection.QueryAsync<ContributorStats>(@"
+            var repoWhereClause = string.IsNullOrEmpty(repoSlug) ? "" : " AND c.RepositoryId = (SELECT Id FROM Repositories WHERE Slug = @repoSlug)";
+            var topContributors = await connection.QueryAsync<ContributorStats>(@$"
                 SELECT TOP 5 u.DisplayName AS UserName, COUNT(c.Id) AS Commits,
                        ISNULL(SUM(cf.LinesAdded), 0) AS CodeLinesAdded,
                        ISNULL(SUM(cf.LinesRemoved), 0) AS CodeLinesRemoved
                 FROM Commits c
                 JOIN Users u ON c.AuthorId = u.Id
                 LEFT JOIN CommitFiles cf ON c.Id = cf.CommitId AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0
-                WHERE c.Date >= @periodStartDate AND c.Date <= @periodEndDate AND c.IsRevert = 0
+                WHERE c.Date >= @periodStartDate AND c.Date <= @periodEndDate AND c.IsRevert = 0{repoWhereClause}
                 GROUP BY u.DisplayName
                 ORDER BY Commits DESC, CodeLinesAdded DESC
-            ", new { periodStartDate, periodEndDate });
+            ", new { periodStartDate, periodEndDate, repoSlug });
 
             return topContributors.ToList();
         }
 
-        private async Task<int> GetUsersWithNoActivity(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate)
+        private async Task<int> GetUsersWithNoActivity(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate, string? repoSlug)
         {
-            // Users who have no commits in the given period, but have existed before the period ends.
-            var usersWithActivity = await connection.QueryAsync<int>(@"
-                SELECT DISTINCT AuthorId FROM Commits
-                WHERE Date >= @periodStartDate AND Date <= @periodEndDate
-            ", new { periodStartDate = periodStartDate, periodEndDate = periodEndDate });
+            var repoWhereClause = string.IsNullOrEmpty(repoSlug) ? "" : " AND c.RepositoryId = (SELECT Id FROM Repositories WHERE Slug = @repoSlug)";
+            
+            // Get the count of distinct users who had activity in the period
+            var activeUserCount = await connection.QuerySingleAsync<int>(@$"
+                SELECT COUNT(DISTINCT c.AuthorId)
+                FROM Commits c
+                WHERE c.Date >= @periodStartDate AND c.Date <= @periodEndDate AND c.IsRevert = 0{repoWhereClause}
+            ", new { periodStartDate, periodEndDate, repoSlug });
 
-            var totalUsers = await connection.QuerySingleOrDefaultAsync<int>("SELECT COUNT(*) FROM Users WHERE CreatedOn <= @periodEndDate", new { periodEndDate = periodEndDate });
+            // Get the total number of users
+            var totalUserCount = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM Users");
 
-            return totalUsers - usersWithActivity.Count();
+            // Inactive users = Total users - Active users
+            return totalUserCount - activeUserCount;
         }
 
-        private async Task<List<ApproverStats>> GetTopApprovers(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate)
+        private async Task<List<ApproverStats>> GetTopApprovers(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate, string? repoSlug)
         {
-            var topApprovers = await connection.QueryAsync<ApproverStats>(@"
+            var repoWhereClause = string.IsNullOrEmpty(repoSlug) ? "" : " AND pr.RepositoryId = (SELECT Id FROM Repositories WHERE Slug = @repoSlug)";
+            var topApprovers = await connection.QueryAsync<ApproverStats>(@$"
                 SELECT TOP 5 u.DisplayName AS UserName, COUNT(pra.Id) AS PrApprovalCount
                 FROM PullRequestApprovals pra
                 JOIN PullRequests pr ON pra.PullRequestId = pr.Id
                 JOIN Users u ON pra.UserUuid = u.BitbucketUserId
-                WHERE pr.CreatedOn >= @periodStartDate AND pr.CreatedOn <= @periodEndDate
+                WHERE pr.CreatedOn >= @periodStartDate AND pr.CreatedOn <= @periodEndDate{repoWhereClause}
                 GROUP BY u.DisplayName
                 ORDER BY PrApprovalCount DESC
-            ", new { periodStartDate, periodEndDate });
+            ", new { periodStartDate, periodEndDate, repoSlug });
 
             return topApprovers.ToList();
+        }
+
+        private async Task<PrsMergedByWeekdayData> GetPrsMergedByWeekdayData(SqlConnection connection, DateTime periodStartDate, DateTime periodEndDate, string? repoSlug)
+        {
+            var repoWhereClause = string.IsNullOrEmpty(repoSlug) ? "" : " AND RepositoryId = (SELECT Id FROM Repositories WHERE Slug = @repoSlug)";
+            var query = @$"
+                SELECT DATENAME(dw, MergedOn) AS DayOfWeek, COUNT(*) AS PrCount
+                FROM PullRequests
+                WHERE MergedOn >= @periodStartDate AND MergedOn <= @periodEndDate AND State = 'MERGED'{repoWhereClause}
+                GROUP BY DATENAME(dw, MergedOn), DATEPART(dw, MergedOn)
+                ORDER BY DATEPART(dw, MergedOn);
+            ";
+
+            var mergedPrs = await connection.QueryAsync<WeekdayPrCount>(query, new { periodStartDate, periodEndDate, repoSlug });
+
+            return new PrsMergedByWeekdayData
+            {
+                MergedPrsByWeekday = mergedPrs.ToList()
+            };
         }
     }
 } 
