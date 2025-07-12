@@ -30,6 +30,7 @@ CREATE TABLE Commits (
     LinesAdded INT DEFAULT 0,
     LinesRemoved INT DEFAULT 0,
     IsMerge BIT NOT NULL DEFAULT 0,
+    IsRevert BIT NOT NULL DEFAULT 0,
     CodeLinesAdded INT,
     CodeLinesRemoved INT,
     DataLinesAdded INT NOT NULL DEFAULT 0,
@@ -84,6 +85,7 @@ CREATE INDEX IX_Commits_BitbucketCommitHash ON Commits(BitbucketCommitHash);
 CREATE INDEX IX_Commits_DataLines ON Commits(DataLinesAdded, DataLinesRemoved);
 CREATE INDEX IX_Commits_ConfigLines ON Commits(ConfigLinesAdded, ConfigLinesRemoved);
 CREATE INDEX IX_Commits_DocsLines ON Commits(DocsLinesAdded, DocsLinesRemoved);
+CREATE INDEX IX_Commits_IsRevert ON Commits(IsRevert);
 CREATE INDEX IX_PullRequests_RepositoryId ON PullRequests(RepositoryId);
 CREATE INDEX IX_PullRequests_AuthorId ON PullRequests(AuthorId);
 CREATE INDEX IX_PullRequests_State ON PullRequests(State);

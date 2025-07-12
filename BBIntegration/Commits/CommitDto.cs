@@ -20,6 +20,8 @@ namespace BBIntegration.Commits
 
         [JsonPropertyName("parents")]
         public List<CommitParentDto> Parents { get; set; } = new();
+
+        public bool IsRevert { get; set; }
     }
 
     public class CommitParentDto

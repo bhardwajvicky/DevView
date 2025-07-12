@@ -186,6 +186,12 @@ namespace BBIntegration.Commits
                 logger?.LogInformation("Added commit: {CommitHash} (IsMerge: {IsMerge}, IsPRMergeCommit: {IsPRMergeCommit})", commit.Hash, isMergeCommit, isPRMergeCommit);
             }
 
+            // Example: Detect revert commit
+            if (commit.Message != null && commit.Message.IndexOf("Revert \"", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                commit.IsRevert = true;
+            }
+
             // Insert file-level details
             await InsertCommitFilesAsync(connection, commitId, diffSummary.FileChanges, logger);
             return commitId;

@@ -152,6 +152,38 @@ namespace BB.Api.Endpoints.Sync
                 return StatusCode(500, $"An error occurred while refreshing commit line counts: {ex.Message}");
             }
         }
+
+        [HttpPost("identify-revert-commits/{workspace}")]
+        public async Task<IActionResult> IdentifyAndMarkRevertCommits(string workspace)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+                await connection.OpenAsync();
+                // Find all commits in the workspace that are not already marked as revert
+                var selectSql = @"
+                    SELECT c.Id, c.Message
+                    FROM Commits c
+                    INNER JOIN Repositories r ON c.RepositoryId = r.Id
+                    WHERE r.Workspace = @workspace AND c.IsRevert = 0
+                ";
+                var commits = await connection.QueryAsync<(long Id, string Message)>(selectSql, new { workspace });
+                int marked = 0;
+                foreach (var commit in commits)
+                {
+                    if (!string.IsNullOrEmpty(commit.Message) && commit.Message.IndexOf("Revert \"", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        await connection.ExecuteAsync("UPDATE Commits SET IsRevert = 1 WHERE Id = @Id", new { commit.Id });
+                        marked++;
+                    }
+                }
+                return Ok($"Marked {marked} revert commits in workspace '{workspace}'.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"An error occurred while identifying revert commits: {ex.Message}");
+            }
+        }
     }
 
     public class DateRangeDto

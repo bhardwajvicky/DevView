@@ -121,6 +121,12 @@ namespace BBIntegration.Commits
                         var (totalAdded, totalRemoved, codeAdded, codeRemoved) = 
                             (diffSummary.TotalAdded, diffSummary.TotalRemoved, diffSummary.CodeAdded, diffSummary.CodeRemoved);
 
+                        // Example: Detect revert commit
+                        if (commit.Message != null && commit.Message.IndexOf("Revert \"", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            commit.IsRevert = true;
+                        }
+
                         int commitId = await CommitCrudHelper.UpsertCommitAndFilesAsync(
                             connection,
                             commit,

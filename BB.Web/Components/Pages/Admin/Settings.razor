@@ -316,6 +316,40 @@
                 </div>
             </div>
 
+            <!-- Revert Commit Detection Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-arrow-counterclockwise me-2"></i>
+                        Revert Commit Detection
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        This tool will scan all commits and mark those that are detected as revert commits (e.g., commit messages starting with "Revert").
+                        Revert commits are excluded from analytics and reporting.
+                    </p>
+                    <button class="btn btn-danger w-100" @onclick="IdentifyAndMarkRevertCommits" disabled="@isMarkingReverts">
+                        @if (isMarkingReverts)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-search me-2"></i>
+                        }
+                        Identify & Mark Revert Commits
+                    </button>
+                    <div class="form-text text-muted mt-2">
+                        This operation will analyze all commit messages and may take a while for large repositories.
+                    </div>
+                    @if (!string.IsNullOrEmpty(revertResultMessage))
+                    {
+                        <div class="alert alert-info mt-3">@revertResultMessage</div>
+                    }
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
@@ -342,6 +376,8 @@
     private string message = string.Empty;
     private string messageType = string.Empty;
     private string fixPrRepoSlug = string.Empty;
+    private bool isMarkingReverts = false;
+    private string revertResultMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -639,6 +675,43 @@
         finally
         {
             isSyncingPRs = false;
+        }
+    }
+
+    private async Task IdentifyAndMarkRevertCommits()
+    {
+        if (!WorkspaceService.HasSelectedWorkspace)
+        {
+            ShowMessage("Please select a workspace first", "error");
+            return;
+        }
+
+        isMarkingReverts = true;
+        revertResultMessage = string.Empty;
+
+        try
+        {
+            var url = $"/api/sync/identify-revert-commits/{WorkspaceService.SelectedWorkspace}";
+            var response = await Http.PostAsync(url, null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                revertResultMessage = $"Revert commits identified and marked successfully: {responseContent}";
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                revertResultMessage = $"Failed to identify revert commits: {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            revertResultMessage = $"Error during revert identification: {ex.Message}";
+        }
+        finally
+        {
+            isMarkingReverts = false;
         }
     }
 

@@ -22,6 +22,7 @@ namespace BB.Api.Models
         public int LinesAdded { get; set; }
         public int LinesRemoved { get; set; }
         public bool IsMerge { get; set; }
+        public bool IsRevert { get; set; }
         
         // Code-specific line counts (nullable for backward compatibility)
         public int? CodeLinesAdded { get; set; }

@@ -40,5 +40,9 @@ DROP CONSTRAINT [YourActualConstraintNameGoesHere]; -- <-- IMPORTANT: Replace th
 ALTER TABLE PullRequests
 ADD CONSTRAINT UQ_PullRequests_RepositoryId_BitbucketPrId UNIQUE (RepositoryId, BitbucketPrId);
 
+-- Add IsRevert column to Commits table
+ALTER TABLE Commits
+ADD IsRevert bit NOT NULL DEFAULT 0;
+
 -- After running this script, re-run your sync process to ensure all PRs,
 -- approvals, and commits are correctly associated. 

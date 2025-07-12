@@ -44,6 +44,7 @@ namespace BB.Api.Services
                     AND (@UserId IS NULL OR c.AuthorId = @UserId)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                    AND c.IsRevert = 0
             ";
         }
 
@@ -208,6 +209,7 @@ namespace BB.Api.Services
                   AND (@repoSlug IS NULL OR r.Slug = @repoSlug)
                   AND (@startDate IS NULL OR c.Date >= @startDate)
                   AND (@endDate IS NULL OR c.Date <= @endDate)
+                  AND c.IsRevert = 0
                 GROUP BY DATEPART(WEEKDAY, [Date]) - 1, DATEPART(HOUR, [Date])
                 ORDER BY DayOfWeek, HourOfDay;";
 
@@ -279,6 +281,7 @@ namespace BB.Api.Services
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                    AND c.IsRevert = 0
                 ORDER BY c.Date DESC;
             ";
 
@@ -473,6 +476,7 @@ namespace BB.Api.Services
                         AND (@startDate IS NULL OR c.Date >= @startDate)
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
+                        AND c.IsRevert = 0
                     GROUP BY c.AuthorId, u.DisplayName, u.AvatarUrl
                 ),
                 ActivityData AS (
@@ -500,6 +504,7 @@ namespace BB.Api.Services
                         AND (@startDate IS NULL OR c.Date >= @startDate)
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
+                        AND c.IsRevert = 0
                     GROUP BY c.AuthorId, DATEADD(DAY, DATEDIFF(DAY, 0, c.Date), 0), c.IsMerge
                 ),
                 TopCommitters AS (
@@ -827,6 +832,7 @@ namespace BB.Api.Services
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
+                    AND c.IsRevert = 0
             ";
 
             return $@"
