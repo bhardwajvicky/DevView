@@ -100,6 +100,7 @@
                         <table class="table table-striped table-hover">
                             <thead>
                                 <tr>
+                                    <th></th> <!-- New column for edit icon -->
                                     <th>Commit</th>
                                     <th>Repository</th>
                                     <th>Author</th>
@@ -121,6 +122,11 @@
                                     var totalRemoved = commit.LinesRemoved;
                                     
                                     <tr>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowCommitFilesModal(commit.Hash)">
+                                                <i class="bi bi-pencil-fill"></i>
+                                            </button>
+                                        </td>
                                         <td>
                                             @if (!string.IsNullOrEmpty(commit.RepositorySlug))
                                             {
@@ -221,6 +227,11 @@
     </div>
 }
 
+<CommitFilesModal
+    IsOpen="@showCommitFilesModal"
+    IsOpenChanged="@((value) => showCommitFilesModal = value)"
+    CommitHash="@(selectedCommitHashForModal ?? string.Empty)" />
+
 @code {
     private IEnumerable<RepositorySummaryDto>? repositories;
     private IEnumerable<BB.Api.Endpoints.Analytics.UserDto>? users;
@@ -230,8 +241,8 @@
     private bool isLoadingCommits = false;
     private string? selectedRepoSlug;
     private int? selectedUserId;
-    private DateTime? startDate;
-    private DateTime? endDate;
+    private DateTime? startDate = DateTime.Today.AddDays(-7);
+    private DateTime? endDate = DateTime.Today;
     private bool includePR = false;  // Changed default to false
     private bool includeData = true;
     private bool includeConfig = true;
@@ -242,6 +253,8 @@
     private int pageSize = 25;
     private string? selectedMessage;
     private bool showMessageModal;
+    private bool showCommitFilesModal = false;
+    private string? selectedCommitHashForModal;
 
     protected override async Task OnInitializedAsync()
     {
@@ -389,11 +402,6 @@
         JSRuntime.InvokeVoidAsync("window.openExternalUrl", url, "bitbucketCommitPopup"); // Use a named target
     }
 
-    private void NavigateToSettings()
-    {
-        Navigation.NavigateTo("admin/settings");
-    }
-
     private void ShowFullMessage(string message)
     {
         selectedMessage = message;
@@ -404,5 +412,22 @@
     {
         showMessageModal = false;
         selectedMessage = null;
+    }
+
+    private void ShowCommitFilesModal(string commitHash)
+    {
+        selectedCommitHashForModal = commitHash;
+        showCommitFilesModal = true;
+    }
+
+    private void CloseCommitFilesModal()
+    {
+        showCommitFilesModal = false;
+        selectedCommitHashForModal = null;
+    }
+
+    private void NavigateToSettings()
+    {
+        Navigation.NavigateTo("admin/settings");
     }
 } 

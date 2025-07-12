@@ -251,5 +251,27 @@ namespace BB.Api.Endpoints.Analytics
             var result = await _analyticsService.GetPrAgeBubbleDataAsync(repoSlug, workspace, startDate, endDate);
             return Ok(result);
         }
+
+        [HttpGet("commits/{commitHash}/files")]
+        public async Task<IActionResult> GetCommitFilesForCommit([FromRoute] string commitHash)
+        {
+            if (string.IsNullOrEmpty(commitHash))
+            {
+                return BadRequest("Commit hash must be provided.");
+            }
+            var result = await _analyticsService.GetCommitFilesForCommitAsync(commitHash);
+            return Ok(result);
+        }
+
+        [HttpPut("commit-files")]
+        public async Task<IActionResult> UpdateCommitFile([FromBody] CommitFileUpdateDto updateDto)
+        {
+            if (updateDto == null)
+            {
+                return BadRequest("Update data must be provided.");
+            }
+            await _analyticsService.UpdateCommitFileAsync(updateDto);
+            return NoContent();
+        }
     }
 } 

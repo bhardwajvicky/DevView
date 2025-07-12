@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using BB.Api.Endpoints.Analytics;
 
 namespace BB.Api.Endpoints.Commits
 {
@@ -23,5 +24,6 @@ namespace BB.Api.Endpoints.Commits
         public int DocsLinesRemoved { get; set; }
         public string? RepositoryName { get; set; }
         public string? RepositorySlug { get; set; }
+        public List<CommitFileDto> CommitFiles { get; set; } = new List<CommitFileDto>();
     }
 } 

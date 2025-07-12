@@ -760,6 +760,42 @@ namespace BB.Api.Services
             return await connection.QueryAsync<PrAgeBubbleDto>(sql, new { repoSlug, workspace, startDate, endDate });
         }
 
+        public async Task<List<CommitFileDto>> GetCommitFilesForCommitAsync(string commitHash)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            var sql = @"
+                SELECT
+                    Id,
+                    FilePath,
+                    FileType,
+                    LinesAdded,
+                    LinesRemoved,
+                    ExcludeFromReporting
+                FROM CommitFiles
+                WHERE CommitId = (SELECT Id FROM Commits WHERE BitbucketCommitHash = @commitHash);";
+
+            var commitFiles = await connection.QueryAsync<CommitFileDto>(sql, new { commitHash });
+
+            return commitFiles.ToList();
+        }
+
+        public async Task UpdateCommitFileAsync(CommitFileUpdateDto updateDto)
+        {
+            using var connection = new SqlConnection(_connectionString);
+
+            // Basic validation to prevent SQL injection for property name
+            var allowedProperties = new List<string> { "ExcludeFromReporting" }; // Add other properties as needed
+            if (!allowedProperties.Contains(updateDto.PropertyName))
+            {
+                throw new ArgumentException($"Invalid property name: {updateDto.PropertyName}");
+            }
+
+            var sql = $"UPDATE CommitFiles SET {updateDto.PropertyName} = @Value WHERE Id = @FileId;";
+
+            await connection.ExecuteAsync(sql, new { updateDto.FileId, updateDto.Value });
+        }
+
         private string GetCommitterRankingQuery(bool includePR, bool includeData, bool includeConfig)
         {
             // Build the ranking criteria based on filters using subqueries
