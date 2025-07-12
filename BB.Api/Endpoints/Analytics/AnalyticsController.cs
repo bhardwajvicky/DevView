@@ -58,20 +58,10 @@ namespace BB.Api.Endpoints.Analytics
             return Ok(result);
         }
 
-        [HttpGet("commits/punchcard")]
-        public async Task<IActionResult> GetCommitPunchcard(
-            [FromQuery] string? repoSlug,
-            [FromQuery] string? workspace,
-            [FromQuery] DateTime? startDate,
-            [FromQuery] DateTime? endDate,
-            [FromQuery] int? userId = null)
+        [HttpGet("commit-punchcard")]
+        public async Task<IActionResult> GetCommitPunchcard([FromQuery] string? workspace = null, [FromQuery] string? repoSlug = null, [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
         {
-            if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
-            {
-                return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
-            }
-
-            var result = await _analyticsService.GetCommitPunchcardAsync(repoSlug, workspace, startDate, endDate, userId);
+            var result = await _analyticsService.GetCommitPunchcardAsync(workspace, repoSlug, startDate, endDate);
             return Ok(result);
         }
 

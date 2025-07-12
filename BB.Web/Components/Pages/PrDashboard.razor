@@ -169,49 +169,27 @@
             </div>
         }
 
-        @if (isLoadingPrAgeBubbleData)
+        @if (isLoadingPunchcard)
         {
             <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
                 <div class="d-flex align-items-center">
                     <div class="spinner-border spinner-border-sm me-2" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <span>Loading PR age bubble graph data...</span>
+                    <span>Loading commit punchcard...</span>
                 </div>
             </RadzenAlert>
         }
-        else if (prAgeBubbleData != null && prAgeBubbleData.Any())
+        else if (punchcardData != null && punchcardData.Any())
         {
             <div class="row mb-4">
-                <div class="col-12">
+                <div style="max-width: 600px; margin-left: 0; margin-right: auto; padding-left: 0; padding-right: 0;">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0">PR Age Distribution (1-20 Days)</h5>
+                            <h5 class="card-title mb-0">Commit Activity Punchcard</h5>
                         </div>
                         <div class="card-body">
-                            <div style="position: relative; height: 400px;">
-                                <canvas id="prAgeBubbleChart"></canvas>
-                                @if (isLoadingPrAgeBubbleData)
-                                {
-                                    <div class="d-flex align-items-center justify-content-center h-100 position-absolute top-0 start-0 w-100 bg-white bg-opacity-75">
-                                        <div class="text-center">
-                                            <div class="spinner-border text-primary" role="status">
-                                                <span class="visually-hidden">Loading chart...</span>
-                                            </div>
-                                            <p class="mt-2 text-muted">Loading chart data...</p>
-                                        </div>
-                                    </div>
-                                }
-                                @if (prAgeBubbleData == null || !prAgeBubbleData.Any())
-                                {
-                                    <div class="d-flex align-items-center justify-content-center h-100 position-absolute top-0 start-0 w-100">
-                                        <div class="text-center text-muted">
-                                            <i class="bi bi-graph-up" style="font-size: 3rem;"></i>
-                                            <p class="mt-2">No data available for PR age distribution.</p>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
+                            <CommitPunchcardChart Data="@punchcardData" />
                         </div>
                     </div>
                 </div>
@@ -221,7 +199,7 @@
         {
             <div class="alert alert-info">
                 <i class="bi bi-info-circle me-2"></i>
-                No data for PR age bubble graph found for the selected criteria.
+                No punchcard data found for the selected criteria.
             </div>
         }
     }
@@ -232,19 +210,16 @@
     private List<BB.Api.Endpoints.Analytics.RepositorySummaryDto>? topOpenPrs;
     private List<BB.Api.Endpoints.Analytics.RepositorySummaryDto>? topOldestOpenPrs;
     private List<BB.Api.Endpoints.Analytics.RepositorySummaryDto>? topUnapprovedPrs;
-    private List<PrAgeBubbleDto>? prAgeBubbleData;
+    private List<CommitPunchcardDto>? punchcardData;
     private bool isLoadingRepos = true;
     private bool isLoadingTopOpenPrs = false;
     private bool isLoadingTopOldestOpenPrs = false;
     private bool isLoadingTopUnapprovedPrs = false;
-    private bool isLoadingPrAgeBubbleData = false;
+    private bool isLoadingPunchcard = false;
     private string? selectedRepoSlug;
     private DateTime? startDate;
     private DateTime? endDate;
     private string? errorMessage;
-
-    private DotNetObjectReference<PrDashboard>? _dotNetRef;
-    private bool prAgeChartInitialized = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -275,20 +250,7 @@
             await LoadTopOpenPrs();
             await LoadTopOldestOpenPrs();
             await LoadTopUnapprovedPrs();
-            await LoadPrAgeBubbleData();
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            _dotNetRef = DotNetObjectReference.Create(this);
-            await JSRuntime.InvokeVoidAsync("setPrDashboardDotNetRef", _dotNetRef);
-        }
-        if (!firstRender && prAgeBubbleData != null && prAgeBubbleData.Any() && !prAgeChartInitialized)
-        {
-            await InitializePrAgeBubbleChart();
+            await LoadPunchcardData();
         }
     }
 
@@ -314,7 +276,6 @@
     private async Task OnRepositorySelected(string? slug)
     {
         selectedRepoSlug = slug;
-        prAgeChartInitialized = false; // Reset chart state
         await RefreshDashboardData();
     }
 
@@ -322,7 +283,6 @@
     {
         startDate = range.start;
         endDate = range.end;
-        prAgeChartInitialized = false; // Reset chart state
         await RefreshDashboardData();
     }
 
@@ -333,13 +293,7 @@
             await LoadTopOpenPrs();
             await LoadTopOldestOpenPrs();
             await LoadTopUnapprovedPrs();
-            await LoadPrAgeBubbleData();
-
-            // Only initialize chart if data is present
-            if (prAgeBubbleData != null && prAgeBubbleData.Any())
-            {
-                await InitializePrAgeBubbleChart();
-            }
+            await LoadPunchcardData();
             StateHasChanged();
         }
         else
@@ -347,7 +301,7 @@
             topOpenPrs = null;
             topOldestOpenPrs = null;
             topUnapprovedPrs = null;
-            prAgeBubbleData = null;
+            punchcardData = null;
             StateHasChanged();
         }
     }
@@ -481,22 +435,20 @@
         }
     }
 
-    private async Task LoadPrAgeBubbleData()
+    private async Task LoadPunchcardData()
     {
         try
         {
-            isLoadingPrAgeBubbleData = true;
+            isLoadingPunchcard = true;
             errorMessage = null;
-
             var workspace = WorkspaceService.SelectedWorkspace;
             if (string.IsNullOrEmpty(workspace))
             {
                 errorMessage = "No workspace selected. Please configure workspace in Settings.";
-                Logger.LogWarning("LoadPrAgeBubbleData: No workspace provided");
+                Logger.LogWarning("LoadPunchcardData: No workspace provided");
                 return;
             }
-
-            var url = $"api/analytics/pr-age-bubble?workspace={workspace}";
+            var url = $"api/analytics/commit-punchcard?workspace={workspace}";
             if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
             {
                 url += $"&repoSlug={selectedRepoSlug}";
@@ -509,118 +461,22 @@
             {
                 url += $"&endDate={endDate.Value:yyyy-MM-dd}";
             }
-
-            prAgeBubbleData = await Http.GetFromJsonAsync<List<PrAgeBubbleDto>>(url);
+            punchcardData = await Http.GetFromJsonAsync<List<CommitPunchcardDto>>(url);
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading PR age bubble data: {ex.Message}";
-            Logger.LogError(ex, "Error loading PR age bubble data");
+            errorMessage = $"Error loading punchcard data: {ex.Message}";
+            Logger.LogError(ex, "Error loading punchcard data");
         }
         finally
         {
-            isLoadingPrAgeBubbleData = false;
+            isLoadingPunchcard = false;
             StateHasChanged();
         }
-    }
-
-    private async Task InitializePrAgeBubbleChart()
-    {
-        if (prAgeBubbleData != null && prAgeBubbleData.Any())
-        {
-            var chartData = prAgeBubbleData.Select(p => new
-            {
-                x = p.AgeInDays,
-                y = p.NumberOfPRs,
-                r = Math.Sqrt(p.NumberOfPRs) * 5, // Radius based on sqrt of PR count for better visual scaling
-                repoName = p.RepositoryName
-            }).ToArray();
-
-            await JSRuntime.InvokeVoidAsync("initializePrAgeBubbleChart", new object[] { chartData });
-            prAgeChartInitialized = true;
-        }
-    }
-
-    private void NavigateToSettings()
-    {
-        Navigation.NavigateTo("/admin/settings");
     }
 }
 
 <script>
-    window.initializePrAgeBubbleChart = (data) => {
-        const chartElement = document.getElementById('prAgeBubbleChart');
-        if (!chartElement) {
-            console.error('PR age bubble chart canvas element not found.');
-            return;
-        }
-
-        const ctx = chartElement.getContext('2d');
-
-        if (window.prAgeBubbleChart && typeof window.prAgeBubbleChart.destroy === 'function') {
-            window.prAgeBubbleChart.destroy();
-        }
-
-        window.prAgeBubbleChart = new Chart(ctx, {
-            type: 'bubble',
-            data: {
-                datasets: [{
-                    label: 'PR Age Distribution',
-                    data: data,
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'PR Age Distribution (Days Open)',
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const item = context.raw;
-                                return `PRs: ${item.y}, Age: ${item.x} days${item.repoName ? `, Repo: ${item.repoName}` : ''}`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'linear',
-                        position: 'bottom',
-                        title: {
-                            display: true,
-                            text: 'Age in Days'
-                        },
-                        min: 0,
-                        max: 20,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Number of PRs'
-                        },
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                }
-            }
-        });
-    };
-
     window.setPrDashboardDotNetRef = function(dotNetRef) {
         window.prDashboardComponent = { dotNetRef: dotNetRef };
     };

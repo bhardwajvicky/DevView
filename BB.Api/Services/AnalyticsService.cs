@@ -194,24 +194,25 @@ namespace BB.Api.Services
             return await connection.QueryAsync<ContributorActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, includeData, includeConfig });
         }
 
-        public async Task<IEnumerable<CommitPunchcardDto>> GetCommitPunchcardAsync(
-            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, int? userId, bool includePR = true)
+        public async Task<List<CommitPunchcardDto>> GetCommitPunchcardAsync(string? workspace = null, string? repoSlug = null, DateTime? startDate = null, DateTime? endDate = null)
         {
             using var connection = new SqlConnection(_connectionString);
-
-            var sql = $@"
-                SELECT 
-                    DATEPART(weekday, c.Date) - 1 AS DayOfWeek,
-                    DATEPART(hour, c.Date) AS Hour,
-                    COUNT(c.Id) AS CommitCount
+            var sql = @"
+                SELECT
+                    DATEPART(WEEKDAY, [Date]) - 1 AS DayOfWeek,
+                    DATEPART(HOUR, [Date]) AS HourOfDay,
+                    COUNT(*) AS CommitCount
                 FROM Commits c
-                JOIN Repositories r ON c.RepositoryId = r.Id
-                {GetFilterClause(includePR)}
-                GROUP BY DATEPART(weekday, c.Date), DATEPART(hour, c.Date)
-                ORDER BY DayOfWeek, Hour;
-            ";
+                INNER JOIN Repositories r ON c.RepositoryId = r.Id
+                WHERE (@workspace IS NULL OR r.Workspace = @workspace)
+                  AND (@repoSlug IS NULL OR r.Slug = @repoSlug)
+                  AND (@startDate IS NULL OR c.Date >= @startDate)
+                  AND (@endDate IS NULL OR c.Date <= @endDate)
+                GROUP BY DATEPART(WEEKDAY, [Date]) - 1, DATEPART(HOUR, [Date])
+                ORDER BY DayOfWeek, HourOfDay;";
 
-            return await connection.QueryAsync<CommitPunchcardDto>(sql, new { repoSlug, workspace, startDate, endDate, userId });
+            var punchcard = await connection.QueryAsync<CommitPunchcardDto>(sql, new { workspace, repoSlug, startDate, endDate });
+            return punchcard.ToList();
         }
 
         public async Task<IEnumerable<RepositorySummaryDto>> GetRepositoriesAsync()
