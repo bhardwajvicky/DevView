@@ -135,7 +135,9 @@
                                             TotalLinesAdded="@totalLinesAdded"
                                             TotalLinesDeleted="@totalLinesDeleted"
                                             IsTopCommitter="true"
-                                            OnChartClick="@(date => HandleContributorChartClick(committer.UserId, date))" />
+                                            OnChartClick="@(date => HandleContributorChartClick(committer.UserId, date))"
+                                            OnNameClick="@(userId => NavigateToUserCommits(userId, committer.DisplayName, null, selectedRepoSlug))"
+                                            ContributorUserId="@committer.UserId" />
                                     </div>
                                 }
                             </div>
@@ -195,7 +197,9 @@
                                                 TotalLinesAdded="@totalLinesAdded"
                                                 TotalLinesDeleted="@totalLinesDeleted"
                                                 IsTopCommitter="false"
-                                                OnChartClick="@(date => HandleContributorChartClick(committer.UserId, date))" />
+                                                OnChartClick="@(date => HandleContributorChartClick(committer.UserId, date))"
+                                                OnNameClick="@(userId => NavigateToUserCommits(userId, committer.DisplayName, null, selectedRepoSlug))"
+                                                ContributorUserId="@committer.UserId" />
                                         </div>
                                     }
                                 </div>

@@ -11,6 +11,142 @@
 @using BB.Web.Components.Common 
 @rendermode InteractiveServer
 
+<div class="container-fluid mt-4">
+    @if (selectedUser != null)
+    {
+        <div class="card">
+            <div class="card-header">
+                <h3>Commits by @selectedUser.DisplayName</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-12">
+                        <CommitsFilter
+                            Repositories="repositories"
+                            SelectedRepoSlug="selectedRepoSlug"
+                            StartDate="startDateObject"
+                            EndDate="endDateObject"
+                            IncludePR="includePR"
+                            IncludeData="includeData"
+                            IncludeConfig="includeConfig"
+                            ShowExcluded="showExcluded"
+                            OnRepositorySelected="OnRepositorySelected"
+                            OnUserSelected="@((int? uId) => Task.CompletedTask)"
+                            OnDateRangeUpdated="EventCallback.Factory.Create<(DateTime? newStartDate, DateTime? newEndDate)>(this, OnDateRangeUpdated)"
+                            OnFiltersChanged="OnFiltersChanged"
+                            OnShowExcludedChanged="OnShowExcludedChanged" />
+                    </div>
+                </div>
+
+                @if (isLoading)
+                {
+                    <div class="d-flex justify-content-center mt-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger mt-4">@errorMessage</div>
+                }
+                else if (commits.Any())
+                {
+                    <CommitSummary PaginatedCommitsResponse="paginatedCommitsResponse" />
+                    <div class="table-responsive mt-4">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>Commit</th>
+                                    <th>Repository</th>
+                                    <th>Date</th>
+                                    <th>Lines Added</th>
+                                    <th>Lines Removed</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var commit in commits)
+                                {
+                                    <tr>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowCommitFilesModal(commit.Hash)">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <a href="#" @onclick='() => OpenBitbucketPopup(commit.Hash, commit.RepositorySlug)' @onclick:preventDefault>
+                                                @commit.Hash.Substring(0, 7)
+                                            </a>
+                                        </td>
+                                        <td>@commit.RepositoryName</td>
+                                        <td>@commit.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td class="text-success">@commit.LinesAdded</td>
+                                        <td class="text-danger">@commit.LinesRemoved</td>
+                                        <td>
+                                            <span title="@commit.Message" style="cursor: pointer" @onclick="() => ShowFullMessage(commit.Message)">
+                                                @(commit.Message.Length > 50 ? commit.Message.Substring(0, 50) + "..." : commit.Message)
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex justify-content-center mt-3">
+                        <nav>
+                            <ul class="pagination">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPageWithLog(currentPage - 1)">Previous</button>
+                                </li>
+                                @for (var i = 1; i <= totalPages; i++)
+                                {
+                                    var pageNumber = i;
+                                    <li class="page-item @(currentPage == pageNumber ? "active" : "")">
+                                        <button class="page-link" @onclick="() => GoToPageWithLog(pageNumber)">@pageNumber</button>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => GoToPageWithLog(currentPage + 1)">Next</button>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info mt-4">No commits found for this user.</div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <p><em>Loading user data...</em></p>
+    }
+</div>
+
+@if (showMessageModal)
+{
+    <div class="modal show" style="display: block; background: rgba(0,0,0,0.5);" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Commit Message</h5>
+                    <button type="button" class="btn-close" @onclick="() => showMessageModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="white-space: pre-wrap;">@selectedMessage</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<CommitFilesModal IsOpen="@showCommitFilesModal" IsOpenChanged="@OnCommitFilesModalChanged" CommitHash="@(selectedCommitHashForModal ?? string.Empty)" />
+
 @code {
     [Parameter]
     public int UserId { get; set; }
@@ -27,41 +163,47 @@
     [SupplyParameterFromQuery]
     public string? RepoSlug { get; set; }
 
-    private List<BB.Api.Endpoints.Commits.CommitListItemDto> commits = new();
-    private List<BB.Api.Endpoints.Analytics.RepositorySummaryDto> repositories = new();
-    private BB.Api.Endpoints.Analytics.UserDto? selectedUser;
+    private List<CommitListItemDto> commits = new();
+    private List<RepositorySummaryDto> repositories = new();
+    private UserDto? selectedUser;
     private string? selectedRepoSlug;
-    private bool includePR = false; // Default unchecked as requested
-    private bool includeData = true; // Added for CommitsFilter consistency
-    private bool includeConfig = true; // Added for CommitsFilter consistency
-    private bool showExcluded = false; // Added for CommitsFilter consistency
-    private DateTime? startDateObject; // New: for DateTime conversion
-    private DateTime? endDateObject;   // New: for DateTime conversion
-    private BB.Api.Endpoints.Commits.PaginatedCommitsResponse? paginatedCommitsResponse; // New variable to explicitly type the response
+    private bool includePR = false;
+    private bool includeData = true;
+    private bool includeConfig = true;
+    private bool showExcluded = false;
+    private DateTime? startDateObject;
+    private DateTime? endDateObject;
+    private PaginatedCommitsResponse? paginatedCommitsResponse;
     private int currentPage = 1;
     private int totalPages = 1;
     private int pageSize = 25;
     private bool isLoading = true;
     private string? errorMessage;
-    private bool showCommitFilesModal = false; // New: For CommitFilesModal
-    private string? selectedCommitHashForModal; // New: For CommitFilesModal
-    private string? selectedMessage; // New: For message truncation and modal
-    private bool showMessageModal; // New: For message truncation and modal
+    private bool showCommitFilesModal = false;
+    private string? selectedCommitHashForModal;
+    private string? selectedMessage;
+    private bool showMessageModal;
 
     protected override async Task OnParametersSetAsync()
     {
-        // Convert string dates from URL parameters to DateTime objects
         if (DateTime.TryParse(StartDate, out var sd)) startDateObject = sd;
-        else startDateObject = DateTime.Today.AddDays(-7); // Default to 7 days if not provided
+        else startDateObject = DateTime.Today.AddDays(-7);
 
         if (DateTime.TryParse(EndDate, out var ed)) endDateObject = ed;
-        else endDateObject = DateTime.Today; // Default to today if not provided
+        else endDateObject = DateTime.Today;
 
-        selectedRepoSlug = RepoSlug; // Keep existing repo slug
+        selectedRepoSlug = RepoSlug;
         
+        await LoadAllData();
+    }
+
+    private async Task LoadAllData()
+    {
+        isLoading = true;
         await LoadRepositories();
         await LoadUser();
         await LoadCommits();
+        isLoading = false;
     }
 
     private async Task LoadRepositories()
@@ -90,18 +232,17 @@
         }
     }
 
-    private async Task OnRepositorySelected(ChangeEventArgs e)
+    private async Task OnRepositorySelected(string? repoSlug)
     {
-        selectedRepoSlug = e.Value?.ToString();
-        if (selectedRepoSlug == "all") selectedRepoSlug = null;
+        selectedRepoSlug = repoSlug == "all" ? null : repoSlug;
         currentPage = 1;
         await LoadCommits();
     }
 
-    private async Task OnDateRangeUpdated(DateTime? newStartDate, DateTime? newEndDate)
+    private async Task OnDateRangeUpdated((DateTime? newStartDate, DateTime? newEndDate) dateRange)
     {
-        startDateObject = newStartDate;
-        endDateObject = newEndDate;
+        startDateObject = dateRange.newStartDate;
+        endDateObject = dateRange.newEndDate;
         currentPage = 1;
         await LoadCommits();
     }
@@ -123,117 +264,56 @@
 
     private async Task LoadCommits()
     {
-        Console.WriteLine($"LoadCommits called - currentPage: {currentPage}, includePR: {includePR}, userId: {UserId}");
         isLoading = true;
         errorMessage = null;
         try
         {
-            // Use the existing commits API endpoint with userId filter
-            var url = $"/api/commits/{selectedRepoSlug?.ToLower() ?? "all"}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}&userId={UserId}";
-            
+            var repoPath = string.IsNullOrEmpty(selectedRepoSlug) ? "all" : selectedRepoSlug;
+            var url = $"api/commits/{repoPath}?page={currentPage}&pageSize={pageSize}&includePR={includePR}&userId={UserId}";
             if (startDateObject.HasValue) url += $"&startDate={startDateObject.Value:yyyy-MM-dd}";
             if (endDateObject.HasValue) url += $"&endDate={endDateObject.Value:yyyy-MM-dd}";
             if (showExcluded) url += "&showExcluded=true";
 
-            Console.WriteLine($"API URL: {url}");
-            var response = await Http.GetFromJsonAsync<BB.Api.Endpoints.Commits.PaginatedCommitsResponse>(url);
+            var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
             if (response != null)
             {
-                Console.WriteLine($"Received {response.Commits.Count} commits, totalPages: {response.TotalPages}");
                 commits = response.Commits;
                 totalPages = response.TotalPages;
-                paginatedCommitsResponse = response; // Assign the full response to the new variable
+                paginatedCommitsResponse = response;
             }
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            Console.WriteLine($"Repository not found error: {ex.Message}");
-            errorMessage = $"Repository '{selectedRepoSlug}' not found or no commits found for this user.";
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"LoadCommits error: {ex.Message}");
             errorMessage = $"Error loading commits: {ex.Message}";
         }
-        isLoading = false;
-        Console.WriteLine("LoadCommits completed, calling StateHasChanged");
-        StateHasChanged();
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task GoToPage(int page)
     {
-        Console.WriteLine($"GoToPage called with page: {page}, totalPages: {totalPages}");
-        if (page < 1 || page > totalPages) 
-        {
-            Console.WriteLine($"Page {page} is out of bounds (1-{totalPages}), returning early");
-            return;
-        }
-        Console.WriteLine($"Setting currentPage from {currentPage} to {page}");
+        if (page < 1 || page > totalPages) return;
         currentPage = page;
-        Console.WriteLine("About to call LoadCommits from GoToPage");
         await LoadCommits();
-        Console.WriteLine("LoadCommits completed from GoToPage");
     }
 
     private async Task GoToPageWithLog(int page)
     {
-        Console.WriteLine($"Button clicked: displaying {page}, calling GoToPage({page})");
         await GoToPage(page);
     }
 
-    private async void OpenBitbucketPopup(string hash, string? repositorySlug = null)
+    private void OpenBitbucketPopup(string hash, string? repositorySlug = null)
     {
         var owner = WorkspaceService.SelectedWorkspace;
         var targetRepo = repositorySlug ?? selectedRepoSlug;
         
-        // If workspace is not set, try to get it from repository data
-        if (string.IsNullOrEmpty(owner))
-        {
-            Console.WriteLine("WorkspaceService.SelectedWorkspace is empty, fetching from repository data");
-            try
-            {
-                var repositories = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.RepositorySummaryDto[]>("/api/analytics/repositories");
-                var repo = repositories?.FirstOrDefault(r => r.Slug.Equals(targetRepo, StringComparison.OrdinalIgnoreCase));
-                if (repo != null)
-                {
-                    owner = repo.Workspace;
-                    Console.WriteLine($"Found workspace from repository data: '{owner}'");
-                    WorkspaceService.SelectedWorkspace = owner;
-                }
-                else
-                {
-                    Console.WriteLine($"Repository '{targetRepo}' not found in repository data");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching repository data: {ex.Message}");
-            }
-        }
-        
-        // If still no workspace, use a fallback or show an error
-        if (string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(targetRepo))
-        {
-            Console.WriteLine("No workspace or repository available, cannot open Bitbucket URL");
-            return;
-        }
+        if (string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(targetRepo)) return;
         
         var url = $"https://bitbucket.org/{owner}/{targetRepo}/commits/{hash}";
-        Console.WriteLine($"Opening Bitbucket URL: {url}");
-        _ = JS.InvokeVoidAsync("window.open", url, "bitbucketPopup", "width=1000,height=800,noopener");
-    }
-
-    private async Task OnIncludePRChanged(ChangeEventArgs e)
-    {
-        Console.WriteLine($"OnIncludePRChanged called with value: {e.Value}");
-        var oldValue = includePR;
-        includePR = (bool)(e.Value ?? false); // Safely unbox to bool
-        Console.WriteLine($"includePR changed from {oldValue} to {includePR}");
-        Console.WriteLine($"Setting currentPage from {currentPage} to 1");
-        currentPage = 1;
-        Console.WriteLine("About to call LoadCommits from OnIncludePRChanged");
-        await LoadCommits();
-        Console.WriteLine("LoadCommits completed from OnIncludePRChanged");
+        _ = JS.InvokeVoidAsync("window.open", url, "_blank");
     }
 
     private void ShowCommitFilesModal(string commitHash)
@@ -247,303 +327,13 @@
         showCommitFilesModal = isOpen;
         if (!isOpen)
         {
-            await LoadCommits(); // Reload commits when modal is closed
+            selectedCommitHashForModal = null;
         }
     }
 
-    private void NavigateBack()
-    {
-        if (!string.IsNullOrEmpty(selectedRepoSlug))
-        {
-            Navigation.NavigateTo($"/dashboard?repo={selectedRepoSlug}");
-        }
-        else
-        {
-            Navigation.NavigateTo("/dashboard");
-        }
-    }
-}
-
-<!-- Header Section with User Info and Navigation -->
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h3 class="mb-2">
-                        <i class="bi bi-person-circle me-2"></i>
-                        Commits by @(selectedUser?.DisplayName ?? "User")
-                    </h3>
-                    @if (!string.IsNullOrEmpty(selectedRepoSlug))
-                    {
-                        <p class="text-muted mb-0">
-                            <i class="bi bi-folder me-1"></i>
-                            Repository: <strong>@selectedRepoSlug</strong>
-                        </p>
-                    }
-                    else
-                    {
-                        <p class="text-muted mb-0">
-                            <i class="bi bi-collection me-1"></i>
-                            All Repositories
-                        </p>
-                    }
-                </div>
-                <div>
-                    <button class="btn btn-outline-primary me-2" @onclick="NavigateBack">
-                        <i class="bi bi-arrow-left me-1"></i>
-                        Back to Dashboard
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Date Range and Filters -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <CommitsFilter
-                IsLoadingRepos="false" // Repositories are loaded separately in this page
-                Repositories="@repositories"
-                SelectedRepoSlug="@selectedRepoSlug"
-                IsLoadingUsers="false" // Users are handled by UserId parameter
-                Users="@(new List<BB.Api.Endpoints.Analytics.UserDto>())" // Not used here as UserId is fixed
-                SelectedUserId="@UserId" // Pass the current User ID to the filter for display, though it's not changeable
-                StartDate="@startDateObject"
-                EndDate="@endDateObject"
-                IncludePR="@includePR"
-                IncludeData="true" // Always true for this page, can be parameterized if needed
-                IncludeConfig="true" // Always true for this page, can be parameterized if needed
-                GroupBy="Day" // Fixed grouping for this page, can be parameterized if needed
-                ShowGrouping="false"
-                ShowExcluded="@showExcluded"
-                OnRepositorySelected="OnRepositorySelected"
-                OnUserSelected="@((int? uId) => { /* User selection is not allowed */ })" // User selection not allowed
-                OnDateRangeUpdated="@((dateRange) => OnDateRangeUpdated(dateRange.start, dateRange.end))"
-                OnFiltersChanged="OnFiltersChanged"
-                OnGroupingUpdated="@((string? g) => { /* Grouping update not allowed */ })" // Grouping update not allowed
-                OnShowExcludedChanged="OnShowExcludedChanged" />
-        </div>
-    </div>
-
-    @if (isLoading)
-    {
-        <div class="text-center my-4">
-            <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
-            <p class="mt-2">Loading commits...</p>
-        </div>
-    }
-    else if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-danger">@errorMessage</div>
-    }
-    else if (commits.Count == 0)
-    {
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            No commits found for @(selectedUser?.DisplayName ?? "this user") in the selected date range.
-        </div>
-    }
-    else
-    {
-        <!-- Summary Info -->
-        <CommitSummary PaginatedCommitsResponse="@paginatedCommitsResponse" />
-
-        <!-- Commits Table -->
-        <div class="table-responsive">
-            <table class="table table-striped table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Edit</th>
-                        <th>Commit</th>
-                        @if (string.IsNullOrEmpty(selectedRepoSlug) || selectedRepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
-                        {
-                            <th>Repository</th>
-                        }
-                        <th>Date Time</th>
-                        <th>Total Lines</th>
-                        <th><span class="text-success">Code ++</span></th>
-                        <th><span class="text-danger">Code --</span></th>
-                        <th><span class="text-success">Data ++</span></th>
-                        <th><span class="text-danger">Data --</span></th>
-                        <th><span class="text-success">Config ++</span></th>
-                        <th><span class="text-danger">Config --</span></th>
-                        <th style="width:30%">Message</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var commit in commits)
-                    {
-                        <tr>
-                            <td>
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowCommitFilesModal(commit.Hash)">
-                                    <i class="bi bi-pencil-fill"></i>
-                                </button>
-                            </td>
-                            <td>
-                                <button type="button" class="btn btn-link p-0 text-decoration-underline" @onclick="() => OpenBitbucketPopup(commit.Hash, commit.RepositorySlug)" title="View on Bitbucket">@commit.Hash.Substring(0, 8)</button>
-                            </td>
-                            @if (string.IsNullOrEmpty(selectedRepoSlug) || selectedRepoSlug.Equals("all", StringComparison.OrdinalIgnoreCase))
-                            {
-                                <td>
-                                    <span class="badge bg-secondary">@(commit.RepositoryName ?? commit.RepositorySlug ?? "Unknown")</span>
-                                </td>
-                            }
-                            <td>@commit.Date.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td>
-                                @if (commit.LinesAdded > 0)
-                                {
-                                    @((MarkupString)$"<span class='text-success fw-bold'>++{commit.LinesAdded}</span>")
-                                }
-                                @if (commit.LinesRemoved > 0)
-                                {
-                                    @((MarkupString)$"<span class='text-danger fw-bold ms-2'>--{commit.LinesRemoved}</span>")
-                                }
-                            </td>
-                            <td>
-                                @(commit.CodeLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.CodeLinesAdded}</span>" : (MarkupString)string.Empty)
-                            </td>
-                            <td>
-                                @(commit.CodeLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.CodeLinesRemoved}</span>" : (MarkupString)string.Empty)
-                            </td>
-                            <td>
-                                @(commit.DataLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.DataLinesAdded}</span>" : (MarkupString)string.Empty)
-                            </td>
-                            <td>
-                                @(commit.DataLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.DataLinesRemoved}</span>" : (MarkupString)string.Empty)
-                            </td>
-                            <td>
-                                @(commit.ConfigLinesAdded > 0 ? (MarkupString)$"<span class='text-success fw-bold'>{commit.ConfigLinesAdded}</span>" : (MarkupString)string.Empty)
-                            </td>
-                            <td>
-                                @(commit.ConfigLinesRemoved > 0 ? (MarkupString)$"<span class='text-danger fw-bold'>{commit.ConfigLinesRemoved}</span>" : (MarkupString)string.Empty)
-                            </td>
-                            <td>
-                                @if (commit.IsPRMergeCommit)
-                                {
-                                    <span class="badge bg-primary me-2">PR</span>
-                                }
-                                <span title="@commit.Message" style="cursor: pointer" @onclick="() => ShowFullMessage(commit.Message)">
-                                    @(commit.Message.Length > 50 ? commit.Message.Substring(0, 50) + "..." : commit.Message)
-                                </span>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Pagination -->
-        <nav>
-            <ul class="pagination justify-content-center">
-                <li class="page-item @(currentPage == 1 ? "disabled" : null)">
-                    <button class="page-link" @onclick="async () => await GoToPage(currentPage - 1)" disabled="@(currentPage == 1)">Previous</button>
-                </li>
-                
-                @if (currentPage > 3)
-                {
-                    <li class="page-item">
-                        <button class="page-link" @onclick="async () => await GoToPage(1)">1</button>
-                    </li>
-                    @if (currentPage > 4)
-                    {
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    }
-                }
-                
-                @{
-                    var startPage = Math.Max(1, currentPage - 2);
-                    var endPage = Math.Min(totalPages, currentPage + 2);
-                    Console.WriteLine($"Pagination: currentPage={currentPage}, totalPages={totalPages}, showing pages {startPage}-{endPage}");
-                }
-                @for (int i = startPage; i <= endPage; i++)
-                {
-                    var pageNum = i; // Capture the loop variable
-                    <li class="page-item @(i == currentPage ? "active" : null)">
-                        <button class="page-link" @onclick="@(async () => await GoToPageWithLog(pageNum))" @onclick:preventDefault="true">@i</button>
-                    </li>
-                }
-                
-                @if (currentPage < totalPages - 2)
-                {
-                    @if (currentPage < totalPages - 3)
-                    {
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    }
-                    <li class="page-item">
-                        <button class="page-link" @onclick="async () => await GoToPage(totalPages)">@totalPages</button>
-                    </li>
-                }
-                
-                <li class="page-item @(currentPage == totalPages ? "disabled" : null)">
-                    <button class="page-link" @onclick="async () => await GoToPage(currentPage + 1)" disabled="@(currentPage == totalPages)">Next</button>
-                </li>
-            </ul>
-            <div class="text-center mt-2">
-                <small class="text-muted">Page @currentPage of @totalPages</small>
-            </div>
-        </nav>
-    }
-</div>
-
-@if (showCommitFilesModal)
-{
-    <CommitFilesModal
-        IsOpen="@showCommitFilesModal"
-        IsOpenChanged="@OnCommitFilesModalChanged"
-        CommitHash="@(selectedCommitHashForModal ?? string.Empty)" />
-}
-
-@if (showMessageModal)
-{
-    <div class="modal show" style="display: block; background: rgba(0,0,0,0.5);" tabindex="-1" role="dialog" aria-modal="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Commit Message</h5>
-                    <button type="button" class="btn-close" @onclick="CloseMessageModal"></button>
-                </div>
-                <div class="modal-body">
-                    <p style="white-space: pre-wrap;">@selectedMessage</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseMessageModal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-@code {
     private void ShowFullMessage(string message)
     {
         selectedMessage = message;
         showMessageModal = true;
-    }
-
-    private void CloseMessageModal()
-    {
-        showMessageModal = false;
-        selectedMessage = null;
-    }
-
-    private async Task SetDateRange(int days)
-    {
-        endDateObject = DateTime.Today;
-        startDateObject = DateTime.Today.AddDays(-days);
-        currentPage = 1;
-        await LoadCommits();
-    }
-
-    private async Task ClearDateRange()
-    {
-        startDateObject = null;
-        endDateObject = null;
-        currentPage = 1;
-        await LoadCommits();
     }
 } 

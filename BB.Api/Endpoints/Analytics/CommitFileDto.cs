@@ -1,18 +1,25 @@
-namespace BB.Api.Endpoints.Analytics;
+using System.Text.Json.Serialization;
 
-public class CommitFileDto
+namespace BB.Api.Endpoints.Analytics
 {
-    public int Id { get; set; }
-    public string FilePath { get; set; }
-    public string FileType { get; set; } = string.Empty;
-    public int LinesAdded { get; set; }
-    public int LinesRemoved { get; set; }
-    public bool ExcludeFromReporting { get; set; }
-}
+    public class CommitFileDto
+    {
+        public int Id { get; set; }
+        public string? FilePath { get; set; }
+        public string FileType { get; set; } = string.Empty;
+        public int LinesAdded { get; set; }
+        public int LinesRemoved { get; set; }
+        public bool ExcludeFromReporting { get; set; }
+        public string CommitHash { get; set; } = string.Empty;
 
-public class CommitFileUpdateDto
-{
-    public int FileId { get; set; }
-    public string PropertyName { get; set; } = string.Empty;
-    public bool Value { get; set; }
+        [JsonIgnore]
+        public int DiffLineId { get; set; }
+    }
+
+    public class CommitFileUpdateDto
+    {
+        public int FileId { get; set; }
+        public string PropertyName { get; set; } = string.Empty;
+        public bool Value { get; set; }
+    }
 } 

@@ -55,7 +55,7 @@
             ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
             OnUserSelected="OnUserSelected"
-            OnDateRangeUpdated="@((dateRange) => OnDateRangeUpdated(dateRange.start, dateRange.end))"
+            OnDateRangeUpdated="EventCallback.Factory.Create<(DateTime? newStartDate, DateTime? newEndDate)>(this, OnDateRangeUpdated)"
             OnFiltersChanged="OnFiltersChanged"
             OnGroupingUpdated="OnGroupingUpdated"
             OnShowExcludedChanged="OnShowExcludedChanged" />
@@ -81,6 +81,7 @@
         }
         else if (commits != null && commits.Any())
         {
+            <CommitSummary PaginatedCommitsResponse="@paginatedCommitsResponse" />
             <div class="card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">
@@ -237,6 +238,7 @@
 @code {
     private IEnumerable<RepositorySummaryDto>? repositories;
     private IEnumerable<BB.Api.Endpoints.Analytics.UserDto>? users;
+    private PaginatedCommitsResponse? paginatedCommitsResponse;
     private List<CommitListItemDto> commits = new();
     private bool isLoadingRepos = true;
     private bool isLoadingUsers = true;
@@ -318,11 +320,11 @@
             if (selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
             if (showExcluded) url += "&showExcluded=true";
 
-            var response = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
-            if (response != null)
+            paginatedCommitsResponse = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
+            if (paginatedCommitsResponse != null)
             {
-                commits = response.Commits;
-                totalPages = response.TotalPages;
+                commits = paginatedCommitsResponse.Commits;
+                totalPages = paginatedCommitsResponse.TotalPages;
             }
         }
         catch (Exception ex)
@@ -352,10 +354,10 @@
         await LoadCommits();
     }
 
-    private async Task OnDateRangeUpdated(DateTime? newStartDate, DateTime? newEndDate)
+    private async Task OnDateRangeUpdated((DateTime? newStartDate, DateTime? newEndDate) dateRange)
     {
-        startDate = newStartDate;
-        endDate = newEndDate;
+        startDate = dateRange.newStartDate;
+        endDate = dateRange.newEndDate;
         currentPage = 1;
         await LoadCommits();
     }
