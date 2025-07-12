@@ -267,7 +267,9 @@
                                 TotalLinesAdded="@totalLinesAdded"
                                 TotalLinesDeleted="@totalLinesDeleted"
                                 IsTopCommitter="true"
-                                OnChartClick="@(date => HandleContributorChartClick(contributor.UserId, date))" />
+                                OnChartClick="@(date => HandleContributorChartClick(contributor.UserId, date))"
+                                OnNameClick="@(userId => NavigateToUserCommits(userId, contributor.DisplayName, null, selectedRepoSlug))"
+                                ContributorUserId="@contributor.UserId" />
                         </div>
                     }
                 </div>
@@ -1311,8 +1313,8 @@
             // Auto-load initial data if repositories are available and workspace is set
             if (repositories != null && repositories.Any() && WorkspaceService.HasSelectedWorkspace)
             {
-                // Set default date range to Last 2 Weeks if not already set
-                startDate ??= DateTime.Today.AddDays(-14);
+                // Set default date range to Last 7 Days if not already set
+                startDate ??= DateTime.Today.AddDays(-7);
                 endDate ??= DateTime.Today;
 
                 await LoadCommitActivity();

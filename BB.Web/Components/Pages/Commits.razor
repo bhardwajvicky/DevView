@@ -132,7 +132,7 @@
                                         <td>
                                             @if (!string.IsNullOrEmpty(commit.RepositorySlug))
                                             {
-                                                <a href="#" @onclick="() => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug)" @onclick:preventDefault>
+                                                <a href="javascript:void(0);" @onclick="(e) => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug, e)" @onclick:preventDefault>
                                                     @commit.Hash[..7]
                                                 </a>
                                             }
@@ -389,7 +389,7 @@
         await LoadCommits();
     }
 
-    private void OpenBitbucketCommit(string hash, string? commitRepoSlug = null)
+    private void OpenBitbucketCommit(string hash, string? commitRepoSlug = null, MouseEventArgs? e = null)
     {
         var workspace = WorkspaceService.SelectedWorkspace;
         if (string.IsNullOrEmpty(workspace))
@@ -409,8 +409,7 @@
 
         // Use the new service to compose the URL
         var url = BitbucketUrlService.GetCommitUrl(workspace, repoToUse, hash);
-        Logger.LogInformation($"Opening Bitbucket Commit URL: {url}");
-        JSRuntime.InvokeVoidAsync("window.openExternalUrl", url, "bitbucketCommitPopup"); // Use a named target
+        JSRuntime.InvokeVoidAsync("window.open", url, "_blank"); // Open in new tab
     }
 
     private void ShowFullMessage(string message)

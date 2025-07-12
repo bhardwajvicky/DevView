@@ -15,7 +15,9 @@
             </div>
         }
         <div class="flex-grow-1">
-            <h6 class="card-title mb-0 text-primary">@DisplayName</h6>
+            <h6 class="card-title mb-0 text-primary">
+                <button class="btn btn-link p-0 border-0 text-primary" @onclick="HandleNameClick" style="font-weight:bold; text-decoration:underline; cursor:pointer;">@DisplayName</button>
+            </h6>
             @if (TotalCommits > 0 || TotalLinesAdded > 0 || TotalLinesDeleted > 0)
             {
                 <small class="text-muted">@StatsString</small>
@@ -39,6 +41,8 @@
     [Parameter] public int TotalLinesDeleted { get; set; }
     [Parameter] public bool IsTopCommitter { get; set; } = true;
     [Parameter] public EventCallback<DateTime> OnChartClick { get; set; }
+    [Parameter] public EventCallback<int> OnNameClick { get; set; }
+    [Parameter] public int ContributorUserId { get; set; }
 
     private DotNetObjectReference<ContributorChart>? _dotNetRef;
     private string StatsString => $"{TotalCommits} commits, {TotalLinesAdded}++ {TotalLinesDeleted}--";
@@ -64,6 +68,12 @@
             return OnChartClick.InvokeAsync(date);
         }
         return Task.CompletedTask;
+    }
+
+    private Task HandleNameClick()
+    {
+        Console.WriteLine($"Contributor name clicked: {DisplayName}");
+        return OnNameClick.InvokeAsync(ContributorUserId);
     }
 
     public void Dispose()
