@@ -101,12 +101,12 @@
                                                 <span class="text-danger">-@totalRemoved</span>
                                             }
                                         </td>
-                                        <td class="text-success">@(commit.CodeLinesAdded > 0 ? $"+{commit.CodeLinesAdded}" : string.Empty)</td>
-                                        <td class="text-danger">@(commit.CodeLinesRemoved > 0 ? $"-{commit.CodeLinesRemoved}" : string.Empty)</td>
-                                        <td class="text-success">@(commit.DataLinesAdded > 0 ? $"+{commit.DataLinesAdded}" : string.Empty)</td>
-                                        <td class="text-danger">@(commit.DataLinesRemoved > 0 ? $"-{commit.DataLinesRemoved}" : string.Empty)</td>
-                                        <td class="text-success">@(commit.ConfigLinesAdded > 0 ? $"+{commit.ConfigLinesAdded}" : string.Empty)</td>
-                                        <td class="text-danger">@(commit.ConfigLinesRemoved > 0 ? $"-{commit.ConfigLinesRemoved}" : string.Empty)</td>
+                                        <td class="text-success">@(commit.CodeLinesAdded > 0 ? "+" + commit.CodeLinesAdded : string.Empty)</td>
+                                        <td class="text-danger">@(commit.CodeLinesRemoved > 0 ? "-" + commit.CodeLinesRemoved : string.Empty)</td>
+                                        <td class="text-success">@(commit.DataLinesAdded > 0 ? "+" + commit.DataLinesAdded : string.Empty)</td>
+                                        <td class="text-danger">@(commit.DataLinesRemoved > 0 ? "-" + commit.DataLinesRemoved : string.Empty)</td>
+                                        <td class="text-success">@(commit.ConfigLinesAdded > 0 ? "+" + commit.ConfigLinesAdded : string.Empty)</td>
+                                        <td class="text-danger">@(commit.ConfigLinesRemoved > 0 ? "-" + commit.ConfigLinesRemoved : string.Empty)</td>
                                         <td>
                                             @if (includePR && commit.IsPRMergeCommit)
                                             {
@@ -126,17 +126,17 @@
                         <nav>
                             <ul class="pagination">
                                 <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                                    <button class="page-link" @onclick="() => GoToPageWithLog(currentPage - 1)">Previous</button>
+                                    <button class="page-link" @onclick="() => GoToPage(currentPage - 1)">Previous</button>
                                 </li>
                                 @for (var i = 1; i <= totalPages; i++)
                                 {
                                     var pageNumber = i;
                                     <li class="page-item @(currentPage == pageNumber ? "active" : "")">
-                                        <button class="page-link" @onclick="() => GoToPageWithLog(pageNumber)">@pageNumber</button>
+                                        <button class="page-link" @onclick="() => GoToPage(pageNumber)">@pageNumber</button>
                                     </li>
                                 }
                                 <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
-                                    <button class="page-link" @onclick="() => GoToPageWithLog(currentPage + 1)">Next</button>
+                                    <button class="page-link" @onclick="() => GoToPage(currentPage + 1)">Next</button>
                                 </li>
                             </ul>
                         </nav>
@@ -325,11 +325,6 @@
         if (page < 1 || page > totalPages) return;
         currentPage = page;
         await LoadCommits();
-    }
-
-    private async Task GoToPageWithLog(int page)
-    {
-        await GoToPage(page);
     }
 
     private void OpenBitbucketCommit(string hash, string? commitRepoSlug = null, MouseEventArgs? e = null)

@@ -347,3 +347,81 @@ window.toggleCommitterDataset = function(canvasId, datasetIndex) {
     dataset.hidden = !dataset.hidden;
     chart.update();
 }; 
+
+window.renderPrAgeChart = async (prAgeData) => {
+    try {
+        const canvasId = 'prAgeChart';
+        const chartElement = await window.waitForElement(canvasId);
+
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js not loaded, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (typeof Chart === 'undefined') {
+                throw new Error('Chart.js failed to load');
+            }
+        }
+
+        if (window.committerCharts[canvasId] && typeof window.committerCharts[canvasId].destroy === 'function') {
+            window.committerCharts[canvasId].destroy();
+            delete window.committerCharts[canvasId];
+        }
+
+        const ctx = chartElement.getContext('2d');
+
+        const labels = Array.from(new Set([...prAgeData.openPrData.map(d => d.x), ...prAgeData.mergedPrData.map(d => d.x)]))
+            .sort((a, b) => a - b);
+
+        window.committerCharts[canvasId] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Open PRs',
+                        data: labels.map(day => prAgeData.openPrData.find(d => d.x === day)?.y || 0),
+                        backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Merged PRs',
+                        data: labels.map(day => prAgeData.mergedPrData.find(d => d.x === day)?.y || 0),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'PR Age Distribution'
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Age in Days'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of PRs'
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error rendering PR Age Chart:', error);
+    }
+}; 
