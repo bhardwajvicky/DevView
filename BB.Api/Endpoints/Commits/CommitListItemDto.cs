@@ -12,6 +12,7 @@ namespace BB.Api.Endpoints.Commits
         public DateTime Date { get; set; }
         public bool IsMerge { get; set; }
         public bool IsPRMergeCommit { get; set; }
+        public bool IsRevert { get; set; }
         public int LinesAdded { get; set; }
         public int LinesRemoved { get; set; }
         public int CodeLinesAdded { get; set; }

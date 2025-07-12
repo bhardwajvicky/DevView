@@ -63,6 +63,7 @@ namespace BB.Api.Endpoints.Commits
                 where += " AND c.Date >= @startDate";
             if (endDate.HasValue)
                 where += " AND c.Date <= @endDate";
+            where += " AND c.IsRevert = 0";
 
             // Count total commits
             var countSql = $"SELECT COUNT(*) FROM Commits c JOIN Repositories r ON c.RepositoryId = r.Id {where}";
@@ -99,7 +100,7 @@ namespace BB.Api.Endpoints.Commits
 
             // Query paginated commits with author info and repository info
             var sql = $@"
-                SELECT c.Id, c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit,
+                SELECT c.Id, c.BitbucketCommitHash AS Hash, c.Message, u.DisplayName AS AuthorName, c.Date, c.IsMerge, c.IsPRMergeCommit, c.IsRevert,
                        c.LinesAdded, c.LinesRemoved,
                        ISNULL((SELECT SUM(cf.LinesAdded) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesAdded,
                        ISNULL((SELECT SUM(cf.LinesRemoved) FROM CommitFiles cf WHERE cf.CommitId = c.Id AND cf.FileType = 'code' AND cf.ExcludeFromReporting = 0), 0) AS CodeLinesRemoved,

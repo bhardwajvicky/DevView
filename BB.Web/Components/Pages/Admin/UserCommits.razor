@@ -6,6 +6,8 @@
 @using System.Linq
 @inject IJSRuntime JS
 @inject BB.Web.Services.WorkspaceService WorkspaceService 
+@inject BitbucketUrlService BitbucketUrlService
+@using BB.Web.Services
 @using BB.Api.Endpoints.Analytics
 @using BB.Api.Endpoints.Commits 
 @using BB.Web.Components.Common 
@@ -60,33 +62,58 @@
                                     <th></th>
                                     <th>Commit</th>
                                     <th>Repository</th>
-                                    <th>Date</th>
-                                    <th>Lines Added</th>
-                                    <th>Lines Removed</th>
-                                    <th>Message</th>
+                                    <th>Author</th>
+                                    <th>Date Time</th>
+                                    <th>Total Lines</th>
+                                    <th class="text-success">Code ++</th>
+                                    <th class="text-danger">Code --</th>
+                                    <th class="text-success">Data ++</th>
+                                    <th class="text-danger">Data --</th>
+                                    <th class="text-success">Config ++</th>
+                                    <th class="text-danger">Config --</th>
+                                    <th style="width: 200px">Message</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var commit in commits)
                                 {
+                                    var totalAdded = commit.LinesAdded;
+                                    var totalRemoved = commit.LinesRemoved;
+                                    
                                     <tr>
                                         <td>
                                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowCommitFilesModal(commit.Hash)">
-                                                <i class="bi bi-eye"></i>
+                                                <i class="bi bi-pencil-fill"></i>
                                             </button>
                                         </td>
                                         <td>
-                                            <a href="#" @onclick='() => OpenBitbucketPopup(commit.Hash, commit.RepositorySlug)' @onclick:preventDefault>
-                                                @commit.Hash.Substring(0, 7)
+                                            <a @onclick='(e) => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug, e)' @onclick:preventDefault style="cursor:pointer; text-decoration:underline; color:var(--bs-link-color);">
+                                                @commit.Hash[..7]
                                             </a>
                                         </td>
                                         <td>@commit.RepositoryName</td>
+                                        <td>@commit.AuthorName</td>
                                         <td>@commit.Date.ToString("yyyy-MM-dd HH:mm")</td>
-                                        <td class="text-success">@commit.LinesAdded</td>
-                                        <td class="text-danger">@commit.LinesRemoved</td>
                                         <td>
+                                            <span class="text-success">+@totalAdded</span>
+                                            @if (totalRemoved > 0)
+                                            {
+                                                <span class="text-danger">-@totalRemoved</span>
+                                            }
+                                        </td>
+                                        <td class="text-success">@(commit.CodeLinesAdded > 0 ? $"+{commit.CodeLinesAdded}" : string.Empty)</td>
+                                        <td class="text-danger">@(commit.CodeLinesRemoved > 0 ? $"-{commit.CodeLinesRemoved}" : string.Empty)</td>
+                                        <td class="text-success">@(commit.DataLinesAdded > 0 ? $"+{commit.DataLinesAdded}" : string.Empty)</td>
+                                        <td class="text-danger">@(commit.DataLinesRemoved > 0 ? $"-{commit.DataLinesRemoved}" : string.Empty)</td>
+                                        <td class="text-success">@(commit.ConfigLinesAdded > 0 ? $"+{commit.ConfigLinesAdded}" : string.Empty)</td>
+                                        <td class="text-danger">@(commit.ConfigLinesRemoved > 0 ? $"-{commit.ConfigLinesRemoved}" : string.Empty)</td>
+                                        <td>
+                                            @if (includePR && commit.IsPRMergeCommit)
+                                            {
+                                                <span class="badge bg-primary me-2">PR</span>
+                                            }
                                             <span title="@commit.Message" style="cursor: pointer" @onclick="() => ShowFullMessage(commit.Message)">
-                                                @(commit.Message.Length > 50 ? commit.Message.Substring(0, 50) + "..." : commit.Message)
+                                                @(commit.Message.Length > 50 ? commit.Message[..50] + "..." : commit.Message)
                                             </span>
                                         </td>
                                     </tr>
@@ -305,14 +332,24 @@
         await GoToPage(page);
     }
 
-    private void OpenBitbucketPopup(string hash, string? repositorySlug = null)
+    private void OpenBitbucketCommit(string hash, string? commitRepoSlug = null, MouseEventArgs? e = null)
     {
-        var owner = WorkspaceService.SelectedWorkspace;
-        var targetRepo = repositorySlug ?? selectedRepoSlug;
-        
-        if (string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(targetRepo)) return;
-        
-        var url = $"https://bitbucket.org/{owner}/{targetRepo}/commits/{hash}";
+        var workspace = WorkspaceService.SelectedWorkspace;
+        if (string.IsNullOrEmpty(workspace))
+        {
+            // No need to set error message here as it's not a primary page for workspace config
+            return;
+        }
+
+        var repoToUse = commitRepoSlug ?? selectedRepoSlug;
+
+        if (string.IsNullOrEmpty(repoToUse) || repoToUse == "all")
+        {
+            // No need to set error message here
+            return;
+        }
+
+        var url = BitbucketUrlService.GetCommitUrl(workspace, repoToUse, hash);
         _ = JS.InvokeVoidAsync("window.open", url, "_blank");
     }
 

@@ -33,5 +33,6 @@ namespace BB.Api.Endpoints.Commits
         
         public bool IsMerge { get; set; }
         public bool IsPRMergeCommit { get; set; }
+        public bool IsRevert { get; set; }
     }
 }
