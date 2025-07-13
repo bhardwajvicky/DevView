@@ -1,0 +1,487 @@
+@page "/pr-dashboard"
+@using Web.Services
+@using System.Net.Http.Json
+@using Radzen
+@using Radzen.Blazor
+@using Web.Components.Common
+@using API.Endpoints.Analytics
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject WorkspaceService WorkspaceService
+@inject NavigationManager Navigation
+@inject ILogger<PrDashboard> Logger
+@rendermode InteractiveServer
+
+<PageTitle>PR Dashboard - DevView</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="bi bi-graph-up"></i> PR Dashboard
+            </h1>
+        </div>
+    </div>
+
+    @if (!WorkspaceService.HasSelectedWorkspace)
+    {
+        <div class="alert alert-warning" role="alert">
+            <h4 class="alert-heading">Workspace Not Configured</h4>
+            <p>Please select a workspace in Settings to view PR statistics.</p>
+            <hr>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/admin/settings")'>
+                <i class="bi bi-gear-fill me-2"></i>Go to Settings
+            </button>
+        </div>
+    }
+    else
+    {
+        <PRFilter 
+            IsLoadingRepos="@isLoadingRepos"
+            Repositories="@repositories"
+            SelectedRepoSlug="@selectedRepoSlug"
+            StartDate="@startDate"
+            EndDate="@endDate"
+            OnRepositorySelected="OnRepositorySelected"
+            OnDateRangeUpdated="OnDateRangeUpdated" />
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Darker">
+                @errorMessage
+            </RadzenAlert>
+        }
+
+        @if (isLoadingTopOpenPrs)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading top open PRs...</span>
+                </div>
+            </RadzenAlert>
+        }
+        else if (topOpenPrs != null && topOpenPrs.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Top 5 Projects by Open PRs</h5>
+                        </div>
+                        <div class="card-body">
+                            <RadzenDataGrid Data="@topOpenPrs" TItem="API.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
+                                <Columns>
+                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="Name" Title="Repository" />
+                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="OpenPullRequestCount" Title="Open PRs" TextAlign="TextAlign.Center" />
+                                </Columns>
+                            </RadzenDataGrid>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                No data for top open PRs found for the selected criteria.
+            </div>
+        }
+
+        @if (isLoadingTopOldestOpenPrs)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading top oldest open PRs...</span>
+                </div>
+            </RadzenAlert>
+        }
+        else if (topOldestOpenPrs != null && topOldestOpenPrs.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Top 5 Projects by Oldest Open PRs</h5>
+                        </div>
+                        <div class="card-body">
+                            <RadzenDataGrid Data="@topOldestOpenPrs" TItem="API.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
+                                <Columns>
+                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="Name" Title="Repository" />
+                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="OldestOpenPullRequestDate" Title="Oldest PR Date" TextAlign="TextAlign.Center" FormatString="{0:yyyy-MM-dd}" />
+                                </Columns>
+                            </RadzenDataGrid>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                No data for top oldest open PRs found for the selected criteria.
+            </div>
+        }
+
+        @if (isLoadingTopUnapprovedPrs)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading top unapproved PRs...</span>
+                </div>
+            </RadzenAlert>
+        }
+        else if (topUnapprovedPrs != null && topUnapprovedPrs.Any())
+        {
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Top 5 Projects by Unapproved PRs</h5>
+                        </div>
+                        <div class="card-body">
+                            <RadzenDataGrid Data="@topUnapprovedPrs" TItem="API.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
+                                <Columns>
+                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="Name" Title="Repository" />
+                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="PRsMissingApprovalCount" Title="Missing Approvals" TextAlign="TextAlign.Center" />
+                                </Columns>
+                            </RadzenDataGrid>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                No data for top unapproved PRs found for the selected criteria.
+            </div>
+        }
+
+        @if (isLoadingPunchcard)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading commit punchcard...</span>
+                </div>
+            </RadzenAlert>
+        }
+        else if (punchcardData != null && punchcardData.Any())
+        {
+            <div class="row mb-4">
+                <div style="max-width: 600px; margin-left: 0; margin-right: auto; padding-left: 0; padding-right: 0;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Commit Activity Punchcard</h5>
+                        </div>
+                        <div class="card-body">
+                            <CommitPunchcardChart Data="@punchcardData" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                No punchcard data found for the selected criteria.
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private IEnumerable<API.Endpoints.Analytics.RepositorySummaryDto>? repositories;
+    private List<API.Endpoints.Analytics.RepositorySummaryDto>? topOpenPrs;
+    private List<API.Endpoints.Analytics.RepositorySummaryDto>? topOldestOpenPrs;
+    private List<API.Endpoints.Analytics.RepositorySummaryDto>? topUnapprovedPrs;
+    private List<CommitPunchcardDto>? punchcardData;
+    private bool isLoadingRepos = true;
+    private bool isLoadingTopOpenPrs = false;
+    private bool isLoadingTopOldestOpenPrs = false;
+    private bool isLoadingTopUnapprovedPrs = false;
+    private bool isLoadingPunchcard = false;
+    private string? selectedRepoSlug;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRepositories();
+
+        if (!WorkspaceService.HasSelectedWorkspace && repositories != null && repositories.Any())
+        {
+            var firstWorkspace = repositories.First().Workspace;
+            WorkspaceService.SelectedWorkspace = firstWorkspace;
+            repositories = repositories.Where(r => r.Workspace == firstWorkspace).ToArray();
+        }
+        else if (WorkspaceService.HasSelectedWorkspace && repositories != null && repositories.Any())
+        {
+            repositories = repositories.Where(r => r.Workspace == WorkspaceService.SelectedWorkspace).ToArray();
+        }
+
+        if (!WorkspaceService.HasSelectedWorkspace)
+        {
+            Navigation.NavigateTo("/admin/settings");
+            return;
+        }
+
+        if (repositories != null && repositories.Any() && string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
+        {
+            selectedRepoSlug = "ALL";
+            startDate = DateTime.Today.AddDays(-30);
+            endDate = DateTime.Today;
+            await LoadTopOpenPrs();
+            await LoadTopOldestOpenPrs();
+            await LoadTopUnapprovedPrs();
+            await LoadPunchcardData();
+        }
+    }
+
+    private async Task LoadRepositories()
+    {
+        try
+        {
+            isLoadingRepos = true;
+            var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]?>("api/analytics/repositories");
+            repositories = allRepositories ?? Array.Empty<RepositorySummaryDto>();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading repositories: {ex.Message}";
+            Logger.LogError(ex, "Error loading repositories");
+        }
+        finally
+        {
+            isLoadingRepos = false;
+        }
+    }
+
+    private async Task OnRepositorySelected(string? slug)
+    {
+        selectedRepoSlug = slug;
+        await RefreshDashboardData();
+    }
+
+    private async Task OnDateRangeUpdated((DateTime? start, DateTime? end) range)
+    {
+        startDate = range.start;
+        endDate = range.end;
+        await RefreshDashboardData();
+    }
+
+    private async Task RefreshDashboardData()
+    {
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
+        {
+            await LoadTopOpenPrs();
+            await LoadTopOldestOpenPrs();
+            await LoadTopUnapprovedPrs();
+            await LoadPunchcardData();
+            StateHasChanged();
+        }
+        else
+        {
+            topOpenPrs = null;
+            topOldestOpenPrs = null;
+            topUnapprovedPrs = null;
+            punchcardData = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTopOpenPrs()
+    {
+        try
+        {
+            isLoadingTopOpenPrs = true;
+            errorMessage = null;
+
+            var workspace = WorkspaceService.SelectedWorkspace;
+            if (string.IsNullOrEmpty(workspace))
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                Logger.LogWarning("LoadTopOpenPrs: No workspace provided");
+                return;
+            }
+
+            var url = $"api/analytics/top-open-prs?workspace={workspace}";
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+
+            topOpenPrs = await Http.GetFromJsonAsync<List<RepositorySummaryDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading top open PRs: {ex.Message}";
+            Logger.LogError(ex, "Error loading top open PRs");
+        }
+        finally
+        {
+            isLoadingTopOpenPrs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTopOldestOpenPrs()
+    {
+        try
+        {
+            isLoadingTopOldestOpenPrs = true;
+            errorMessage = null;
+
+            var workspace = WorkspaceService.SelectedWorkspace;
+            if (string.IsNullOrEmpty(workspace))
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                Logger.LogWarning("LoadTopOldestOpenPrs: No workspace provided");
+                return;
+            }
+
+            var url = $"api/analytics/top-oldest-open-prs?workspace={workspace}";
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+
+            topOldestOpenPrs = await Http.GetFromJsonAsync<List<RepositorySummaryDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading top oldest open PRs: {ex.Message}";
+            Logger.LogError(ex, "Error loading top oldest open PRs");
+        }
+        finally
+        {
+            isLoadingTopOldestOpenPrs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTopUnapprovedPrs()
+    {
+        try
+        {
+            isLoadingTopUnapprovedPrs = true;
+            errorMessage = null;
+
+            var workspace = WorkspaceService.SelectedWorkspace;
+            if (string.IsNullOrEmpty(workspace))
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                Logger.LogWarning("LoadTopUnapprovedPrs: No workspace provided");
+                return;
+            }
+
+            var url = $"api/analytics/top-unapproved-prs?workspace={workspace}";
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+
+            topUnapprovedPrs = await Http.GetFromJsonAsync<List<RepositorySummaryDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading top unapproved PRs: {ex.Message}";
+            Logger.LogError(ex, "Error loading top unapproved PRs");
+        }
+        finally
+        {
+            isLoadingTopUnapprovedPrs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPunchcardData()
+    {
+        try
+        {
+            isLoadingPunchcard = true;
+            errorMessage = null;
+            var workspace = WorkspaceService.SelectedWorkspace;
+            if (string.IsNullOrEmpty(workspace))
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                Logger.LogWarning("LoadPunchcardData: No workspace provided");
+                return;
+            }
+            var url = $"api/analytics/commit-punchcard?workspace={workspace}";
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+            punchcardData = await Http.GetFromJsonAsync<List<CommitPunchcardDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading punchcard data: {ex.Message}";
+            Logger.LogError(ex, "Error loading punchcard data");
+        }
+        finally
+        {
+            isLoadingPunchcard = false;
+            StateHasChanged();
+        }
+    }
+}
+
+<script>
+    window.setPrDashboardDotNetRef = function(dotNetRef) {
+        window.prDashboardComponent = { dotNetRef: dotNetRef };
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Any initial JS setup needed after DOM is fully loaded
+    });
+</script> 

@@ -1,0 +1,72 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">DevView</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-bar-chart-fill-nav-menu" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="user-dashboard">
+                <span class="bi bi-speedometer2" aria-hidden="true"></span> User Dashboard
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="top-committers">
+                <span class="bi bi-people-fill" aria-hidden="true"></span> Top Committers
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="commits">
+                <span class="bi bi-git" aria-hidden="true"></span> Commits
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="pull-requests">
+                <span class="bi bi-git" aria-hidden="true"></span> Pull Requests
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="pr-dashboard">
+                <span class="bi bi-graph-up" aria-hidden="true"></span> PR Dashboard
+            </NavLink>
+        </div>
+
+        <!-- Admin Section with Dropdown -->
+        <div class="nav-item px-3">
+            <div class="nav-link dropdown-toggle" data-bs-toggle="collapse" data-bs-target="#adminSubmenu" aria-expanded="false" aria-controls="adminSubmenu" style="cursor: pointer;">
+                <span class="bi bi-gear-fill-nav-menu" aria-hidden="true"></span> Admin
+            </div>
+            <div class="collapse" id="adminSubmenu">
+                <div class="nav-item ps-4">
+                    <NavLink class="nav-link" href="admin/repositories">
+                        <span class="bi bi-folder-fill" aria-hidden="true"></span> Repositories
+                    </NavLink>
+                </div>
+                <div class="nav-item ps-4">
+                    <NavLink class="nav-link" href="admin/users">
+                        <span class="bi bi-people-fill" aria-hidden="true"></span> Users
+                    </NavLink>
+                </div>
+                <div class="nav-item ps-4">
+                    <NavLink class="nav-link" href="admin/settings">
+                        <span class="bi bi-sliders" aria-hidden="true"></span> Settings
+                    </NavLink>
+                </div>
+            </div>
+        </div>
+    </nav>
+</div>
+

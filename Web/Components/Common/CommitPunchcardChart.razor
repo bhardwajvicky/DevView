@@ -1,0 +1,95 @@
+@using API.Endpoints.Analytics
+@inject IJSRuntime JS
+
+<div style="position: relative; height: 400px; max-width: 600px; margin: 0 auto;">
+    <canvas id="@ChartId"></canvas>
+</div>
+
+@code {
+    [Parameter]
+    public List<CommitPunchcardDto> Data { get; set; } = new();
+
+    [Parameter]
+    public string ChartId { get; set; } = $"punchcardChart_{Guid.NewGuid().ToString("N")}";
+
+    private static readonly string[] Days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+    private static readonly string[] Hours = new[] {
+        "12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
+        "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"
+    };
+
+    private object[] GetChartData() => Data.Select(d => new {
+        // Map DayOfWeek: 0=Sunday, 1=Monday, ..., 6=Saturday
+        y = Days[d.DayOfWeek == 0 ? 6 : d.DayOfWeek - 1], // Sunday last
+        x = Hours[d.HourOfDay],
+        r = Math.Sqrt(d.CommitCount) * 4,
+        count = d.CommitCount
+    }).ToArray();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Data != null && Data.Any())
+        {
+            var chartData = GetChartData();
+            await JS.InvokeVoidAsync("initializePunchcardChart", ChartId, chartData);
+        }
+    }
+}
+
+<script>
+window.initializePunchcardChart = (chartId, data) => {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const hours = [
+        "12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
+        "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"
+    ];
+    const chartElement = document.getElementById(chartId);
+    if (!chartElement) {
+        console.error('Punchcard chart canvas element not found.');
+        return;
+    }
+    const ctx = chartElement.getContext('2d');
+    if (window.punchcardChart && typeof window.punchcardChart.destroy === 'function') {
+        window.punchcardChart.destroy();
+    }
+    window.punchcardChart = new Chart(ctx, {
+        type: 'bubble',
+        data: {
+            datasets: [{
+                label: 'Commits',
+                data: data,
+                backgroundColor: 'rgba(33, 37, 41, 0.8)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'category',
+                    labels: hours,
+                    title: { display: true, text: 'Hour of Day' },
+                    grid: { drawBorder: false }
+                },
+                y: {
+                    type: 'category',
+                    labels: days,
+                    title: { display: true, text: 'Day of Week' },
+                    reverse: false, // Monday at top, Sunday at bottom
+                    grid: { drawBorder: false }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.raw.y}, ${context.raw.x} - Commits: ${Math.round(context.raw.count)}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+};
+</script> 
