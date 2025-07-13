@@ -24,28 +24,41 @@ DevView is a comprehensive .NET 9 solution for analyzing Bitbucket repositories 
 - **Charts**: Chart.js with custom configurations
 - **APIs**: Bitbucket Cloud REST API integration
 
-## 🏗️ Architecture
+## ��️ Architecture
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│      Web        │    │       API        │    │   Integration   │
-│  (Blazor UI)    │◄──►│  (REST API)      │◄──►│ (Bitbucket API) │
-│  Port: 5084     │    │  Port: 5000      │    │   Integration   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-          │                       │                       │
-          │                       │                       │
-          ▼                       ▼                       ▼
-    ┌─────────────────────────────────────────────────────────┐
-    │                  SQL Server Database                    │
-    │         (Users, Repositories, Commits, PRs)            │
-    └─────────────────────────────────────────────────────────┘
-                                   ▲
-                                   │
-                         ┌─────────────────┐
-                         │    AutoSync     │
-                         │ (Background     │
-                         │  Sync Service)  │
-                         └─────────────────┘
+```mermaid
+graph TD
+    subgraph "DevView System"
+        direction LR
+        
+        subgraph "UI Layer"
+            Web["<div style='font-weight: bold'>Web (Blazor UI)</div><div style='font-size: smaller'>Port: 5084</div>"]
+        end
+        
+        subgraph "Backend Services"
+            API["<div style='font-weight: bold'>API (REST API)</div><div style='font-size: smaller'>Port: 5000</div>"]
+            AutoSync["<div style='font-weight: bold'>AutoSync</div><div style='font-size: smaller'>Background Sync</div>"]
+        end
+        
+        subgraph "Integration Layer"
+            Integration["<div style='font-weight: bold'>Integration</div><div style='font-size: smaller'>Bitbucket API Client</div>"]
+        end
+        
+        subgraph "Data Store"
+            Database["<div style='font-weight: bold'>SQL Server</div><div style='font-size: smaller'>Users, Repos, Commits, PRs</div>"]
+        end
+    end
+    
+    subgraph "External Services"
+        Bitbucket["<div style='font-weight: bold'>Bitbucket Cloud</div><div style='font-size: smaller'>REST API</div>"]
+    end
+    
+    Web -- "HTTP API Calls" --> API
+    API -- "Data Access" --> Integration
+    AutoSync -- "Data Access" --> Integration
+    Integration -- "Fetches/Pushes Data" --> Bitbucket
+    API -- "Reads/Writes Data" --> Database
+    AutoSync -- "Writes Data" --> Database
 ```
 
 ## 🔄 Data Flow Overview
