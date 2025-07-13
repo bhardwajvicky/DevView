@@ -129,8 +129,8 @@ DevView.sln
 
 ### 1. Clone & Setup
 ```bash
-git clone <repository-url>
-cd easy-api-dev
+git clone https://github.com/bhardwajvicky/DevView.git
+cd DevView
 ```
 
 ### 2. Configuration Setup
@@ -384,6 +384,20 @@ When using `start-dev.sh`:
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
+
+## 📦 Repository Information
+
+DevView is hosted on both GitHub and Bitbucket for redundancy and accessibility:
+
+- **Primary Repository (GitHub)**: https://github.com/bhardwajvicky/DevView.git
+- **Mirror Repository (Bitbucket)**: https://bitbucket.org/vbhardwaj66/devview.git
+
+### Git Configuration
+The repository is configured to:
+- **Fetch from**: GitHub (primary source)
+- **Push to**: Both GitHub and Bitbucket simultaneously
+
+When you push changes, they will automatically be pushed to both repositories. Future development should clone from GitHub as the primary source.
 
 ## 📄 License
 
