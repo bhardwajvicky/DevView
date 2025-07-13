@@ -1,3 +1,4 @@
+using Data.Models;
 using API.Endpoints.Analytics;
 using Integration.Common;
 using Dapper;

@@ -1,3 +1,4 @@
+using Data.Models;
 using Integration.Commits;
 using Integration.PullRequests;
 using Integration.Repositories;

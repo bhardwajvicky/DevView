@@ -1,3 +1,4 @@
+using Data.Models;
 using API.Services;
 using Microsoft.AspNetCore.Mvc;
 using System;

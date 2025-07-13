@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace API.Models
+namespace Data.Models
 {
     public class CommitFile
     {

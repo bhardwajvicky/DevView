@@ -1,3 +1,4 @@
+using Data.Models;
 using Integration.Common;
 using Integration.Utils;
 using Dapper;

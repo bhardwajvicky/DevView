@@ -40,6 +40,10 @@ graph TD
             AutoSync["<div style='font-weight: bold'>AutoSync</div><div style='font-size: smaller'>Background Sync</div>"]
         end
         
+        subgraph "Data Layer"
+            Data["<div style='font-weight: bold'>Data</div><div style='font-size: smaller'>Models & Repositories</div>"]
+        end
+        
         subgraph "Integration Layer"
             Integration["<div style='font-weight: bold'>Integration</div><div style='font-size: smaller'>Bitbucket API Client</div>"]
         end
@@ -54,33 +58,39 @@ graph TD
     end
     
     Web -- "HTTP API Calls" --> API
-    API -- "Data Access" --> Integration
-    AutoSync -- "Data Access" --> Integration
+    API -- "Uses Models & Repositories" --> Data
+    AutoSync -- "Uses Models & Repositories" --> Data
+    API -- "Bitbucket Integration" --> Integration
+    AutoSync -- "Bitbucket Integration" --> Integration
     Integration -- "Fetches/Pushes Data" --> Bitbucket
-    API -- "Reads/Writes Data" --> Database
-    AutoSync -- "Writes Data" --> Database
+    Data -- "Database Operations" --> Database
 ```
 
 ## 🔄 Data Flow Overview
 
 DevView follows a clean architecture pattern with clear separation of concerns:
 
-1. **Integration Layer**: Handles all Bitbucket API communication
+1. **Data Layer**: Centralized data access and business models
+   - Database models (Commit, CommitFile, PullRequest, SyncSettings)
+   - Repository pattern implementation for CRUD operations
+   - Shared between API and AutoSync for consistent data access
+
+2. **Integration Layer**: Handles all Bitbucket API communication
    - Fetches users, repositories, commits, and pull requests
    - Parses commit diffs and classifies file types
    - Manages API rate limiting and error handling
 
-2. **API Layer**: Provides RESTful endpoints for data access
+3. **API Layer**: Provides RESTful endpoints for data access
    - Analytics endpoints for charts and insights
    - Sync endpoints for manual data updates
    - Commit and PR management endpoints
 
-3. **Web Layer**: Blazor Server application for user interface
+4. **Web Layer**: Blazor Server application for user interface
    - Real-time dashboard with interactive charts
    - Admin pages for data management
    - Responsive design with modern UI components
 
-4. **AutoSync Service**: Background data synchronization
+5. **AutoSync Service**: Background data synchronization
    - Full sync mode: Historical data import in batches
    - Delta sync mode: Recent changes synchronization
    - Configurable sync targets (users, repos, commits, PRs)
@@ -100,9 +110,19 @@ DevView.sln
 │   │   ├── PullRequests/            # 🔀 Pull request endpoints
 │   │   └── Sync/                    # 🔄 Data synchronization
 │   ├── Services/                    # 🛠️ Business logic services
-│   ├── Models/                      # 📋 Database entity models
 │   ├── SqlSchema/                   # 🗄️ Database schema files
 │   └── appsettings.json            # ⚙️ API configuration
+│
+├── Data/                            # 📊 Shared Data Layer
+│   ├── Models/                      # 📋 Database entity models
+│   │   ├── Commit.cs               # 📝 Commit data model
+│   │   ├── CommitFile.cs           # 📄 Commit file details
+│   │   ├── PullRequest.cs          # 🔀 Pull request model
+│   │   └── SyncSettings.cs         # ⚙️ Sync configuration
+│   └── Services/                    # 🛠️ Data access services
+│       ├── DatabaseService.cs      # 🗄️ Base database service
+│       ├── CommitRepository.cs     # 📝 Commit data operations
+│       └── PullRequestRepository.cs # 🔀 PR data operations
 │
 ├── Web/                             # 🌐 Blazor Server Web App
 │   ├── Components/
@@ -127,7 +147,6 @@ DevView.sln
 │   └── Utils/                      # 🔧 Utility services
 │
 ├── AutoSync/                        # ⏰ Background Sync Service
-│   ├── Models/                      # 📋 Sync configuration models
 │   └── Program.cs                  # 🚀 Main sync application
 │
 └── start-dev.sh                    # 🚀 Development startup script

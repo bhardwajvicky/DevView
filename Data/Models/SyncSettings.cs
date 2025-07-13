@@ -1,4 +1,4 @@
-namespace tVar.AutoSync.Models
+namespace Data.Models
 {
     public class SyncSettings
     {
@@ -15,4 +15,4 @@ namespace tVar.AutoSync.Models
         public bool Repositories { get; set; } = true;
         public bool Users { get; set; } = true;
     }
-} 
+}

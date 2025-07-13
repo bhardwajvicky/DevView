@@ -1,3 +1,4 @@
+using Data.Models;
 using System.Text.Json.Serialization;
 
 namespace API.Endpoints.Analytics

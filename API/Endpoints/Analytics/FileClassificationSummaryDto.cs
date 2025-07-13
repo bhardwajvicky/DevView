@@ -1,4 +1,4 @@
-namespace API.Endpoints.Analytics
+using Data.Models;namespace API.Endpoints.Analytics
 {
     public class FileClassificationSummaryDto
     {

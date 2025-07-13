@@ -12,7 +12,7 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic; // Added for Dictionary
 using System.Linq; // Added for ToDictionary and Min
-using tVar.AutoSync.Models; // Added this line
+using Data.Models;
 using Integration.Users; // Added this line
 
 namespace tVar.AutoSync

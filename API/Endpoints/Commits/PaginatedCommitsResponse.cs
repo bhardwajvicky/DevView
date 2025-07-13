@@ -1,3 +1,4 @@
+using Data.Models;
 using System.Collections.Generic;
 
 namespace API.Endpoints.Commits
