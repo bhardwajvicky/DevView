@@ -20,20 +20,6 @@
         </div>
     </div>
 
-    <CommitsFilter
-        IsLoadingRepos="@isLoadingRepos"
-        Repositories="@repositories"
-        SelectedRepoSlug="@selectedRepoSlug"
-        StartDate="@startDate"
-        EndDate="@endDate"
-        ShowGrouping="false"
-        ShowExcluded="false"
-        OnRepositorySelected="OnRepositorySelected"
-        OnDateRangeUpdated="OnDateRangeUpdated"
-        OnFiltersChanged="OnFiltersChanged"
-        OnGroupingUpdated="OnGroupingUpdated"
-        OnShowExcludedChanged="OnShowExcludedChanged" />
-
     @if (isLoading)
     {
         <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
@@ -175,7 +161,7 @@
         <h3 class="mb-4 mt-4">Detailed Insights</h3>
         <div class="row">
             <!-- PR Average Age Graph -->
-            <div class="col-lg-6 mb-4">
+            <div class="col-lg-4 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">PR Average Age (Open & Merged)</h5>
@@ -187,7 +173,7 @@
             </div>
 
             <!-- Biggest Contributor Users -->
-            <div class="col-lg-6 mb-4">
+            <div class="col-lg-4 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">Biggest Contributor Users (Commits & Code Lines)</h5>
@@ -217,11 +203,9 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="row">
             <!-- Most Approvals by Top 5 Team Members -->
-            <div class="col-lg-6 mb-4">
+            <div class="col-lg-4 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">Most Approvals by Top 5 Team Members</h5>
@@ -249,12 +233,30 @@
             </div>
 
             <!-- PRs Merged by Weekday Chart -->
-            <div class="col-lg-6 mb-4">
+            <div class="col-lg-4 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">PRs Merged by Weekday</h5>
-                        <div class="flex-grow-1">
-                            <canvas id="prsMergedByWeekdayChart" class="w-100 h-100"></canvas>
+                        <div class="row align-items-center">
+                            <div class="col-6">
+                                <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-2">PRs Merged</h5>
+                                <h2 class="fw-bold mb-1">@dashboardData.CurrentPeriod.TotalMergedPrs</h2>
+                                @{
+                                    var prChange = (double)dashboardData.CurrentPeriod.TotalMergedPrs - dashboardData.PreviousPeriod.TotalMergedPrs;
+                                    var prPercentageChange = dashboardData.PreviousPeriod.TotalMergedPrs > 0
+                                        ? (prChange / dashboardData.PreviousPeriod.TotalMergedPrs) * 100
+                                        : (dashboardData.CurrentPeriod.TotalMergedPrs > 0 ? 100.0 : 0.0);
+                                    var prChangeClass = prPercentageChange >= 0 ? "text-success" : "text-danger";
+                                }
+                                <p class="small mb-0 @prChangeClass">
+                                    <span>@prChange.ToString("+#;-#;0")</span>
+                                    (@prPercentageChange.ToString("F1")%)
+                                </p>
+                            </div>
+                            <div class="col-6">
+                                <div class="flex-grow-1" style="height: 120px;">
+                                    <canvas id="prsMergedByWeekdayChart" class="w-100 h-100"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -267,54 +269,15 @@
     private UserDashboardResponseDto? dashboardData;
     private bool isLoading = true;
     private string? errorMessage;
-    private BB.Api.Endpoints.Analytics.RepositorySummaryDto[]? repositories;
-    private bool isLoadingRepos = true;
-    private string? selectedRepoSlug;
     private DateTime? startDate;
     private DateTime? endDate;
+    private bool _chartsRendered = false;
 
     protected override async Task OnInitializedAsync()
     {
         // Set default date range to the last 30 days
         endDate = DateTime.Now;
         startDate = endDate.Value.AddDays(-30);
-
-        // Load all available repositories first
-        await LoadRepositories();
-
-        if (repositories != null && repositories.Any())
-        {
-            // If no workspace is selected in WorkspaceService, try to auto-select one
-            if (!WorkspaceService.HasSelectedWorkspace)
-            {
-                // Find the first actual repository (not the "All Repositories" option)
-                var firstActualRepo = repositories.FirstOrDefault(r => r.Slug != "ALL");
-                if (firstActualRepo != null)
-                {
-                    WorkspaceService.SelectedWorkspace = firstActualRepo.Workspace;
-                }
-            }
-
-            // Now, if a workspace is selected (either previously or auto-selected), filter the repositories for the UI
-            if (WorkspaceService.HasSelectedWorkspace && repositories != null)
-            {
-                // Filter repositories by the selected workspace, always including the "ALL" option
-                repositories = repositories
-                    .Where(r => r.Workspace == WorkspaceService.SelectedWorkspace || r.Slug == "ALL")
-                    .ToArray();
-
-                // If selectedRepoSlug is not set or invalid for the current workspace, default to "ALL"
-                if (string.IsNullOrEmpty(selectedRepoSlug) || (repositories != null && !repositories.Any(r => r.Slug == selectedRepoSlug)))
-                {
-                    selectedRepoSlug = "ALL";
-                }
-            }
-            else // If still no workspace is selected (e.g., no repositories at all), redirect to settings
-            {
-                Navigation.NavigateTo("/admin/settings");
-                return;
-            }
-        }
 
         await LoadDashboardData();
     }
@@ -323,129 +286,48 @@
     {
         isLoading = true;
         errorMessage = null;
+
         try
         {
-            var url = "api/userdashboard";
-            var queryParams = new List<string>();
-
-            if (startDate.HasValue)
-            {
-                queryParams.Add($"startDate={startDate.Value:yyyy-MM-dd}");
-            }
-            if (endDate.HasValue)
-            {
-                queryParams.Add($"endDate={endDate.Value:yyyy-MM-dd}");
-            }
-            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
-            {
-                queryParams.Add($"repoSlug={selectedRepoSlug}");
-            }
-
-            if (queryParams.Any())
-            {
-                url += "?" + string.Join("&", queryParams);
-            }
-
+            var url = $"api/userdashboard?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
             dashboardData = await Http.GetFromJsonAsync<UserDashboardResponseDto>(url);
         }
         catch (Exception ex)
         {
             errorMessage = $"Error loading dashboard data: {ex.Message}";
-            Console.WriteLine(ex.Message);
         }
         finally
         {
             isLoading = false;
+            StateHasChanged();
         }
-    }
-
-    private async Task LoadRepositories()
-    {
-        isLoadingRepos = true;
-        try
-        {
-            var fetchedRepos = await Http.GetFromJsonAsync<BB.Api.Endpoints.Analytics.RepositorySummaryDto[]>("api/analytics/repositories");
-            if (fetchedRepos != null)
-            {
-                repositories = fetchedRepos.ToArray();
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error loading repositories: {ex.Message}";
-        }
-        finally
-        {
-            isLoadingRepos = false;
-        }
-    }
-
-    private async Task OnRepositorySelected(string? repoSlug)
-    {
-        selectedRepoSlug = repoSlug;
-        await LoadDashboardData();
-    }
-
-    private async Task OnDateRangeUpdated((DateTime? start, DateTime? end) dates)
-    {
-        startDate = dates.start;
-        endDate = dates.end;
-        await LoadDashboardData();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && dashboardData != null)
+        if (!_chartsRendered && dashboardData != null)
         {
-            await RenderPrAgeChart();
-            await RenderPrsMergedByWeekdayChart();
+            _chartsRendered = true;
+
+            if (dashboardData.PrAgeGraphData != null)
+            {
+                await RenderPrAgeChart(dashboardData.PrAgeGraphData);
+            }
+
+            if (dashboardData.PrsMergedByWeekdayData?.MergedPrsByWeekday != null)
+            {
+                await RenderPrsMergedByWeekdayChart(dashboardData.PrsMergedByWeekdayData.MergedPrsByWeekday);
+            }
         }
     }
 
-    private async Task RenderPrAgeChart()
+    private async Task RenderPrAgeChart(PrAgeGraph prAgeGraphData)
     {
-        if (dashboardData == null || (dashboardData.PrAgeGraphData.OpenPrAge.Count == 0 && dashboardData.PrAgeGraphData.MergedPrAge.Count == 0))
-        {
-            return;
-        }
-
-        // Prepare data for the chart
-        var openPrData = dashboardData.PrAgeGraphData.OpenPrAge.Select(p => new { x = p.Days, y = p.PrCount }).ToList();
-        var mergedPrData = dashboardData.PrAgeGraphData.MergedPrAge.Select(p => new { x = p.Days, y = p.PrCount }).ToList();
-
-        // Pass data to JavaScript for chart rendering
-        await JSRuntime.InvokeVoidAsync("renderPrAgeChart", new { openPrData, mergedPrData });
+        await JSRuntime.InvokeVoidAsync("renderPrAgeChart", prAgeGraphData);
     }
 
-    private async Task RenderPrsMergedByWeekdayChart()
+    private async Task RenderPrsMergedByWeekdayChart(List<WeekdayPrCount> prsMergedByWeekdayData)
     {
-        if (dashboardData == null || dashboardData.PrsMergedByWeekdayData.MergedPrsByWeekday.Count == 0)
-        {
-            return;
-        }
-
-        var chartData = dashboardData.PrsMergedByWeekdayData.MergedPrsByWeekday.Select(p => new { dayOfWeek = p.DayOfWeek, prCount = p.PrCount }).ToList();
-
-        await JSRuntime.InvokeVoidAsync("renderPrsMergedByWeekdayChart", chartData);
-    }
-
-    // These methods are not directly used by UserDashboard, but are required by CommitsFilter component
-    // They can be left as empty implementations or throw NotImplementedException if not relevant for this dashboard
-    private Task OnFiltersChanged((bool includePR, bool includeData, bool includeConfig) filters)
-    {
-        // No filters to apply on User Dashboard, so this can be empty
-        return Task.CompletedTask;
-    }
-
-    private Task OnGroupingUpdated(string grouping)
-    {
-        // Grouping is not applicable for User Dashboard, so this can be empty
-        return Task.CompletedTask;
-    }
-
-    private Task OnShowExcludedChanged(bool value)
-    {
-        // ShowExcluded is not applicable for User Dashboard, so this can be empty
-        return Task.CompletedTask;
+        await JSRuntime.InvokeVoidAsync("renderPrsMergedByWeekdayChart", prsMergedByWeekdayData);
     }
 } 

@@ -23,6 +23,7 @@ namespace BB.Api.Endpoints.Analytics
         public int TotalCommits { get; set; }
         public int RepositoriesUpdated { get; set; }
         public int PrsNotApprovedAndMerged { get; set; }
+        public int TotalMergedPrs { get; set; }
     }
 
     public class PrAgeGraph

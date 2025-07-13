@@ -81,9 +81,23 @@ namespace BB.Api.Endpoints.Analytics
                 new { periodStartDate, periodEndDate, repoSlug });
 
             // Active Contributing Users
-            var activeContributingUsers = await connection.QuerySingleOrDefaultAsync<int>(
-                $"SELECT COUNT(DISTINCT AuthorId) FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0{repoWhereClause}", 
-                new { periodStartDate, periodEndDate, repoSlug });
+            var activeContributingUsers = await connection.QuerySingleOrDefaultAsync<int>(@$"
+                SELECT COUNT(DISTINCT UserId)
+                FROM (
+                    -- Commits
+                    SELECT AuthorId AS UserId FROM Commits WHERE Date >= @periodStartDate AND Date <= @periodEndDate AND IsRevert = 0{repoWhereClause.Replace("AND RepositoryId", "AND Commits.RepositoryId")}
+                    UNION
+                    -- PRs Created
+                    SELECT AuthorId AS UserId FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate{repoWhereClause.Replace("AND RepositoryId", "AND PullRequests.RepositoryId")}
+                    UNION
+                    -- PRs Approved
+                    SELECT u.Id AS UserId
+                    FROM PullRequestApprovals pra
+                    JOIN PullRequests pr ON pra.PullRequestId = pr.Id
+                    JOIN Users u ON pra.UserUuid = u.BitbucketUserId
+                    WHERE pra.ApprovedOn >= @periodStartDate AND pra.ApprovedOn <= @periodEndDate AND pra.Approved = 1{repoWhereClause.Replace("AND RepositoryId", "AND pr.RepositoryId")}
+                ) AS UserActivity
+            ", new { periodStartDate, periodEndDate, repoSlug });
 
             // Total Licensed Users - This needs to be determined. For now, let's assume it's the total number of users in the system.
             // This query does not depend on repoSlug
@@ -95,6 +109,11 @@ namespace BB.Api.Endpoints.Analytics
                 $"SELECT COUNT(*) FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate AND State != 'MERGED' AND State != 'DECLINED'{repoWhereClause}", 
                 new { periodStartDate, periodEndDate, repoSlug });
 
+            // Total Merged PRs
+            var totalMergedPrs = await connection.QuerySingleOrDefaultAsync<int>(
+                $"SELECT COUNT(*) FROM PullRequests WHERE MergedOn >= @periodStartDate AND MergedOn <= @periodEndDate AND State = 'MERGED'{repoWhereClause}",
+                new { periodStartDate, periodEndDate, repoSlug });
+
             return new PeriodStats
             {
                 StartDate = periodStartDate,
@@ -103,7 +122,8 @@ namespace BB.Api.Endpoints.Analytics
                 RepositoriesUpdated = repositoriesUpdated,
                 ActiveContributingUsers = activeContributingUsers,
                 TotalLicensedUsers = totalLicensedUsers, 
-                PrsNotApprovedAndMerged = prsNotApprovedAndMerged 
+                PrsNotApprovedAndMerged = prsNotApprovedAndMerged,
+                TotalMergedPrs = totalMergedPrs
             };
         }
 
@@ -117,7 +137,7 @@ namespace BB.Api.Endpoints.Analytics
             // Open PRs Age
             _logger.LogInformation("Fetching open PRs from {PeriodStartDate} to {PeriodEndDate} for repo {RepoSlug}", periodStartDate, periodEndDate, repoSlug);
             var openPrs = await connection.QueryAsync<DateTime>(
-                $"SELECT CreatedOn FROM PullRequests WHERE CreatedOn >= @periodStartDate AND CreatedOn <= @periodEndDate AND State = 'OPEN'{repoWhereClause}",
+                $"SELECT CreatedOn FROM PullRequests WHERE CreatedOn >= CAST(@periodStartDate AS DATETIME2) AND CreatedOn <= CAST(@periodEndDate AS DATETIME2) AND State = 'OPEN'{repoWhereClause}",
                 new { periodStartDate, periodEndDate, repoSlug });
 
             _logger.LogInformation("Found {Count} open PRs", openPrs.Count());
@@ -140,7 +160,7 @@ namespace BB.Api.Endpoints.Analytics
             // Merged PRs Age
             _logger.LogInformation("Fetching merged PRs from {PeriodStartDate} to {PeriodEndDate} for repo {RepoSlug}", periodStartDate, periodEndDate, repoSlug);
             var mergedPrs = await connection.QueryAsync<(DateTime CreatedOn, DateTime MergedOn)>(
-                $"SELECT CreatedOn, MergedOn FROM PullRequests WHERE MergedOn >= @periodStartDate AND MergedOn <= @periodEndDate AND State = 'MERGED'{repoWhereClause}",
+                $"SELECT CreatedOn, MergedOn FROM PullRequests WHERE MergedOn >= CAST(@periodStartDate AS DATETIME2) AND MergedOn <= CAST(@periodEndDate AS DATETIME2) AND State = 'MERGED'{repoWhereClause}",
                 new { periodStartDate, periodEndDate, repoSlug });
             
             _logger.LogInformation("Found {Count} merged PRs", mergedPrs.Count());
@@ -191,9 +211,21 @@ namespace BB.Api.Endpoints.Analytics
             
             // Get the count of distinct users who had activity in the period
             var activeUserCount = await connection.QuerySingleAsync<int>(@$"
-                SELECT COUNT(DISTINCT c.AuthorId)
-                FROM Commits c
-                WHERE c.Date >= @periodStartDate AND c.Date <= @periodEndDate AND c.IsRevert = 0{repoWhereClause}
+                SELECT COUNT(DISTINCT UserId)
+                FROM (
+                    -- Commits
+                    SELECT AuthorId AS UserId FROM Commits c WHERE c.Date >= @periodStartDate AND c.Date <= @periodEndDate AND c.IsRevert = 0{repoWhereClause}
+                    UNION
+                    -- PRs Created
+                    SELECT pr.AuthorId AS UserId FROM PullRequests pr WHERE pr.CreatedOn >= @periodStartDate AND pr.CreatedOn <= @periodEndDate{repoWhereClause.Replace("c.RepositoryId", "pr.RepositoryId")}
+                    UNION
+                    -- PRs Approved
+                    SELECT u.Id AS UserId
+                    FROM PullRequestApprovals pra
+                    JOIN PullRequests pr ON pra.PullRequestId = pr.Id
+                    JOIN Users u ON pra.UserUuid = u.BitbucketUserId
+                    WHERE pra.ApprovedOn >= @periodStartDate AND pra.ApprovedOn <= @periodEndDate AND pra.Approved = 1{repoWhereClause.Replace("c.RepositoryId", "pr.RepositoryId")}
+                ) AS UserActivity
             ", new { periodStartDate, periodEndDate, repoSlug });
 
             // Get the total number of users
@@ -225,7 +257,7 @@ namespace BB.Api.Endpoints.Analytics
             var query = @$"
                 SELECT DATENAME(dw, MergedOn) AS DayOfWeek, COUNT(*) AS PrCount
                 FROM PullRequests
-                WHERE MergedOn >= @periodStartDate AND MergedOn <= @periodEndDate AND State = 'MERGED'{repoWhereClause}
+                WHERE MergedOn >= CAST(@periodStartDate AS DATETIME2) AND MergedOn <= CAST(@periodEndDate AS DATETIME2) AND State = 'MERGED'{repoWhereClause}
                 GROUP BY DATENAME(dw, MergedOn), DATEPART(dw, MergedOn)
                 ORDER BY DATEPART(dw, MergedOn);
             ";
