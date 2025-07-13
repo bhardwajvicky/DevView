@@ -1,6 +1,6 @@
-# Bitbucket Analytics Dashboard
+# DevView - Bitbucket Analytics Dashboard
 
-A comprehensive .NET 9 solution for analyzing Bitbucket repositories with real-time analytics, beautiful visualizations, and GitHub-style insights.
+DevView is a comprehensive .NET 9 solution for analyzing Bitbucket repositories with real-time analytics, beautiful visualizations, and GitHub-style insights.
 
 ## 🌟 Features
 
@@ -28,7 +28,7 @@ A comprehensive .NET 9 solution for analyzing Bitbucket repositories with real-t
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   BB.Web        │    │     BB.Api       │    │  BBIntegration  │
+│      Web        │    │       API        │    │   Integration   │
 │  (Blazor UI)    │◄──►│  (REST API)      │◄──►│ (Bitbucket API) │
 │  Port: 5084     │    │  Port: 5000      │    │   Integration   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
@@ -39,12 +39,48 @@ A comprehensive .NET 9 solution for analyzing Bitbucket repositories with real-t
     │                  SQL Server Database                    │
     │         (Users, Repositories, Commits, PRs)            │
     └─────────────────────────────────────────────────────────┘
+                                   ▲
+                                   │
+                         ┌─────────────────┐
+                         │    AutoSync     │
+                         │ (Background     │
+                         │  Sync Service)  │
+                         └─────────────────┘
 ```
+
+## 🔄 Data Flow Overview
+
+DevView follows a clean architecture pattern with clear separation of concerns:
+
+1. **Integration Layer**: Handles all Bitbucket API communication
+   - Fetches users, repositories, commits, and pull requests
+   - Parses commit diffs and classifies file types
+   - Manages API rate limiting and error handling
+
+2. **API Layer**: Provides RESTful endpoints for data access
+   - Analytics endpoints for charts and insights
+   - Sync endpoints for manual data updates
+   - Commit and PR management endpoints
+
+3. **Web Layer**: Blazor Server application for user interface
+   - Real-time dashboard with interactive charts
+   - Admin pages for data management
+   - Responsive design with modern UI components
+
+4. **AutoSync Service**: Background data synchronization
+   - Full sync mode: Historical data import in batches
+   - Delta sync mode: Recent changes synchronization
+   - Configurable sync targets (users, repos, commits, PRs)
+
+### Sync Modes
+- **Full Sync**: Imports complete repository history in 10-day batches
+- **Delta Sync**: Syncs only recent changes (configurable days)
+- **Selective Sync**: Choose which data types to synchronize
 
 ### Project Structure
 ```
-BB.sln
-├── BB.Api/                          # 🔧 ASP.NET Core Web API
+DevView.sln
+├── API/                             # 🔧 ASP.NET Core Web API
 │   ├── Endpoints/
 │   │   ├── Analytics/               # 📊 Analytics controllers & DTOs
 │   │   ├── Commits/                 # 📝 Commit data endpoints
@@ -55,22 +91,31 @@ BB.sln
 │   ├── SqlSchema/                   # 🗄️ Database schema files
 │   └── appsettings.json            # ⚙️ API configuration
 │
-├── BB.Web/                          # 🌐 Blazor Server Web App
+├── Web/                             # 🌐 Blazor Server Web App
 │   ├── Components/
 │   │   ├── Pages/
 │   │   │   ├── Dashboard.razor      # 📊 Main analytics dashboard
-│   │   │   └── ApiTest.razor        # 🧪 API connection testing
+│   │   │   ├── UserDashboard.razor  # 👤 User-specific analytics
+│   │   │   ├── Commits.razor        # 📝 Commit analysis
+│   │   │   ├── PullRequests.razor   # 🔀 PR analysis
+│   │   │   ├── TopCommitters.razor  # 🏆 Top contributors
+│   │   │   └── Admin/               # 🔐 Admin pages
+│   │   ├── Common/                  # 🔄 Reusable components
 │   │   └── Layout/                  # 🎨 UI layout components
-│   ├── DTOs/                        # 📦 Data transfer objects
+│   ├── Services/                    # 🛠️ Web app services
 │   └── appsettings.json            # ⚙️ Web app configuration
 │
-├── BBIntegration/                   # 🔌 Bitbucket API Integration
+├── Integration/                     # 🔌 Bitbucket API Integration
 │   ├── Commits/                     # 📝 Commit data fetching
 │   ├── PullRequests/               # 🔀 PR data fetching
 │   ├── Repositories/               # 📁 Repository management
 │   ├── Users/                      # 👥 User data management
 │   ├── Common/                     # 🛠️ Shared API client & config
 │   └── Utils/                      # 🔧 Utility services
+│
+├── AutoSync/                        # ⏰ Background Sync Service
+│   ├── Models/                      # 📋 Sync configuration models
+│   └── Program.cs                  # 🚀 Main sync application
 │
 └── start-dev.sh                    # 🚀 Development startup script
 ```
@@ -104,13 +149,13 @@ This will:
    ```sql
    CREATE DATABASE bb;
    ```
-2. **Run Schema**: Execute the complete SQL schema from `BB.Api/SqlSchema/schema.sql` to create all tables:
+2. **Run Schema**: Execute the complete SQL schema from `API/SqlSchema/schema.sql` to create all tables:
    - Users table (with avatar support)
    - Repositories table 
    - Commits table (with code line tracking)
    - PullRequests table
    - All necessary indexes and foreign key relationships
-3. **Configure Connection**: Update the connection string in `BB.Api/appsettings.json` (created from template)
+3. **Configure Connection**: Update the connection string in `API/appsettings.json` (created from template)
 
 ### 4. Start Development Environment
 ```bash
@@ -119,11 +164,11 @@ This will:
 
 # Option 2: Manual startup
 # Terminal 1 - Start API
-cd BB.Api
+cd API
 dotnet run
 
 # Terminal 2 - Start Web App
-cd BB.Web
+cd Web
 dotnet run
 ```
 
@@ -134,7 +179,7 @@ dotnet run
 
 ## 📋 Configuration
 
-### BB.Api/appsettings.json
+### API/appsettings.json
 ```json
 {
   "ConnectionStrings": {
@@ -148,7 +193,7 @@ dotnet run
 }
 ```
 
-### BB.Web/appsettings.json
+### Web/appsettings.json
 ```json
 {
   "Logging": {
@@ -207,16 +252,16 @@ Content-Type: application/json
 ### Local Production Build
 ```bash
 # Build API
-cd BB.Api
+cd API
 dotnet publish -c Release -o ./publish
 
 # Build Web App
-cd BB.Web
+cd Web
 dotnet publish -c Release -o ./publish
 ```
 
 ### Docker Deployment
-Create `Dockerfile` for BB.Api:
+Create `Dockerfile` for API:
 ```dockerfile
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
@@ -224,26 +269,26 @@ EXPOSE 5000
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
-COPY ["BB.Api/BB.Api.csproj", "BB.Api/"]
-COPY ["BBIntegration/BBIntegration.csproj", "BBIntegration/"]
-RUN dotnet restore "BB.Api/BB.Api.csproj"
+COPY ["API/API.csproj", "API/"]
+COPY ["Integration/Integration.csproj", "Integration/"]
+RUN dotnet restore "API/API.csproj"
 COPY . .
-WORKDIR "/src/BB.Api"
-RUN dotnet build "BB.Api.csproj" -c Release -o /app/build
+WORKDIR "/src/API"
+RUN dotnet build "API.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "BB.Api.csproj" -c Release -o /app/publish
+RUN dotnet publish "API.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "BB.Api.dll"]
+ENTRYPOINT ["dotnet", "API.dll"]
 ```
 
 ### Cloud Deployment Options
 
 #### Azure App Service
-1. **Create App Service** for both BB.Api and BB.Web
+1. **Create App Service** for both API and Web
 2. **Configure Connection Strings** in Application Settings
 3. **Deploy** using Visual Studio, GitHub Actions, or Azure CLI
 
@@ -272,13 +317,14 @@ dotnet test --collect:"XPlat Code Coverage"
 ```
 
 ### Adding New Features
-1. **API Endpoints**: Add to `BB.Api/Endpoints/`
-2. **UI Components**: Add to `BB.Web/Components/`
-3. **Bitbucket Integration**: Extend `BBIntegration/`
+1. **API Endpoints**: Add to `API/Endpoints/`
+2. **UI Components**: Add to `Web/Components/`
+3. **Bitbucket Integration**: Extend `Integration/`
 
 ### Debugging
 - **API Logs**: Use built-in logging or check `api.log`
 - **Web Logs**: Check browser console and `web.log`
+- **AutoSync Logs**: Console output shows sync progress and errors
 - **Database**: Use SQL Server Management Studio or Azure Data Studio
 
 ## 📈 API Endpoints
@@ -317,9 +363,9 @@ dotnet test --collect:"XPlat Code Coverage"
 3. Check data format in network tab
 
 **API Connection Errors**
-1. Ensure BB.Api is running on port 5000
+1. Ensure API is running on port 5000
 2. Check CORS configuration
-3. Verify `ApiBaseUrl` in BB.Web settings
+3. Verify `ApiBaseUrl` in Web settings
 
 **Database Connection Issues**
 1. Verify SQL Server is running
@@ -351,21 +397,27 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 This repository includes launch settings templates for both the API and Web projects to help standardize local development environments.
 
-## API Project (BB.Api)
-- **Template file:** `BB.Api/Properties/launchSettings.template.json`
+## API Project (API)
+- **Template file:** `API/Properties/launchSettings.template.json`
 - **Default HTTP port:** `5000`
 - **How to use:**
-  1. Copy `BB.Api/Properties/launchSettings.template.json` to `BB.Api/Properties/launchSettings.json`.
+  1. Copy `API/Properties/launchSettings.template.json` to `API/Properties/launchSettings.json`.
   2. Adjust any settings as needed for your local environment.
   3. The API will be available at `http://localhost:5000` by default.
 
-## Web Project (BB.Web)
-- **Template file:** `BB.Web/appsettings.template.json`
+## Web Project (Web)
+- **Template file:** `Web/appsettings.template.json`
 - **Default HTTP port:** `5084`
 - **How to use:**
-  1. Copy `BB.Web/appsettings.template.json` to `BB.Web/Properties/launchSettings.json`.
+  1. Copy `Web/appsettings.template.json` to `Web/Properties/launchSettings.json`.
   2. Adjust any settings as needed for your local environment.
   3. The web app will be available at `http://localhost:5084` by default.
+
+## AutoSync Service
+- **Configuration:** Uses same database and Bitbucket settings as API
+- **Run manually:** `cd AutoSync && dotnet run`
+- **Sync modes:** Configure in `appsettings.json` for Full or Delta sync
+- **Background service:** Can be deployed as a Windows Service or Docker container
 
 ## Notes
 - These templates are not used directly by the .NET runtime. You must copy them to `launchSettings.json` in the appropriate `Properties` folder for them to take effect.
