@@ -1266,8 +1266,8 @@
     private string? commitDetailsModalTitle;
     private DotNetObjectReference<Dashboard>? _dotNetRef;
     private bool includePR = false;
-    private bool includeData = true;
-    private bool includeConfig = true;
+    private bool includeData = false;
+    private bool includeConfig = false;
     private string selectedGrouping = "Day";
     private Dictionary<int, List<API.Endpoints.Analytics.CommitActivityDto>> _individualContributorCommitActivity = new();
     private bool showExcluded = false;
@@ -1332,6 +1332,7 @@
             await JSRuntime.InvokeVoidAsync("setDashboardDotNetRef", _dotNetRef);
             // Initialize JavaScript variables
             await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = \"{selectedGrouping}\"");
+            await JSRuntime.InvokeVoidAsync("eval", $"window.showExcluded = \"{showExcluded}\";");
         }
         // Initialize chart after render if we have data (firstRender or not)
         if (commitActivity != null && commitActivity.Any())
@@ -1376,6 +1377,7 @@
 
         await JSRuntime.InvokeVoidAsync("eval", $"window.selectedRepoSlug = '{selectedRepoSlug}';");
         await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.showExcluded = \"{showExcluded}\";");
 
         await RefreshDashboardData();
     }

@@ -44,20 +44,19 @@ namespace Integration.Repositories
                 {
                     const string sql = @"
                         MERGE Repositories AS target
-                        USING (SELECT @Uuid AS BitbucketRepoId, @Slug AS Slug, @Name AS Name, @FullName AS FullName, @Workspace AS Workspace, @CreatedOn AS CreatedOn) AS source
+                        USING (SELECT @Uuid AS BitbucketRepoId, @Slug AS Slug, @Name AS Name, @Workspace AS Workspace, @CreatedOn AS CreatedOn) AS source
                         ON (target.BitbucketRepoId = source.BitbucketRepoId)
                         WHEN MATCHED THEN 
-                            UPDATE SET Name = source.Name, FullName = source.FullName, Workspace = source.Workspace, Slug = source.Slug
+                            UPDATE SET Name = source.Name, Workspace = source.Workspace, Slug = source.Slug
                         WHEN NOT MATCHED THEN
-                            INSERT (BitbucketRepoId, Slug, Name, FullName, Workspace, CreatedOn)
-                            VALUES (source.BitbucketRepoId, source.Slug, source.Name, source.FullName, source.Workspace, source.CreatedOn);
+                            INSERT (BitbucketRepoId, Slug, Name, Workspace, CreatedOn)
+                            VALUES (source.BitbucketRepoId, source.Slug, source.Name, source.Workspace, source.CreatedOn);
                     ";
                     await connection.ExecuteAsync(sql, new
                     {
                         repo.Uuid,
                         repo.Slug,
                         repo.Name,
-                        repo.FullName,
                         Workspace = workspace,
                         repo.CreatedOn
                     });

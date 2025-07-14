@@ -247,9 +247,9 @@
     private int? selectedUserId;
     private DateTime? startDate = DateTime.Today.AddDays(-7);
     private DateTime? endDate = DateTime.Today;
-    private bool includePR = false;  // Changed default to false
-    private bool includeData = true;
-    private bool includeConfig = true;
+    private bool includePR = false;
+    private bool includeData = false;
+    private bool includeConfig = false;
     private string? groupBy = "Day"; // Make nullable and initialize to null
     private string? errorMessage;
     private int currentPage = 1;
