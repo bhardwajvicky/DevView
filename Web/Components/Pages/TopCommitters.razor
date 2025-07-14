@@ -50,10 +50,12 @@
             IncludeData="@includeData"
             IncludeConfig="@includeConfig"
             GroupBy="@groupBy"
+            ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
             OnDateRangeUpdated="OnDateRangeUpdated"
             OnFiltersChanged="OnFiltersChanged"
-            OnGroupingUpdated="OnGroupingUpdated" />
+            OnGroupingUpdated="OnGroupingUpdated"
+            OnShowExcludedChanged="OnShowExcludedChanged" />
 
         <!-- Error/Info Messages -->
         @if (!string.IsNullOrEmpty(errorMessage))
@@ -221,15 +223,19 @@
     private string? selectedRepoSlug;
     private DateTime? startDate;
     private DateTime? endDate;
-    private bool includePR = true;
-    private bool includeData = true;
-    private bool includeConfig = true;
+    private bool includePR = false;
+    private bool includeData = false;
+    private bool includeConfig = false;
+    private bool showExcluded = false;
     private string groupBy = "Day";
     private string selectedGrouping = "Day";
     private DotNetObjectReference<TopCommitters>? _dotNetRef;
 
     protected override async Task OnInitializedAsync()
     {
+        endDate = DateTime.Now;
+        startDate = endDate.Value.AddDays(-7);
+
         try
         {
             // Instead of redirecting, just show a message if no workspace is selected
@@ -268,6 +274,7 @@
             await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
             await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
             await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
+            await JSRuntime.InvokeVoidAsync("eval", $"window.showExcluded = {showExcluded.ToString().ToLower()};");
         }
     }
 
@@ -306,6 +313,7 @@
         await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = '{selectedGrouping}';");
         await JSRuntime.InvokeVoidAsync("eval", $"window.includeData = {includeData.ToString().ToLower()};");
         await JSRuntime.InvokeVoidAsync("eval", $"window.includeConfig = {includeConfig.ToString().ToLower()};");
+        await JSRuntime.InvokeVoidAsync("eval", $"window.showExcluded = {showExcluded.ToString().ToLower()};");
         
         await RefreshData();
     }
@@ -329,6 +337,12 @@
         this.includeData = filters.includeData;
         this.includeConfig = filters.includeConfig;
         // Removed redundant JS interop calls for window.includeData and window.includeConfig
+        await RefreshData();
+    }
+
+    private async Task OnShowExcludedChanged(bool excluded)
+    {
+        showExcluded = excluded;
         await RefreshData();
     }
 
@@ -367,11 +381,11 @@
             string url;
             if (string.IsNullOrEmpty(repoSlug))
             {
-                url = $"/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}";
             }
             else
             {
-                url = $"/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}";
+                url = $"/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}";
             }
 
             // Add date range parameters if specified

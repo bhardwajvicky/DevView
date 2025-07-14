@@ -7,6 +7,9 @@ using Integration.Repositories;
 using Integration.Users;
 using Integration.Utils;
 
+// Set Dapper default command timeout
+Dapper.SqlMapper.Settings.CommandTimeout = 300; // 5 minutes
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Create BitbucketConfig from appsettings.json
