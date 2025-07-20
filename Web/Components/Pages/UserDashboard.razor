@@ -5,6 +5,7 @@
 @using Radzen.Blazor
 @using Web.Services
 @using Web.Components.Common
+@using System.Linq
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
@@ -16,11 +17,142 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <!-- Removed: <h1 class="mb-4"><i class="bi bi-speedometer2"></i> User Dashboard</h1> -->
+            <h1 class="mb-4"><i class="bi bi-speedometer2"></i> User Dashboard</h1>
         </div>
     </div>
 
-    @if (isLoading)
+    @if (!WorkspaceService.HasSelectedWorkspace)
+    {
+        <div class="alert alert-warning" role="alert">
+            <h4 class="alert-heading">Workspace Not Configured</h4>
+            <p>Please select a workspace in Settings to view dashboard statistics.</p>
+            <hr>
+            <button class="btn btn-primary" @onclick="NavigateToSettings">
+                <i class="bi bi-gear-fill me-2"></i>Go to Settings
+            </button>
+        </div>
+    }
+    else
+    {
+        <!-- Filters -->
+        <div class="row mb-4">
+            @if (isLoadingRepos)
+            {
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Repository</label>
+                        <input type="text" class="form-control" value="Loading repositories..." disabled />
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Repository</label>
+                        @if (repositories != null && repositories.Any())
+                        {
+                            <RadzenDropDown Data="@GetRepositoryOptions()"
+                                          TextProperty="Name"
+                                          ValueProperty="Slug"
+                                          AllowClear="true"
+                                          AllowFiltering="true"
+                                          FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                          Placeholder="Search repositories..."
+                                          Value="@selectedRepoSlug"
+                                          Change="@(args => OnRepositoryChanged(args))"
+                                          class="w-100" />
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                No repositories found. Please check your configuration.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label for="userSelect" class="form-label fw-bold">Select User</label>
+                    @if (isLoadingUsers)
+                    {
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Loading users...</span>
+                        </div>
+                    }
+                    else if (users != null && users.Any())
+                    {
+                        <RadzenDropDown Data="@users.OrderBy(u => u.DisplayName)"
+                                      TextProperty="DisplayName"
+                                      ValueProperty="Id"
+                                      AllowClear="true"
+                                      AllowFiltering="true"
+                                      FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                      Placeholder="Search users..."
+                                      Value="@selectedUserId"
+                                      Change="@(args => OnUserChanged(args))"
+                                      class="w-100" />
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            No users found. Please check your configuration.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Date Range Selection -->
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Date Range</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <RadzenDatePicker @bind-Value="startDate" DateFormat="MM/dd/yyyy" Placeholder="Start Date" 
+                                            Change="@(() => OnDateRangeChanged())" class="w-100" />
+                        </div>
+                        <div class="col-md-6">
+                            <RadzenDatePicker @bind-Value="endDate" DateFormat="MM/dd/yyyy" Placeholder="End Date" 
+                                            Change="@(() => OnDateRangeChanged())" class="w-100" />
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 7 Days" Click="@(() => SetDateRange(7))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 30 Days" Click="@(() => SetDateRange(30))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 90 Days" Click="@(() => SetDateRange(90))" class="me-1" />
+                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="All Time" Click="@(() => SetDateRange(null))" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Row -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Filters</h5>
+                        <div class="d-flex gap-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="includePR" @bind="includePR" @bind:after="OnFilterChanged">
+                                <label class="form-check-label" for="includePR">Include PRs</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="showExcluded" @bind="showExcluded" @bind:after="OnFilterChanged">
+                                <label class="form-check-label" for="showExcluded">Show Excluded</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (isLoading)
     {
         <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
             <div class="d-flex align-items-center">
@@ -62,7 +194,7 @@
                             </span>
                         </h2>
                         <p class="text-muted small mb-0">Last period: @dashboardData.PreviousPeriod.ActiveContributingUsers</p>
-                        <p class="text-muted small mb-0">@dashboardData.CurrentPeriod.StartDate.ToString("MMM dd") - @dashboardData.CurrentPeriod.EndDate.ToString("MMM dd")</p>
+                        <p class="text-muted small mb-0">@GetDateRangeDisplay()</p>
                     </div>
                 </div>
             </div>
@@ -90,7 +222,7 @@
                             </span>
                         </h2>
                         <p class="text-muted small mb-0">Last period: @dashboardData.PreviousPeriod.TotalCommits</p>
-                        <p class="text-muted small mb-0">@dashboardData.CurrentPeriod.StartDate.ToString("MMM dd") - @dashboardData.CurrentPeriod.EndDate.ToString("MMM dd")</p>
+                        <p class="text-muted small mb-0">@GetDateRangeDisplay()</p>
                     </div>
                 </div>
             </div>
@@ -118,7 +250,7 @@
                             </span>
                         </h2>
                         <p class="text-muted small mb-0">Last period: @dashboardData.PreviousPeriod.RepositoriesUpdated</p>
-                        <p class="text-muted small mb-0">@dashboardData.CurrentPeriod.StartDate.ToString("MMM dd") - @dashboardData.CurrentPeriod.EndDate.ToString("MMM dd")</p>
+                        <p class="text-muted small mb-0">@GetDateRangeDisplay()</p>
                     </div>
                 </div>
             </div>
@@ -135,7 +267,7 @@
                             <span class="text-danger">@dashboardData.CurrentPeriod.PrsNotApprovedAndMerged</span>
                         </h2>
                         <p class="text-muted small mb-0">Current Period</p>
-                        <p class="text-muted small mb-0">@dashboardData.CurrentPeriod.StartDate.ToString("MMM dd") - @dashboardData.CurrentPeriod.EndDate.ToString("MMM dd")</p>
+                        <p class="text-muted small mb-0">@GetDateRangeDisplay()</p>
                     </div>
                 </div>
             </div>
@@ -152,7 +284,7 @@
                             <span class="text-warning">@dashboardData.UsersWithNoActivity</span>
                         </h2>
                         <p class="text-muted small mb-0">Current Period</p>
-                        <p class="text-muted small mb-0">@dashboardData.CurrentPeriod.StartDate.ToString("MMM dd") - @dashboardData.CurrentPeriod.EndDate.ToString("MMM dd")</p>
+                        <p class="text-muted small mb-0">@GetDateRangeDisplay()</p>
                     </div>
                 </div>
             </div>
@@ -263,6 +395,7 @@
             </div>
         </div>
     }
+}
 </div>
 
 @code {
@@ -273,12 +406,29 @@
     private DateTime? endDate;
     private bool _chartsRendered = false;
 
+    // Filter-related state variables
+    private IEnumerable<RepositorySummaryDto>? repositories;
+    private IEnumerable<UserDto>? users;
+    private bool isLoadingRepos = true;
+    private bool isLoadingUsers = true;
+    private string? selectedRepoSlug = "all";
+    private int? selectedUserId;
+    private bool includePR = false;
+    private bool showExcluded = false;
+
     protected override async Task OnInitializedAsync()
     {
-        // Set default date range to the last 30 days
-        endDate = DateTime.Now;
-        startDate = endDate.Value.AddDays(-30);
+        // Start with "All Time" by default (null dates)
+        startDate = null;
+        endDate = null;
 
+        if (!WorkspaceService.HasSelectedWorkspace)
+        {
+            return;
+        }
+
+        await LoadRepositories();
+        await LoadUsers();
         await LoadDashboardData();
     }
 
@@ -286,10 +436,44 @@
     {
         isLoading = true;
         errorMessage = null;
+        _chartsRendered = false;
 
         try
         {
-            var url = $"api/userdashboard?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
+            if (!WorkspaceService.HasSelectedWorkspace)
+            {
+                errorMessage = "No workspace selected. Please configure workspace in Settings.";
+                return;
+            }
+
+            var url = $"api/userdashboard?workspace={WorkspaceService.SelectedWorkspace}";
+            
+            // Add date filters only if they have values (handle "All Time" scenario)
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+            
+            // Add repository filter if specific repo is selected
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "all")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            
+            // Add user filter if specific user is selected
+            if (selectedUserId.HasValue)
+            {
+                url += $"&userId={selectedUserId.Value}";
+            }
+
+            // Add filter parameters that might affect data aggregation
+            url += $"&includePR={includePR.ToString().ToLower()}";
+            url += $"&showExcluded={showExcluded.ToString().ToLower()}";
+
             dashboardData = await Http.GetFromJsonAsync<UserDashboardResponseDto>(url);
         }
         catch (Exception ex)
@@ -301,6 +485,137 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task LoadRepositories()
+    {
+        try
+        {
+            isLoadingRepos = true;
+            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("api/analytics/repositories");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading repositories: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingRepos = false;
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            isLoadingUsers = true;
+            users = await Http.GetFromJsonAsync<IEnumerable<UserDto>>("api/analytics/users");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading users: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingUsers = false;
+        }
+    }
+
+    private async Task OnRepositoryChanged(object? value)
+    {
+        var slug = value?.ToString();
+        selectedRepoSlug = slug;
+        await LoadDashboardData();
+    }
+
+    private async Task OnUserChanged(object? value)
+    {
+        var userId = value != null ? (int?)Convert.ToInt32(value) : null;
+        selectedUserId = userId;
+        await LoadDashboardData();
+    }
+
+    private async Task OnDateRangeChanged()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task SetDateRange(int? days)
+    {
+        if (days.HasValue)
+        {
+            endDate = DateTime.Today;
+            startDate = endDate.Value.AddDays(-days.Value);
+        }
+        else
+        {
+            startDate = null;
+            endDate = null;
+        }
+        await LoadDashboardData();
+    }
+
+    private IEnumerable<dynamic> GetRepositoryOptions()
+    {
+        var options = new List<dynamic>();
+        
+        // Add "All Repositories" option
+        options.Add(new { Name = "All Repositories", Slug = "all" });
+        
+        // Add individual repositories
+        if (repositories != null)
+        {
+            options.AddRange(repositories.OrderBy(r => r.Name).Select(r => new { r.Name, r.Slug }));
+        }
+        
+        return options;
+    }
+
+    private void NavigateToSettings()
+    {
+        Navigation.NavigateTo("/admin/settings");
+    }
+
+    private async Task OnFilterChanged()
+    {
+        await LoadDashboardData();
+    }
+
+    private string GetDateRangeDisplay()
+    {
+        // If both dates are null, it means "All Time" is selected
+        if (!startDate.HasValue && !endDate.HasValue)
+        {
+            return "All Time";
+        }
+        
+        // If only start date is provided
+        if (startDate.HasValue && !endDate.HasValue)
+        {
+            return $"From {startDate.Value:MMM dd, yyyy}";
+        }
+        
+        // If only end date is provided
+        if (!startDate.HasValue && endDate.HasValue)
+        {
+            return $"Until {endDate.Value:MMM dd, yyyy}";
+        }
+        
+        // If both dates are provided
+        if (startDate.HasValue && endDate.HasValue)
+        {
+            // If same year, show shorter format
+            if (startDate.Value.Year == endDate.Value.Year)
+            {
+                return $"{startDate.Value:MMM dd} - {endDate.Value:MMM dd, yyyy}";
+            }
+            else
+            {
+                return $"{startDate.Value:MMM dd, yyyy} - {endDate.Value:MMM dd, yyyy}";
+            }
+        }
+        
+        return "All Time"; // Fallback
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
