@@ -34,21 +34,91 @@
                             <table class="table table-striped table-hover align-middle">
                                 <thead>
                                     <tr>
-                                        <th>File Name</th>
-                                        <th>File Type</th>
-                                        <th>Additions</th>
-                                        <th>Deletions</th>
+                                        <th @onclick="() => SortBy(nameof(CommitFileDto.FilePath))" 
+                                            style="cursor: pointer; user-select: none;"
+                                            class="@GetSortClass(nameof(CommitFileDto.FilePath))">
+                                            File Name
+                                            @if (currentSortColumn == nameof(CommitFileDto.FilePath))
+                                            {
+                                                <i class="bi @(isAscending ? "bi-sort-alpha-down" : "bi-sort-alpha-up") ms-1"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted"></i>
+                                            }
+                                        </th>
+                                        <th @onclick="() => SortBy(nameof(CommitFileDto.FileType))" 
+                                            style="cursor: pointer; user-select: none;"
+                                            class="@GetSortClass(nameof(CommitFileDto.FileType))">
+                                            File Type
+                                            @if (currentSortColumn == nameof(CommitFileDto.FileType))
+                                            {
+                                                <i class="bi @(isAscending ? "bi-sort-alpha-down" : "bi-sort-alpha-up") ms-1"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted"></i>
+                                            }
+                                        </th>
+                                        <th @onclick="() => SortBy(nameof(CommitFileDto.LinesAdded))" 
+                                            style="cursor: pointer; user-select: none;"
+                                            class="@GetSortClass(nameof(CommitFileDto.LinesAdded))">
+                                            Additions
+                                            @if (currentSortColumn == nameof(CommitFileDto.LinesAdded))
+                                            {
+                                                <i class="bi @(isAscending ? "bi-sort-numeric-down" : "bi-sort-numeric-up") ms-1"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted"></i>
+                                            }
+                                        </th>
+                                        <th @onclick="() => SortBy(nameof(CommitFileDto.LinesRemoved))" 
+                                            style="cursor: pointer; user-select: none;"
+                                            class="@GetSortClass(nameof(CommitFileDto.LinesRemoved))">
+                                            Deletions
+                                            @if (currentSortColumn == nameof(CommitFileDto.LinesRemoved))
+                                            {
+                                                <i class="bi @(isAscending ? "bi-sort-numeric-down" : "bi-sort-numeric-up") ms-1"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-arrow-down-up ms-1 text-muted"></i>
+                                            }
+                                        </th>
                                         <th>Exclude</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var file in CommitFiles)
+                                    @foreach (var file in GetSortedFiles())
                                     {
                                         <tr>
                                             <td>@file.FilePath</td>
-                                            <td>@file.FileType</td>
-                                            <td>@file.LinesAdded</td>
-                                            <td>@file.LinesRemoved</td>
+                                            <td>
+                                                <span class="badge @GetFileTypeBadgeClass(file.FileType)">
+                                                    @file.FileType
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (file.LinesAdded > 0)
+                                                {
+                                                    <span class="text-success fw-bold">+@file.LinesAdded</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (file.LinesRemoved > 0)
+                                                {
+                                                    <span class="text-danger fw-bold">-@file.LinesRemoved</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">0</span>
+                                                }
+                                            </td>
                                             <td>
                                                 <div class="form-check form-switch">
                                                     <input class="form-check-input" type="checkbox" role="switch" id="excludeSwitch_@file.Id" checked="@file.ExcludeFromReporting" @onchange="(e) => OnExcludeFromReportingChange(file, (bool)(e.Value ?? false))" />
@@ -71,6 +141,21 @@
     <div class="modal-backdrop fade show"></div>
 }
 
+<style>
+    .sortable-header {
+        transition: background-color 0.2s ease;
+    }
+    
+    .sortable-header:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .sort-active {
+        background-color: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+    }
+</style>
+
 @code {
     [Parameter]
     public bool IsOpen { get; set; }
@@ -83,6 +168,10 @@
 
     private List<CommitFileDto>? CommitFiles { get; set; }
     private bool ShowAlert { get; set; }
+    
+    // Sorting state
+    private string? currentSortColumn = null;
+    private bool isAscending = true;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -97,12 +186,82 @@
         try
         {
             CommitFiles = await Http.GetFromJsonAsync<List<CommitFileDto>>($"api/Analytics/commits/{CommitHash}/files");
+            // Reset sorting when new data is loaded
+            currentSortColumn = null;
+            isAscending = true;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading commit files: {ex.Message}");
             CommitFiles = new List<CommitFileDto>(); // Initialize to empty list on error
         }
+    }
+
+    private void SortBy(string columnName)
+    {
+        if (currentSortColumn == columnName)
+        {
+            // Toggle sort direction if same column
+            isAscending = !isAscending;
+        }
+        else
+        {
+            // New column, start with ascending
+            currentSortColumn = columnName;
+            isAscending = true;
+        }
+        
+        StateHasChanged();
+    }
+
+    private IEnumerable<CommitFileDto> GetSortedFiles()
+    {
+        if (CommitFiles == null || !CommitFiles.Any())
+            return new List<CommitFileDto>();
+
+        if (string.IsNullOrEmpty(currentSortColumn))
+            return CommitFiles;
+
+        return currentSortColumn switch
+        {
+            nameof(CommitFileDto.FilePath) => isAscending 
+                ? CommitFiles.OrderBy(f => f.FilePath) 
+                : CommitFiles.OrderByDescending(f => f.FilePath),
+            nameof(CommitFileDto.FileType) => isAscending 
+                ? CommitFiles.OrderBy(f => f.FileType) 
+                : CommitFiles.OrderByDescending(f => f.FileType),
+            nameof(CommitFileDto.LinesAdded) => isAscending 
+                ? CommitFiles.OrderBy(f => f.LinesAdded) 
+                : CommitFiles.OrderByDescending(f => f.LinesAdded),
+            nameof(CommitFileDto.LinesRemoved) => isAscending 
+                ? CommitFiles.OrderBy(f => f.LinesRemoved) 
+                : CommitFiles.OrderByDescending(f => f.LinesRemoved),
+            _ => CommitFiles
+        };
+    }
+
+    private string GetSortClass(string columnName)
+    {
+        var classes = new List<string> { "sortable-header" };
+        
+        if (currentSortColumn == columnName)
+        {
+            classes.Add("sort-active");
+        }
+        
+        return string.Join(" ", classes);
+    }
+
+    private string GetFileTypeBadgeClass(string fileType)
+    {
+        return fileType?.ToLower() switch
+        {
+            "code" => "bg-primary",
+            "data" => "bg-info",
+            "config" => "bg-warning",
+            "docs" => "bg-success",
+            _ => "bg-secondary"
+        };
     }
 
     private async Task OnExcludeFromReportingChange(CommitFileDto file, bool value)
