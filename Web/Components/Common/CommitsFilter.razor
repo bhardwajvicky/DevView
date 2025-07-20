@@ -145,6 +145,13 @@
 </div>
 
 @code {
+    // Simple model class for dropdown options
+    public class RepositoryOption
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+    }
+
     [Parameter]
     public bool IsLoadingRepos { get; set; }
 
@@ -212,17 +219,17 @@
         SelectedRepoSlug = slug;
     }
 
-    private IEnumerable<dynamic> GetRepositoryOptions()
+    private IEnumerable<RepositoryOption> GetRepositoryOptions()
     {
-        var options = new List<dynamic>();
+        var options = new List<RepositoryOption>();
         
         // Add "All Repositories" option
-        options.Add(new { Name = "All Repositories", Slug = "all" });
+        options.Add(new RepositoryOption { Name = "All Repositories", Slug = "ALL" });
         
         // Add individual repositories
         if (Repositories != null)
         {
-            options.AddRange(Repositories.OrderBy(r => r.Name).Select(r => new { r.Name, r.Slug }));
+            options.AddRange(Repositories.OrderBy(r => r.Name).Select(r => new RepositoryOption { Name = r.Name, Slug = r.Slug }));
         }
         
         return options;

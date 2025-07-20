@@ -6,6 +6,7 @@
 @using Web.Components.Common
 @using API.Endpoints.Analytics 
 @using API.Endpoints.Commits
+@using Microsoft.AspNetCore.WebUtilities
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
@@ -19,9 +20,17 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <h1 class="mb-4">
-                <i class="bi bi-git"></i> Commits
-            </h1>
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <h1 class="mb-0">
+                    <i class="bi bi-git"></i> Commits
+                </h1>
+                @if (showBackButton)
+                {
+                    <button class="btn btn-outline-secondary" @onclick="NavigateBack">
+                        <i class="bi bi-arrow-left me-2"></i>Back to User Dashboard
+                    </button>
+                }
+            </div>
         </div>
     </div>
 
@@ -260,12 +269,68 @@
     private bool showCommitFilesModal = false;
     private string? selectedCommitHashForModal;
     private bool showExcluded = false;
+    private bool showBackButton = false;
+    private string? referrerPage;
+    private Dictionary<string, string> originalQueryParams = new();
 
     protected override async Task OnInitializedAsync()
     {
+        // Parse query parameters from URL
+        ParseQueryParameters();
+        
         await LoadRepositories();
         await LoadUsers();
         await LoadCommits();
+    }
+
+    private void ParseQueryParameters()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var queryParams = QueryHelpers.ParseQuery(uri.Query);
+
+        // Store all original query parameters for back navigation
+        foreach (var param in queryParams)
+        {
+            originalQueryParams[param.Key] = param.Value.ToString();
+        }
+
+        // Check if we came from user dashboard
+        if (queryParams.TryGetValue("referrer", out var referrer))
+        {
+            referrerPage = referrer;
+            showBackButton = referrer == "userdashboard";
+        }
+
+        // Apply filters from query parameters
+        if (queryParams.TryGetValue("userId", out var userIdStr) && int.TryParse(userIdStr, out var userId))
+        {
+            selectedUserId = userId;
+        }
+
+        if (queryParams.TryGetValue("repoSlug", out var repoSlug))
+        {
+            selectedRepoSlug = repoSlug;
+        }
+
+        if (queryParams.TryGetValue("startDate", out var startDateStr) && DateTime.TryParse(startDateStr, out var startDateParsed))
+        {
+            startDate = startDateParsed;
+        }
+
+        if (queryParams.TryGetValue("endDate", out var endDateStr) && DateTime.TryParse(endDateStr, out var endDateParsed))
+        {
+            endDate = endDateParsed;
+        }
+
+        if (queryParams.TryGetValue("includePR", out var includePRStr) && bool.TryParse(includePRStr, out var includePRParsed))
+        {
+            includePR = includePRParsed;
+        }
+
+        if (queryParams.TryGetValue("showExcluded", out var showExcludedStr) && bool.TryParse(showExcludedStr, out var showExcludedParsed))
+        {
+            showExcluded = showExcludedParsed;
+        }
     }
 
     private async Task LoadRepositories()
@@ -450,5 +515,35 @@
     private void NavigateToSettings()
     {
         Navigation.NavigateTo("admin/settings");
+    }
+
+    private void NavigateBack()
+    {
+        if (referrerPage == "userdashboard")
+        {
+            var url = "/user-dashboard";
+            var queryParams = new List<string>();
+
+            // Reconstruct the original filters, excluding the referrer and userId
+            foreach (var param in originalQueryParams)
+            {
+                if (param.Key != "referrer" && param.Key != "userId")
+                {
+                    queryParams.Add($"{param.Key}={param.Value}");
+                }
+            }
+
+            if (queryParams.Any())
+            {
+                url += "?" + string.Join("&", queryParams);
+            }
+
+            Navigation.NavigateTo(url);
+        }
+        else
+        {
+            // Fallback to user dashboard without parameters
+            Navigation.NavigateTo("/user-dashboard");
+        }
     }
 } 

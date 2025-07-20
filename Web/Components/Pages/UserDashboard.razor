@@ -6,6 +6,7 @@
 @using Web.Services
 @using Web.Components.Common
 @using System.Linq
+@using Microsoft.AspNetCore.WebUtilities
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
@@ -288,6 +289,36 @@
                     </div>
                 </div>
             </div>
+
+            <!-- PRs Merged by Weekday Chart -->
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="row align-items-center">
+                            <div class="col-6">
+                                <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-2">PRs Merged</h5>
+                                <h2 class="fw-bold mb-1">@dashboardData.CurrentPeriod.TotalMergedPrs</h2>
+                                @{
+                                    var prChange = (double)dashboardData.CurrentPeriod.TotalMergedPrs - dashboardData.PreviousPeriod.TotalMergedPrs;
+                                    var prPercentageChange = dashboardData.PreviousPeriod.TotalMergedPrs > 0
+                                        ? (prChange / dashboardData.PreviousPeriod.TotalMergedPrs) * 100
+                                        : (dashboardData.CurrentPeriod.TotalMergedPrs > 0 ? 100.0 : 0.0);
+                                    var prChangeClass = prPercentageChange >= 0 ? "text-success" : "text-danger";
+                                }
+                                <p class="small mb-0 @prChangeClass">
+                                    <span>@prChange.ToString("+#;-#;0")</span>
+                                    (@prPercentageChange.ToString("F1")%)
+                                </p>
+                            </div>
+                            <div class="col-6">
+                                <div class="flex-grow-1" style="height: 120px;">
+                                    <canvas id="prsMergedByWeekdayChart" class="w-100 h-100"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <h3 class="mb-4 mt-4">Detailed Insights</h3>
@@ -323,7 +354,13 @@
                                     @foreach (var contributor in dashboardData.TopContributors)
                                     {
                                         <tr>
-                                            <td>@contributor.UserName</td>
+                                            <td>
+                                                <a href="javascript:void(0)" 
+                                                   @onclick="() => NavigateToUserCommits(contributor.UserName)"
+                                                   style="cursor:pointer; text-decoration:underline; color:var(--bs-link-color);">
+                                                    @contributor.UserName
+                                                </a>
+                                            </td>
                                             <td>@contributor.Commits</td>
                                             <td class="text-success">+@contributor.CodeLinesAdded</td>
                                             <td class="text-danger">-@contributor.CodeLinesRemoved</td>
@@ -363,36 +400,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- PRs Merged by Weekday Chart -->
-            <div class="col-lg-4 mb-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body d-flex flex-column">
-                        <div class="row align-items-center">
-                            <div class="col-6">
-                                <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-2">PRs Merged</h5>
-                                <h2 class="fw-bold mb-1">@dashboardData.CurrentPeriod.TotalMergedPrs</h2>
-                                @{
-                                    var prChange = (double)dashboardData.CurrentPeriod.TotalMergedPrs - dashboardData.PreviousPeriod.TotalMergedPrs;
-                                    var prPercentageChange = dashboardData.PreviousPeriod.TotalMergedPrs > 0
-                                        ? (prChange / dashboardData.PreviousPeriod.TotalMergedPrs) * 100
-                                        : (dashboardData.CurrentPeriod.TotalMergedPrs > 0 ? 100.0 : 0.0);
-                                    var prChangeClass = prPercentageChange >= 0 ? "text-success" : "text-danger";
-                                }
-                                <p class="small mb-0 @prChangeClass">
-                                    <span>@prChange.ToString("+#;-#;0")</span>
-                                    (@prPercentageChange.ToString("F1")%)
-                                </p>
-                            </div>
-                            <div class="col-6">
-                                <div class="flex-grow-1" style="height: 120px;">
-                                    <canvas id="prsMergedByWeekdayChart" class="w-100 h-100"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     }
 }
@@ -422,6 +429,9 @@
         startDate = null;
         endDate = null;
 
+        // Parse query parameters to restore filters when navigating back
+        ParseQueryParameters();
+
         if (!WorkspaceService.HasSelectedWorkspace)
         {
             return;
@@ -430,6 +440,38 @@
         await LoadRepositories();
         await LoadUsers();
         await LoadDashboardData();
+    }
+
+    private void ParseQueryParameters()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var queryParams = QueryHelpers.ParseQuery(uri.Query);
+
+        // Apply filters from query parameters
+        if (queryParams.TryGetValue("repoSlug", out var repoSlug))
+        {
+            selectedRepoSlug = repoSlug;
+        }
+
+        if (queryParams.TryGetValue("startDate", out var startDateStr) && DateTime.TryParse(startDateStr, out var startDateParsed))
+        {
+            startDate = startDateParsed;
+        }
+
+        if (queryParams.TryGetValue("endDate", out var endDateStr) && DateTime.TryParse(endDateStr, out var endDateParsed))
+        {
+            endDate = endDateParsed;
+        }
+
+        if (queryParams.TryGetValue("includePR", out var includePRStr) && bool.TryParse(includePRStr, out var includePRParsed))
+        {
+            includePR = includePRParsed;
+        }
+
+        if (queryParams.TryGetValue("showExcluded", out var showExcludedStr) && bool.TryParse(showExcludedStr, out var showExcludedParsed))
+        {
+            showExcluded = showExcludedParsed;
+        }
     }
 
     private async Task LoadDashboardData()
@@ -644,5 +686,52 @@
     private async Task RenderPrsMergedByWeekdayChart(List<WeekdayPrCount> prsMergedByWeekdayData)
     {
         await JSRuntime.InvokeVoidAsync("renderPrsMergedByWeekdayChart", prsMergedByWeekdayData);
+    }
+
+    private void NavigateToUserCommits(string userName)
+    {
+        // Find the user ID from the users collection
+        var user = users?.FirstOrDefault(u => u.DisplayName == userName);
+        if (user == null)
+        {
+            errorMessage = $"Could not find user ID for {userName}";
+            return;
+        }
+
+        var url = "/commits";
+        var queryParams = new List<string>();
+
+        // Add referrer information for back navigation
+        queryParams.Add("referrer=userdashboard");
+        
+        // Add user filter
+        queryParams.Add($"userId={user.Id}");
+        
+        // Add date filters if they exist
+        if (startDate.HasValue)
+        {
+            queryParams.Add($"startDate={startDate.Value:yyyy-MM-dd}");
+        }
+        if (endDate.HasValue)
+        {
+            queryParams.Add($"endDate={endDate.Value:yyyy-MM-dd}");
+        }
+        
+        // Add repository filter if specific repo is selected
+        if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "all")
+        {
+            queryParams.Add($"repoSlug={selectedRepoSlug}");
+        }
+        
+        // Add other filters
+        queryParams.Add($"includePR={includePR.ToString().ToLower()}");
+        queryParams.Add($"showExcluded={showExcluded.ToString().ToLower()}");
+
+        if (queryParams.Any())
+        {
+            url += "?" + string.Join("&", queryParams);
+        }
+
+        Navigation.NavigateTo(url);
     }
 } 
