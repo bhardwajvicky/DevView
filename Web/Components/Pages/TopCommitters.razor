@@ -127,7 +127,7 @@
                                         + (includeConfig ? a.ConfigLinesRemoved : 0)
                                     );
 
-                                    <div class="col-md-4">
+                                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
                                         <ContributorChart 
                                             DisplayName="@committer.DisplayName"
                                             AvatarUrl="@committer.AvatarUrl"
@@ -162,7 +162,7 @@
                             </div>
                             <div class="card-body">
                                 <div class="row">
-                                    @foreach (var committer in topCommittersData.BottomCommitters)
+                                    @foreach (var committer in (topCommittersData.BottomCommitters ?? new List<API.Endpoints.Analytics.TopCommittersDto>()).AsEnumerable().Reverse())
                                     {
                                         var canvasId = $"committerChart_bottom_{committer.UserId}";
                                         var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<API.Endpoints.Analytics.CommitActivityDto>() :
@@ -189,7 +189,7 @@
                                             + (includeConfig ? a.ConfigLinesRemoved : 0)
                                         );
 
-                                        <div class="col-md-4">
+                                        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
                                             <ContributorChart 
                                                 DisplayName="@committer.DisplayName"
                                                 AvatarUrl="@committer.AvatarUrl"

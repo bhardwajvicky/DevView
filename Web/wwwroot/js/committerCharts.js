@@ -134,7 +134,7 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                         pointRadius: 3,
                         pointHoverRadius: 6,
                         borderWidth: 2,
-                        hidden: false
+                        hidden: true
                     },
                     {
                         label: 'Total ++',
@@ -146,7 +146,7 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                         pointRadius: 2,
                         pointHoverRadius: 5,
                         borderWidth: 1.5,
-                        hidden: false
+                        hidden: true
                     },
                     {
                         label: 'Total --',
@@ -158,31 +158,31 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                         pointRadius: 2,
                         pointHoverRadius: 5,
                         borderWidth: 1.5,
-                        hidden: false
+                        hidden: true
                     },
                     {
                         label: '🧑‍💻 Code ++',
                         data: codeAdded,
-                        borderColor: 'rgb(22, 163, 74)',
-                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                        borderColor: 'rgb(6, 182, 212)',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 2,
                         pointHoverRadius: 5,
                         borderWidth: 1.5,
-                        hidden: true
+                        hidden: false
                     },
                     {
                         label: '🧑‍💻 Code --',
                         data: codeRemoved,
-                        borderColor: 'rgb(220, 38, 38)',
-                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        borderColor: 'rgb(236, 72, 153)',
+                        backgroundColor: 'rgba(236, 72, 153, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 2,
                         pointHoverRadius: 5,
                         borderWidth: 1.5,
-                        hidden: true
+                        hidden: false
                     },
                     {
                         label: '🗄️ Data ++',
@@ -199,8 +199,8 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                     {
                         label: '🗄️ Data --',
                         data: dataRemoved,
-                        borderColor: 'rgb(126, 34, 206)',
-                        backgroundColor: 'rgba(126, 34, 206, 0.1)',
+                        borderColor: 'rgb(249, 115, 22)',
+                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 2,
@@ -211,8 +211,8 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                     {
                         label: '🛠️ Config ++',
                         data: configAdded,
-                        borderColor: 'rgb(245, 158, 11)',
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderColor: 'rgb(234, 179, 8)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 2,
@@ -223,8 +223,8 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                     {
                         label: '🛠️ Config --',
                         data: configRemoved,
-                        borderColor: 'rgb(217, 119, 6)',
-                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                        borderColor: 'rgb(154, 52, 18)',
+                        backgroundColor: 'rgba(154, 52, 18, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 2,
@@ -247,7 +247,79 @@ window.initializeCommitterChart = async (canvasId, rawData, displayName, isTopCo
                             font: {
                                 size: 10
                             },
-                            padding: 10
+                            padding: 10,
+                            filter: function(item, chart) {
+                                // Show only one legend item per category (hide the -- variants)
+                                const label = item.text;
+                                return !label.includes('--');
+                            },
+                            generateLabels: function(chart) {
+                                const datasets = chart.data.datasets;
+                                const labels = [];
+                                
+                                // Create custom legend items
+                                const legendItems = [
+                                    { index: 0, label: 'Commits', color: 'rgb(54, 162, 235)' },
+                                    { 
+                                        index: 1, 
+                                        label: 'Total', 
+                                        color: 'rgb(34, 197, 94)', // Use ++ color as primary
+                                        pairedIndex: 2 // Index of the -- dataset
+                                    },
+                                    { 
+                                        index: 3, 
+                                        label: '🧑‍💻 Code', 
+                                        color: 'rgb(6, 182, 212)',
+                                        pairedIndex: 4
+                                    },
+                                    { 
+                                        index: 5, 
+                                        label: '🗄️ Data', 
+                                        color: 'rgb(147, 51, 234)',
+                                        pairedIndex: 6
+                                    },
+                                    { 
+                                        index: 7, 
+                                        label: '🛠️ Config', 
+                                        color: 'rgb(234, 179, 8)',
+                                        pairedIndex: 8
+                                    }
+                                ];
+                                
+                                return legendItems.map(item => ({
+                                    text: item.label,
+                                    fillStyle: item.color,
+                                    strokeStyle: item.color,
+                                    lineWidth: 2,
+                                    pointStyle: 'circle',
+                                    hidden: item.pairedIndex !== undefined ? 
+                                        (datasets[item.index].hidden && datasets[item.pairedIndex].hidden) :
+                                        datasets[item.index].hidden,
+                                    datasetIndex: item.index,
+                                    pairedDatasetIndex: item.pairedIndex
+                                }));
+                            }
+                        },
+                        onClick: function(evt, legendItem, legend) {
+                            const chart = legend.chart;
+                            const datasetIndex = legendItem.datasetIndex;
+                            const pairedDatasetIndex = legendItem.pairedDatasetIndex;
+                            
+                            if (pairedDatasetIndex !== undefined) {
+                                // Toggle both ++ and -- datasets together
+                                const dataset1 = chart.data.datasets[datasetIndex];
+                                const dataset2 = chart.data.datasets[pairedDatasetIndex];
+                                const newHiddenState = !dataset1.hidden;
+                                
+                                dataset1.hidden = newHiddenState;
+                                dataset2.hidden = newHiddenState;
+                            } else {
+                                // Toggle single dataset (Commits)
+                                const dataset = chart.data.datasets[datasetIndex];
+                                dataset.hidden = !dataset.hidden;
+                            }
+                            
+                            chart.update();
                         }
                     },
                     tooltip: {

@@ -19,16 +19,25 @@
         <div class="col-md-3">
             <div class="mb-3">
                 <label class="form-label fw-bold">Repository</label>
-                <select class="form-control" @bind="SelectedRepoSlug" @bind:after="@(() => OnRepositorySelected.InvokeAsync(SelectedRepoSlug))">
-                    <option value="all">All Repositories</option>
-                    @if (Repositories != null)
-                    {
-                        @foreach (var repo in Repositories)
-                        {
-                            <option value="@repo.Slug">@repo.Name</option>
-                        }
-                    }
-                </select>
+                @if (Repositories != null && Repositories.Any())
+                {
+                    <RadzenDropDown Data="@GetRepositoryOptions()"
+                                  TextProperty="Name"
+                                  ValueProperty="Slug"
+                                  AllowClear="true"
+                                  AllowFiltering="true"
+                                  FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                  Placeholder="Search repositories..."
+                                  Value="@SelectedRepoSlug"
+                                  Change="@(args => OnRepositoryChanged(args))"
+                                  class="w-100" />
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        No repositories found. Please check your configuration.
+                    </div>
+                }
             </div>
         </div>
     }
@@ -201,6 +210,22 @@
         var slug = value?.ToString();
         await OnRepositorySelected.InvokeAsync(slug);
         SelectedRepoSlug = slug;
+    }
+
+    private IEnumerable<dynamic> GetRepositoryOptions()
+    {
+        var options = new List<dynamic>();
+        
+        // Add "All Repositories" option
+        options.Add(new { Name = "All Repositories", Slug = "all" });
+        
+        // Add individual repositories
+        if (Repositories != null)
+        {
+            options.AddRange(Repositories.OrderBy(r => r.Name).Select(r => new { r.Name, r.Slug }));
+        }
+        
+        return options;
     }
 
     private async Task OnUserChanged(object? value)
