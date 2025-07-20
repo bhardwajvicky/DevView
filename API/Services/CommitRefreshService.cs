@@ -13,55 +13,89 @@ namespace API.Services
     public class CommitRefreshService
     {
         private readonly string _connectionString;
-        private readonly DiffParserService _diffParser;
-        private readonly BitbucketApiClient _apiClient;
+        private readonly FileClassificationService _fileClassifier;
         private readonly ILogger<CommitRefreshService> _logger;
 
-        public CommitRefreshService(BitbucketConfig config, DiffParserService diffParser, BitbucketApiClient apiClient, ILogger<CommitRefreshService> logger)
+        public CommitRefreshService(BitbucketConfig config, FileClassificationService fileClassifier, ILogger<CommitRefreshService> logger)
         {
             _connectionString = config.DbConnectionString;
-            _diffParser = diffParser;
-            _apiClient = apiClient;
+            _fileClassifier = fileClassifier;
             _logger = logger;
         }
 
         public async Task<int> RefreshAllCommitLineCountsAsync()
         {
-            _logger.LogInformation("Starting refresh of all commit line counts.");
-            int updatedCount = 0;
+            _logger.LogInformation("Starting refresh of commit line counts using existing CommitFiles data.");
+            int updatedFilesCount = 0;
+            int updatedCommitsCount = 0;
 
             await using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            // Get all existing commits that need line classification (i.e., CodeLinesAdded is null or 0, or just re-process all)
-            // For now, let's re-process all commits to ensure correctness.
-            var commitsToRefresh = await connection.QueryAsync<CommitRecord>("SELECT Id, RepositoryId, BitbucketCommitHash, Message, AuthorId, Date FROM Commits");
-            
-            foreach (var commit in commitsToRefresh)
+            // Step 1: Get all CommitFiles records
+            _logger.LogInformation("Reading all CommitFiles records for re-classification...");
+            var commitFiles = await connection.QueryAsync<CommitFileRecord>(
+                "SELECT Id, CommitId, FilePath, FileType, LinesAdded, LinesRemoved FROM CommitFiles");
+
+            _logger.LogInformation("Found {Count} commit files to process.", commitFiles.Count());
+
+            // Step 2: Re-classify each file and update if needed
+            foreach (var file in commitFiles)
             {
                 try
                 {
-                    // Retrieve repository slug and workspace for fetching diff
-                    var repoInfo = await connection.QuerySingleOrDefaultAsync<RepositoryInfo>(
-                        "SELECT r.Slug, r.Workspace FROM Repositories r WHERE r.Id = @RepositoryId", 
-                        new { commit.RepositoryId });
+                    // Re-classify the file using current configuration
+                    var newFileType = _fileClassifier.ClassifyFile(file.FilePath);
+                    var newFileTypeString = newFileType.ToString().ToLower();
 
-                    if (repoInfo == null)
+                    // Update if classification changed
+                    if (!string.Equals(file.FileType, newFileTypeString, StringComparison.OrdinalIgnoreCase))
                     {
-                        _logger.LogWarning("Repository not found for commit {CommitId}. Skipping.", commit.Id);
-                        continue;
+                        await connection.ExecuteAsync(
+                            "UPDATE CommitFiles SET FileType = @NewFileType WHERE Id = @Id",
+                            new { NewFileType = newFileTypeString, file.Id });
+                        
+                        updatedFilesCount++;
+                        
+                        _logger.LogDebug("Updated file {FilePath}: {OldType} → {NewType}", 
+                            file.FilePath, file.FileType, newFileTypeString);
                     }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error re-classifying file {FilePath}: {Message}", file.FilePath, ex.Message);
+                }
+            }
 
-                    // Fetch the raw diff content from Bitbucket
-                    var diffContent = await _apiClient.GetCommitDiffAsync(repoInfo.Workspace, repoInfo.Slug, commit.BitbucketCommitHash);
-                    var diffSummary = _diffParser.ParseDiffWithClassification(diffContent);
+            _logger.LogInformation("Re-classified {UpdatedCount} out of {TotalCount} files.", updatedFilesCount, commitFiles.Count());
 
-                    // Update the commit in the database with new line counts
+            // Step 3: Re-aggregate line counts for all commits
+            _logger.LogInformation("Re-aggregating line counts for all commits...");
+            
+            var commits = await connection.QueryAsync<int>("SELECT DISTINCT CommitId FROM CommitFiles");
+            
+            foreach (var commitId in commits)
+            {
+                try
+                {
+                    // Calculate aggregated line counts from CommitFiles
+                    var aggregatedData = await connection.QuerySingleOrDefaultAsync<dynamic>(@"
+                        SELECT 
+                            SUM(CASE WHEN FileType = 'code' AND ExcludeFromReporting = 0 THEN LinesAdded ELSE 0 END) AS CodeLinesAdded,
+                            SUM(CASE WHEN FileType = 'code' AND ExcludeFromReporting = 0 THEN LinesRemoved ELSE 0 END) AS CodeLinesRemoved,
+                            SUM(CASE WHEN FileType = 'data' AND ExcludeFromReporting = 0 THEN LinesAdded ELSE 0 END) AS DataLinesAdded,
+                            SUM(CASE WHEN FileType = 'data' AND ExcludeFromReporting = 0 THEN LinesRemoved ELSE 0 END) AS DataLinesRemoved,
+                            SUM(CASE WHEN FileType = 'config' AND ExcludeFromReporting = 0 THEN LinesAdded ELSE 0 END) AS ConfigLinesAdded,
+                            SUM(CASE WHEN FileType = 'config' AND ExcludeFromReporting = 0 THEN LinesRemoved ELSE 0 END) AS ConfigLinesRemoved,
+                            SUM(CASE WHEN FileType = 'docs' AND ExcludeFromReporting = 0 THEN LinesAdded ELSE 0 END) AS DocsLinesAdded,
+                            SUM(CASE WHEN FileType = 'docs' AND ExcludeFromReporting = 0 THEN LinesRemoved ELSE 0 END) AS DocsLinesRemoved
+                        FROM CommitFiles 
+                        WHERE CommitId = @CommitId", new { CommitId = commitId });
+
+                    // Update the commit with re-calculated line counts
                     var updateSql = @"
                         UPDATE Commits
                         SET 
-                            LinesAdded = @TotalAdded,
-                            LinesRemoved = @TotalRemoved,
                             CodeLinesAdded = @CodeAdded,
                             CodeLinesRemoved = @CodeRemoved,
                             DataLinesAdded = @DataAdded,
@@ -70,50 +104,43 @@ namespace API.Services
                             ConfigLinesRemoved = @ConfigRemoved,
                             DocsLinesAdded = @DocsAdded,
                             DocsLinesRemoved = @DocsRemoved
-                        WHERE Id = @Id;";
+                        WHERE Id = @CommitId";
 
-                    var parameters = new
+                    await connection.ExecuteAsync(updateSql, new
                     {
-                        commit.Id,
-                        diffSummary.TotalAdded,
-                        diffSummary.TotalRemoved,
-                        diffSummary.CodeAdded,
-                        diffSummary.CodeRemoved,
-                        diffSummary.DataAdded,
-                        diffSummary.DataRemoved,
-                        diffSummary.ConfigAdded,
-                        diffSummary.ConfigRemoved,
-                        diffSummary.DocsAdded,
-                        diffSummary.DocsRemoved
-                    };
+                        CommitId = commitId,
+                        CodeAdded = aggregatedData?.CodeLinesAdded ?? 0,
+                        CodeRemoved = aggregatedData?.CodeLinesRemoved ?? 0,
+                        DataAdded = aggregatedData?.DataLinesAdded ?? 0,
+                        DataRemoved = aggregatedData?.DataLinesRemoved ?? 0,
+                        ConfigAdded = aggregatedData?.ConfigLinesAdded ?? 0,
+                        ConfigRemoved = aggregatedData?.ConfigLinesRemoved ?? 0,
+                        DocsAdded = aggregatedData?.DocsLinesAdded ?? 0,
+                        DocsRemoved = aggregatedData?.DocsLinesRemoved ?? 0
+                    });
 
-                    await connection.ExecuteAsync(updateSql, parameters);
-                    updatedCount++;
+                    updatedCommitsCount++;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error refreshing commit {CommitHash}: {Message}", commit.BitbucketCommitHash, ex.Message);
+                    _logger.LogError(ex, "Error updating line counts for commit {CommitId}: {Message}", commitId, ex.Message);
                 }
             }
 
-            _logger.LogInformation("Finished refreshing commit line counts. Total commits updated: {UpdatedCount}", updatedCount);
-            return updatedCount;
+            _logger.LogInformation("Finished refresh: {FilesUpdated} files re-classified, {CommitsUpdated} commits updated.", 
+                updatedFilesCount, updatedCommitsCount);
+
+            return updatedFilesCount;
         }
 
-        private class CommitRecord
+        private class CommitFileRecord
         {
             public int Id { get; set; }
-            public int RepositoryId { get; set; }
-            public string BitbucketCommitHash { get; set; } = string.Empty;
-            public string Message { get; set; } = string.Empty;
-            public int AuthorId { get; set; }
-            public DateTime Date { get; set; }
-        }
-
-        private class RepositoryInfo
-        {
-            public string Slug { get; set; } = string.Empty;
-            public string Workspace { get; set; } = string.Empty;
+            public int CommitId { get; set; }
+            public string FilePath { get; set; } = string.Empty;
+            public string FileType { get; set; } = string.Empty;
+            public int LinesAdded { get; set; }
+            public int LinesRemoved { get; set; }
         }
     }
 } 
