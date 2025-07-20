@@ -162,7 +162,7 @@
                             </div>
                             <div class="card-body">
                                 <div class="row">
-                                    @foreach (var committer in (topCommittersData.BottomCommitters ?? new List<API.Endpoints.Analytics.TopCommittersDto>()).AsEnumerable().Reverse())
+                                    @foreach (var committer in topCommittersData.BottomCommitters ?? new List<API.Endpoints.Analytics.TopCommittersDto>())
                                     {
                                         var canvasId = $"committerChart_bottom_{committer.UserId}";
                                         var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<API.Endpoints.Analytics.CommitActivityDto>() :
@@ -381,11 +381,11 @@
             string url;
             if (string.IsNullOrEmpty(repoSlug))
             {
-                url = $"/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}";
+                url = $"/api/analytics/contributors/top-bottom?workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}&topCount=6&bottomCount=6";
             }
             else
             {
-                url = $"/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}";
+                url = $"/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}&topCount=6&bottomCount=6";
             }
 
             // Add date range parameters if specified

@@ -425,11 +425,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Start with "All Time" by default (null dates)
-        startDate = null;
-        endDate = null;
+        // Start with "Last 7 Days" by default
+        endDate = DateTime.Today;
+        startDate = DateTime.Today.AddDays(-7);
 
-        // Parse query parameters to restore filters when navigating back
+        // Parse query parameters to restore filters when navigating back (this can override defaults)
         ParseQueryParameters();
 
         if (!WorkspaceService.HasSelectedWorkspace)

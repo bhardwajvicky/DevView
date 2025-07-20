@@ -77,6 +77,19 @@
             </div>
         }
 
+        <!-- Commit Activity Chart -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <CommitActivityChart 
+                    Data="@commitActivity"
+                    Title="Commit Activity Over Time (Day)"
+                    ChartId="commitsPageChart"
+                    GroupBy="Day"
+                    RepositoryInfo="@GetRepositoryInfo()"
+                    IsLoading="@isLoadingCommitActivity" />
+            </div>
+        </div>
+
         @if (isLoadingCommits)
         {
             <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
@@ -272,6 +285,10 @@
     private bool showBackButton = false;
     private string? referrerPage;
     private Dictionary<string, string> originalQueryParams = new();
+    
+    // Chart data
+    private API.Endpoints.Analytics.CommitActivityDto[]? commitActivity;
+    private bool isLoadingCommitActivity = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -281,6 +298,7 @@
         await LoadRepositories();
         await LoadUsers();
         await LoadCommits();
+        await LoadCommitActivity();
     }
 
     private void ParseQueryParameters()
@@ -405,11 +423,51 @@
         }
     }
 
+    private async Task LoadCommitActivity()
+    {
+        try
+        {
+            isLoadingCommitActivity = true;
+            
+            if (!WorkspaceService.HasSelectedWorkspace)
+            {
+                return;
+            }
+
+            var url = $"api/analytics/commits/activity?workspace={WorkspaceService.SelectedWorkspace}&groupBy=Day";
+            
+            // Apply the same filters as the commit list
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "all")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            if (selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            url += $"&includePR={includePR.ToString().ToLower()}";
+            url += $"&includeData={includeData.ToString().ToLower()}";
+            url += $"&includeConfig={includeConfig.ToString().ToLower()}";
+            if (showExcluded) url += "&showExcluded=true";
+
+            commitActivity = await Http.GetFromJsonAsync<API.Endpoints.Analytics.CommitActivityDto[]>(url);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading commit activity: {ex.Message}";
+            Logger.LogError(ex, "Error loading commit activity");
+        }
+        finally
+        {
+            isLoadingCommitActivity = false;
+        }
+    }
+
     private async Task OnRepositorySelected(string? slug)
     {
         selectedRepoSlug = slug;
         currentPage = 1;
         await LoadCommits();
+        await LoadCommitActivity();
     }
 
     private async Task OnUserSelected(int? userId)
@@ -417,6 +475,7 @@
         selectedUserId = userId;
         currentPage = 1;
         await LoadCommits();
+        await LoadCommitActivity();
     }
 
     private async Task OnDateRangeUpdated((DateTime? newStartDate, DateTime? newEndDate) dateRange)
@@ -425,6 +484,7 @@
         endDate = dateRange.newEndDate;
         currentPage = 1;
         await LoadCommits();
+        await LoadCommitActivity();
     }
 
     private async Task OnGroupingUpdated(string? newGrouping)
@@ -441,12 +501,27 @@
         this.includeConfig = filters.includeConfig;
         currentPage = 1;
         await LoadCommits();
+        await LoadCommitActivity();
     }
 
     private async Task OnShowExcludedChanged(bool value)
     {
         showExcluded = value;
         await LoadCommits();
+        await LoadCommitActivity();
+    }
+
+    private string GetRepositoryInfo()
+    {
+        if (selectedRepoSlug == null || selectedRepoSlug == "all")
+        {
+            return "All Repositories";
+        }
+        else
+        {
+            var selectedRepo = repositories?.FirstOrDefault(r => r.Slug == selectedRepoSlug);
+            return selectedRepo?.Name ?? selectedRepoSlug;
+        }
     }
 
     private async Task GoToPage(int page)
