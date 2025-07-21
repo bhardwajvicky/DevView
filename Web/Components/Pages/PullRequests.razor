@@ -4,8 +4,7 @@
 @using Radzen
 @using Radzen.Blazor
 @using Web.Components.Common
-@using API.Endpoints.Analytics
-@using API.Endpoints.PullRequests
+
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
@@ -271,7 +270,7 @@
 }
 
 @code {
-    private IEnumerable<API.Endpoints.Analytics.RepositorySummaryDto>? repositories;
+    private IEnumerable<RepositorySummaryDto>? repositories;
     private List<PullRequestListItemDto> pullRequests = new();
     private bool isLoadingRepos = true;
     private bool isLoadingPRs = false;
@@ -295,7 +294,7 @@
         try
         {
             isLoadingRepos = true;
-            repositories = await Http.GetFromJsonAsync<IEnumerable<API.Endpoints.Analytics.RepositorySummaryDto>>("api/analytics/repositories");
+            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("api/analytics/repositories");
         }
         catch (Exception ex)
         {

@@ -1,5 +1,6 @@
 using Data.Models;
 using Microsoft.AspNetCore.Mvc;
+using Entities.DTOs.Analytics;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -7,7 +7,7 @@
  */
 
 using Data.Models;
-using API.Endpoints.Analytics;
+using Entities.DTOs.Analytics;
 using Integration.Common;
 using Dapper;
 using Microsoft.Data.SqlClient;

@@ -4,8 +4,7 @@
 @using Radzen
 @using Radzen.Blazor
 @using Web.Components.Common
-@using API.Endpoints.Analytics 
-@using API.Endpoints.Commits
+
 @using Microsoft.AspNetCore.WebUtilities
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
@@ -259,7 +258,7 @@
 
 @code {
     private IEnumerable<RepositorySummaryDto>? repositories;
-    private IEnumerable<API.Endpoints.Analytics.UserDto>? users;
+    private IEnumerable<UserDto>? users;
     private PaginatedCommitsResponse? paginatedCommitsResponse;
     private List<CommitListItemDto> commits = new();
     private bool isLoadingRepos = true;
@@ -287,7 +286,7 @@
     private Dictionary<string, string> originalQueryParams = new();
     
     // Chart data
-    private API.Endpoints.Analytics.CommitActivityDto[]? commitActivity;
+    private CommitActivityDto[]? commitActivity;
     private bool isLoadingCommitActivity = false;
 
     protected override async Task OnInitializedAsync()
@@ -374,7 +373,7 @@
         try
         {
             isLoadingUsers = true;
-            users = await Http.GetFromJsonAsync<IEnumerable<API.Endpoints.Analytics.UserDto>>("/api/analytics/users");
+            users = await Http.GetFromJsonAsync<IEnumerable<UserDto>>("/api/analytics/users");
         }
         catch (Exception ex)
         {
@@ -449,7 +448,7 @@
             url += $"&includeConfig={includeConfig.ToString().ToLower()}";
             if (showExcluded) url += "&showExcluded=true";
 
-            commitActivity = await Http.GetFromJsonAsync<API.Endpoints.Analytics.CommitActivityDto[]>(url);
+            commitActivity = await Http.GetFromJsonAsync<CommitActivityDto[]>(url);
         }
         catch (Exception ex)
         {

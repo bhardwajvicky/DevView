@@ -8,7 +8,7 @@
 @using System.Text.Json
 @using System.Linq
 @using Web.Components.Common
-@using API.Endpoints.Analytics
+
 @inject HttpClient Http
 @inject ILogger<TopCommitters> Logger
 @inject IJSRuntime JSRuntime
@@ -103,8 +103,8 @@
                                 @foreach (var committer in topCommittersData.TopCommitters)
                                 {
                                     var canvasId = $"committerChart_top_{committer.UserId}";
-                                    var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<API.Endpoints.Analytics.CommitActivityDto>() :
-                                        System.Text.Json.JsonSerializer.Deserialize<List<API.Endpoints.Analytics.CommitActivityDto>>(committer.ActivityData) ?? new List<API.Endpoints.Analytics.CommitActivityDto>();
+                                    var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<CommitActivityDto>() :
+                                        System.Text.Json.JsonSerializer.Deserialize<List<CommitActivityDto>>(committer.ActivityData) ?? new List<CommitActivityDto>();
 
                                     // Apply filters to calculate totals
                                     var filteredActivity = activityData.AsEnumerable();
@@ -162,11 +162,11 @@
                             </div>
                             <div class="card-body">
                                 <div class="row">
-                                    @foreach (var committer in topCommittersData.BottomCommitters ?? new List<API.Endpoints.Analytics.TopCommittersDto>())
+                                    @foreach (var committer in topCommittersData.BottomCommitters ?? new List<TopCommittersDto>())
                                     {
                                         var canvasId = $"committerChart_bottom_{committer.UserId}";
-                                        var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<API.Endpoints.Analytics.CommitActivityDto>() :
-                                            System.Text.Json.JsonSerializer.Deserialize<List<API.Endpoints.Analytics.CommitActivityDto>>(committer.ActivityData) ?? new List<API.Endpoints.Analytics.CommitActivityDto>();
+                                        var activityData = string.IsNullOrEmpty(committer.ActivityData) ? new List<CommitActivityDto>() :
+                                            System.Text.Json.JsonSerializer.Deserialize<List<CommitActivityDto>>(committer.ActivityData) ?? new List<CommitActivityDto>();
 
                                         // Apply filters to calculate totals
                                         var filteredActivity = activityData.AsEnumerable();
@@ -215,8 +215,8 @@
 </div>
 
 @code {
-    private IEnumerable<API.Endpoints.Analytics.RepositorySummaryDto>? repositories;
-    private API.Endpoints.Analytics.TopCommittersResponseDto? topCommittersData;
+    private IEnumerable<RepositorySummaryDto>? repositories;
+    private TopCommittersResponseDto? topCommittersData;
     private bool isLoadingRepos = false;
     private bool isLoadingCommitters = false;
     private string? errorMessage;
@@ -283,7 +283,7 @@
         try
         {
             isLoadingRepos = true;
-            var allRepositories = await Http.GetFromJsonAsync<API.Endpoints.Analytics.RepositorySummaryDto[]>("/api/analytics/repositories");
+            var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("/api/analytics/repositories");
             
             if (allRepositories != null && allRepositories.Any())
             {
@@ -291,7 +291,7 @@
             }
             else
             {
-                repositories = Array.Empty<API.Endpoints.Analytics.RepositorySummaryDto>();
+                repositories = Array.Empty<RepositorySummaryDto>();
             }
         }
         catch (Exception ex)
@@ -400,7 +400,7 @@
 
             Logger.LogInformation("Making API call to: {Url}", url);
             
-            topCommittersData = await Http.GetFromJsonAsync<API.Endpoints.Analytics.TopCommittersResponseDto>(url);
+            topCommittersData = await Http.GetFromJsonAsync<TopCommittersResponseDto>(url);
             
             // Removed conditional message for "Only one developer found"
 

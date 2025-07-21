@@ -1,8 +1,12 @@
-using Data.Models;
-using System;
-using System.Collections.Generic;
+/*
+ * DevView - .NET 9 Bitbucket Analytics Solution
+ * Copyright (c) 2025 Vikas Bhardwaj
+ * 
+ * This project is licensed under the MIT License.
+ * See LICENSE file in the project root for full license information.
+ */
 
-namespace API.Endpoints.PullRequests
+namespace Entities.DTOs.PullRequests
 {
     public class PullRequestListItemDto
     {

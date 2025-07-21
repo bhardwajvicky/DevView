@@ -9,7 +9,7 @@
 @using System.Text.Json
 @using System.Linq
 @using Web.Components.Common
-@using API.Endpoints.Analytics
+
 @using System.Globalization
 @inject HttpClient Http
 @inject ILogger<Dashboard> Logger
@@ -118,23 +118,23 @@
                     @if (commitActivity != null && commitActivity.Any())
                     {
                         <RadzenDataGrid AllowFiltering="true" AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="15" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
-                                        Data="@commitActivity" TItem="API.Endpoints.Analytics.CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or" RowRender="@OnRowRender">
+                                        Data="@commitActivity" TItem="CommitActivityDto" LogicalFilterOperator="LogicalFilterOperator.Or" RowRender="@OnRowRender">
                             <Columns>
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="Date" Title="Date" Width="120px" FormatString="{0:MMM dd, yyyy}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="CommitCount" Title="Commits" Width="80px" TextAlign="TextAlign.Center">
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="Date" Title="Date" Width="120px" FormatString="{0:MMM dd, yyyy}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="CommitCount" Title="Commits" Width="80px" TextAlign="TextAlign.Center">
                                     <Template Context="data">
                                         <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@data.CommitCount.ToString()" />
                                     </Template>
                                 </RadzenDataGridColumn>
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="TotalLinesAdded" Title="Total ++" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="TotalLinesRemoved" Title="Total --" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="CodeLinesAdded" Title="Code ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="CodeLinesRemoved" Title="Code --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="DataLinesAdded" Title="Data ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="DataLinesRemoved" Title="Data --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="ConfigLinesAdded" Title="Config ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Property="ConfigLinesRemoved" Title="Config --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesAdded" Title="Total ++" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="TotalLinesRemoved" Title="Total --" Width="100px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesAdded" Title="Code ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="CodeLinesRemoved" Title="Code --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesAdded" Title="Data ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="DataLinesRemoved" Title="Data --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesAdded" Title="Config ++" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Property="ConfigLinesRemoved" Title="Config --" Width="80px" TextAlign="TextAlign.Right" FormatString="{0:N0}" />
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Title="Net Change" Width="100px" TextAlign="TextAlign.Right" Sortable="false">
                                     <Template Context="data">
                                         @{
                                             var netChange = data.TotalLinesAdded - data.TotalLinesRemoved;
@@ -144,7 +144,7 @@
                                         <RadzenBadge BadgeStyle="@badgeStyle" Text="@($"{sign}{netChange:N0}")" />
                                     </Template>
                                 </RadzenDataGridColumn>
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitActivityDto" Title="Actions" Width="80px" Sortable="false" Filterable="false">
+                                <RadzenDataGridColumn TItem="CommitActivityDto" Title="Actions" Width="80px" Sortable="false" Filterable="false">
                                     <Template Context="data">
                                         <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Primary" Text="Select" Click="@(() => SelectDataPoint(data))" />
                                     </Template>
@@ -200,7 +200,7 @@
                     @foreach (var contributor in GetUniqueContributors())
                     {
                         var canvasId = $"contributorChart_{contributor.UserId}";
-                        var activityData = _individualContributorCommitActivity.ContainsKey(contributor.UserId) ? _individualContributorCommitActivity[contributor.UserId] : new List<API.Endpoints.Analytics.CommitActivityDto>();
+                        var activityData = _individualContributorCommitActivity.ContainsKey(contributor.UserId) ? _individualContributorCommitActivity[contributor.UserId] : new List<CommitActivityDto>();
 
                         // Apply filters to calculate totals
                         var filteredActivity = activityData.AsEnumerable();
@@ -267,25 +267,25 @@
                     }
                     else if (commitDetailsList != null && commitDetailsList.Any())
                     {
-                        <RadzenDataGrid Data="@commitDetailsList" TItem="API.Endpoints.Analytics.CommitDetailDto" AllowPaging="true" PageSize="10" AllowSorting="true">
+                        <RadzenDataGrid Data="@commitDetailsList" TItem="CommitDetailDto" AllowPaging="true" PageSize="10" AllowSorting="true">
                             <Columns>
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="CommitHash" Title="Hash" Width="120px">
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="CommitHash" Title="Hash" Width="120px">
                                     <Template Context="data">
                                         <span title="@data.CommitHash">@data.CommitHash.Substring(0, Math.Min(8, data.CommitHash.Length))...</span>
                                     </Template>
                                 </RadzenDataGridColumn>
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="Message" Title="Message" Width="300px">
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="Message" Title="Message" Width="300px">
                                     <Template Context="data">
                                         <span title="@data.Message">@((data.Message?.Length > 80) ? data.Message.Substring(0, 80) + "..." : data.Message)</span>
                                     </Template>
                                 </RadzenDataGridColumn>
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="RepositoryName" Title="Repository" Width="150px" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="LinesAdded" Title="+Lines" Width="80px" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="LinesRemoved" Title="-Lines" Width="80px" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="CodeLinesAdded" Title="+Code" Width="80px" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="CodeLinesRemoved" Title="-Code" Width="80px" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="Date" Title="Date" Width="160px" FormatString="{0:yyyy-MM-dd HH:mm}" />
-                                <RadzenDataGridColumn TItem="API.Endpoints.Analytics.CommitDetailDto" Property="IsMerge" Title="Merge?" Width="60px">
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="RepositoryName" Title="Repository" Width="150px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="LinesAdded" Title="+Lines" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="LinesRemoved" Title="-Lines" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="CodeLinesAdded" Title="+Code" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="CodeLinesRemoved" Title="-Code" Width="80px" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="Date" Title="Date" Width="160px" FormatString="{0:yyyy-MM-dd HH:mm}" />
+                                <RadzenDataGridColumn TItem="CommitDetailDto" Property="IsMerge" Title="Merge?" Width="60px">
                                     <Template Context="data">
                                         @if (data.IsMerge)
                                         {
@@ -897,9 +897,9 @@
 </script>
 
 @code {
-    private API.Endpoints.Analytics.RepositorySummaryDto[]? repositories;
-    private API.Endpoints.Analytics.CommitActivityDto[]? commitActivity;
-    private API.Endpoints.Analytics.ContributorActivityDto[]? contributorData;
+    private RepositorySummaryDto[]? repositories;
+    private CommitActivityDto[]? commitActivity;
+    private ContributorActivityDto[]? contributorData;
     private bool isLoadingRepos = true;
     private bool isLoadingCommits = false;
     private bool isLoadingContributors = false;
@@ -908,18 +908,18 @@
     private DateTime? startDate;
     private DateTime? endDate;
     private string? selectedDataPoint;
-    private API.Endpoints.Analytics.CommitActivityDto? selectedCommitData;
+    private CommitActivityDto? selectedCommitData;
     private bool showCommitDetailsModal = false;
     private bool isLoadingCommitDetails = false;
     private string? commitDetailsError;
-    private List<API.Endpoints.Analytics.CommitDetailDto>? commitDetailsList;
+    private List<CommitDetailDto>? commitDetailsList;
     private string? commitDetailsModalTitle;
     private DotNetObjectReference<Dashboard>? _dotNetRef;
     private bool includePR = false;
     private bool includeData = false;
     private bool includeConfig = false;
     private string selectedGrouping = "Day";
-    private Dictionary<int, List<API.Endpoints.Analytics.CommitActivityDto>> _individualContributorCommitActivity = new();
+    private Dictionary<int, List<CommitActivityDto>> _individualContributorCommitActivity = new();
     private bool showExcluded = false;
 
     protected override async Task OnInitializedAsync()
@@ -999,13 +999,13 @@
             isLoadingRepos = true;
             errorMessage = null; // Clear previous errors
             // Fetch all repositories first, without any initial filtering
-            var allRepositoriesData = await Http.GetFromJsonAsync<API.Endpoints.Analytics.RepositorySummaryDto[]>("api/analytics/repositories");
+            var allRepositoriesData = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("api/analytics/repositories");
 
             // Add an "All Repositories" option with its Workspace explicitly set to "All"
-            var allOption = new API.Endpoints.Analytics.RepositorySummaryDto { Name = "All Repositories", Slug = "ALL", Workspace = "All" };
+            var allOption = new RepositorySummaryDto { Name = "All Repositories", Slug = "ALL", Workspace = "All" };
 
             // Combine all fetched repositories with the "All Repositories" option
-            repositories = new[] { allOption }.Concat(allRepositoriesData ?? Array.Empty<API.Endpoints.Analytics.RepositorySummaryDto>()).ToArray();
+            repositories = new[] { allOption }.Concat(allRepositoriesData ?? Array.Empty<RepositorySummaryDto>()).ToArray();
         }
         catch (Exception ex)
         {
@@ -1122,7 +1122,7 @@
             url += $"&includeData={includeData}";
             url += $"&includeConfig={includeConfig}";
             if (showExcluded) url += "&showExcluded=true";
-            commitActivity = await Http.GetFromJsonAsync<API.Endpoints.Analytics.CommitActivityDto[]>(url);
+            commitActivity = await Http.GetFromJsonAsync<CommitActivityDto[]>(url);
 
             // Also load contributor data
             var contributorUrl = $"api/analytics/contributors?workspace={WorkspaceService.SelectedWorkspace}";
@@ -1131,7 +1131,7 @@
             if (endDate.HasValue) contributorUrl += $"&endDate={endDate.Value:yyyy-MM-dd}";
             contributorUrl += $"&groupBy={selectedGrouping}"; // Grouping applies to contributor activity as well
             if (showExcluded) contributorUrl += "&showExcluded=true";
-            contributorData = await Http.GetFromJsonAsync<API.Endpoints.Analytics.ContributorActivityDto[]>(contributorUrl);
+            contributorData = await Http.GetFromJsonAsync<ContributorActivityDto[]>(contributorUrl);
 
             // Fetch individual commit activity for each contributor
             _individualContributorCommitActivity.Clear();
@@ -1147,7 +1147,7 @@
                     individualCommitActivityUrl += $"&includeData={includeData}";
                     individualCommitActivityUrl += $"&includeConfig={includeConfig}";
                     if (showExcluded) individualCommitActivityUrl += "&showExcluded=true";
-                    var individualActivity = await Http.GetFromJsonAsync<API.Endpoints.Analytics.CommitActivityDto[]>(individualCommitActivityUrl);
+                    var individualActivity = await Http.GetFromJsonAsync<CommitActivityDto[]>(individualCommitActivityUrl);
                     if (individualActivity != null) {
                         _individualContributorCommitActivity[contributor.UserId] = individualActivity.ToList();
                     }
@@ -1216,7 +1216,7 @@
         }
     }
 
-    private void OnRowRender(RowRenderEventArgs<API.Endpoints.Analytics.CommitActivityDto> args)
+    private void OnRowRender(RowRenderEventArgs<CommitActivityDto> args)
     {
         var data = args.Data;
         args.Attributes.Add("title",
@@ -1229,7 +1229,7 @@
         );
     }
 
-    private void SelectDataPoint(API.Endpoints.Analytics.CommitActivityDto data)
+    private void SelectDataPoint(CommitActivityDto data)
     {
         selectedCommitData = data;
         showCommitDetailsModal = true;
@@ -1278,13 +1278,13 @@
         commitDetailsError = null;
     }
 
-    private IEnumerable<API.Endpoints.Analytics.ContributorActivityDto> GetUniqueContributors()
+    private IEnumerable<ContributorActivityDto> GetUniqueContributors()
     {
-        if (contributorData == null) return Enumerable.Empty<API.Endpoints.Analytics.ContributorActivityDto>();
+        if (contributorData == null) return Enumerable.Empty<ContributorActivityDto>();
 
         return contributorData
             .GroupBy(c => new { c.UserId, c.DisplayName, c.AvatarUrl })
-            .Select(g => new API.Endpoints.Analytics.ContributorActivityDto // Using the correct DTO type here
+            .Select(g => new ContributorActivityDto // Using the correct DTO type here
             {
                 UserId = g.Key.UserId,
                 DisplayName = g.Key.DisplayName,
@@ -1350,7 +1350,7 @@
             var url = $"/api/analytics/commits/details?date={date:yyyy-MM-dd}&includePR={includePR}&includeData={includeData}&includeConfig={includeConfig}";
             if (!string.IsNullOrEmpty(repoSlug) && repoSlug != "ALL") url += $"&repoSlug={repoSlug}";
 
-            var result = await Http.GetFromJsonAsync<List<API.Endpoints.Analytics.CommitDetailDto>>(url);
+            var result = await Http.GetFromJsonAsync<List<CommitDetailDto>>(url);
             commitDetailsList = result;
         }
         catch (Exception ex)
@@ -1380,7 +1380,7 @@
 
     public class DashboardSummary
     {
-        public List<API.Endpoints.Analytics.CommitActivityDto> CommitActivities { get; set; } = new();
-        public List<API.Endpoints.Analytics.ContributorActivityDto> ContributorActivities { get; set; } = new();
+        public List<CommitActivityDto> CommitActivities { get; set; } = new();
+        public List<ContributorActivityDto> ContributorActivities { get; set; } = new();
     }
 } 

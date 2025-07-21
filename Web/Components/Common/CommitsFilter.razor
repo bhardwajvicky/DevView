@@ -2,7 +2,7 @@
 @using Radzen.Blazor
 @using Web.Services
 @using System.Net.Http.Json
-@using API.Endpoints.Analytics
+
 
 <div class="row mb-4">
     @if (IsLoadingRepos)
@@ -156,7 +156,7 @@
     public bool IsLoadingRepos { get; set; }
 
     [Parameter]
-    public IEnumerable<API.Endpoints.Analytics.RepositorySummaryDto>? Repositories { get; set; }
+    public IEnumerable<RepositorySummaryDto>? Repositories { get; set; }
 
     [Parameter]
     public string? SelectedRepoSlug { get; set; }
@@ -165,7 +165,7 @@
     public bool IsLoadingUsers { get; set; }
 
     [Parameter]
-    public IEnumerable<API.Endpoints.Analytics.UserDto>? Users { get; set; }
+    public IEnumerable<UserDto>? Users { get; set; }
 
     [Parameter]
     public int? SelectedUserId { get; set; }

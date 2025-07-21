@@ -4,7 +4,7 @@
 @using Radzen
 @using Radzen.Blazor
 @using Web.Components.Common
-@using API.Endpoints.Analytics
+
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject WorkspaceService WorkspaceService
@@ -72,10 +72,10 @@
                             <h5 class="card-title mb-0">Top 5 Projects by Open PRs</h5>
                         </div>
                         <div class="card-body">
-                            <RadzenDataGrid Data="@topOpenPrs" TItem="API.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
+                            <RadzenDataGrid Data="@topOpenPrs" TItem="RepositorySummaryDto" AllowColumnResize="true">
                                 <Columns>
-                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="Name" Title="Repository" />
-                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="OpenPullRequestCount" Title="Open PRs" TextAlign="TextAlign.Center" />
+                                    <RadzenDataGridColumn TItem="RepositorySummaryDto" Property="Name" Title="Repository" />
+                                    <RadzenDataGridColumn TItem="RepositorySummaryDto" Property="OpenPullRequestCount" Title="Open PRs" TextAlign="TextAlign.Center" />
                                 </Columns>
                             </RadzenDataGrid>
                         </div>
@@ -111,10 +111,10 @@
                             <h5 class="card-title mb-0">Top 5 Projects by Oldest Open PRs</h5>
                         </div>
                         <div class="card-body">
-                            <RadzenDataGrid Data="@topOldestOpenPrs" TItem="API.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
+                            <RadzenDataGrid Data="@topOldestOpenPrs" TItem="RepositorySummaryDto" AllowColumnResize="true">
                                 <Columns>
-                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="Name" Title="Repository" />
-                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="OldestOpenPullRequestDate" Title="Oldest PR Date" TextAlign="TextAlign.Center" FormatString="{0:yyyy-MM-dd}" />
+                                    <RadzenDataGridColumn TItem="RepositorySummaryDto" Property="Name" Title="Repository" />
+                                    <RadzenDataGridColumn TItem="RepositorySummaryDto" Property="OldestOpenPullRequestDate" Title="Oldest PR Date" TextAlign="TextAlign.Center" FormatString="{0:yyyy-MM-dd}" />
                                 </Columns>
                             </RadzenDataGrid>
                         </div>
@@ -150,10 +150,10 @@
                             <h5 class="card-title mb-0">Top 5 Projects by Unapproved PRs</h5>
                         </div>
                         <div class="card-body">
-                            <RadzenDataGrid Data="@topUnapprovedPrs" TItem="API.Endpoints.Analytics.RepositorySummaryDto" AllowColumnResize="true">
+                            <RadzenDataGrid Data="@topUnapprovedPrs" TItem="RepositorySummaryDto" AllowColumnResize="true">
                                 <Columns>
-                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="Name" Title="Repository" />
-                                    <RadzenDataGridColumn TItem="API.Endpoints.Analytics.RepositorySummaryDto" Property="PRsMissingApprovalCount" Title="Missing Approvals" TextAlign="TextAlign.Center" />
+                                    <RadzenDataGridColumn TItem="RepositorySummaryDto" Property="Name" Title="Repository" />
+                                    <RadzenDataGridColumn TItem="RepositorySummaryDto" Property="PRsMissingApprovalCount" Title="Missing Approvals" TextAlign="TextAlign.Center" />
                                 </Columns>
                             </RadzenDataGrid>
                         </div>
@@ -206,10 +206,10 @@
 </div>
 
 @code {
-    private IEnumerable<API.Endpoints.Analytics.RepositorySummaryDto>? repositories;
-    private List<API.Endpoints.Analytics.RepositorySummaryDto>? topOpenPrs;
-    private List<API.Endpoints.Analytics.RepositorySummaryDto>? topOldestOpenPrs;
-    private List<API.Endpoints.Analytics.RepositorySummaryDto>? topUnapprovedPrs;
+    private IEnumerable<RepositorySummaryDto>? repositories;
+    private List<RepositorySummaryDto>? topOpenPrs;
+    private List<RepositorySummaryDto>? topOldestOpenPrs;
+    private List<RepositorySummaryDto>? topUnapprovedPrs;
     private List<CommitPunchcardDto>? punchcardData;
     private bool isLoadingRepos = true;
     private bool isLoadingTopOpenPrs = false;

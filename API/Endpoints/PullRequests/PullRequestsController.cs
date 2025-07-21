@@ -1,5 +1,6 @@
 using Data.Models;
 using Microsoft.AspNetCore.Mvc;
+using Entities.DTOs.PullRequests;
 using System;
 using System.Collections.Generic;
 using Microsoft.Data.SqlClient;

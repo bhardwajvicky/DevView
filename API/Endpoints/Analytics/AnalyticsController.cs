@@ -9,6 +9,7 @@
 using Data.Models;
 using API.Services;
 using Microsoft.AspNetCore.Mvc;
+using Entities.DTOs.Analytics;
 using System;
 using System.Threading.Tasks;
 
