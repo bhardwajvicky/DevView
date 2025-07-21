@@ -1,4 +1,12 @@
-﻿using System;
+﻿/*
+ * DevView - .NET 9 Bitbucket Analytics Solution
+ * Copyright (c) 2025 Vikas Bhardwaj
+ * 
+ * This project is licensed under the MIT License.
+ * See LICENSE file in the project root for full license information.
+ */
+
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
