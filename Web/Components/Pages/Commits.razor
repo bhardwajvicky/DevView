@@ -154,7 +154,7 @@
                                         <td>
                                             @if (!string.IsNullOrEmpty(commit.RepositorySlug))
                                             {
-                                                <a @onclick="(e) => OpenBitbucketCommit(commit.Hash, commit.RepositorySlug, e)" @onclick:preventDefault style="cursor:pointer; text-decoration:underline; color:var(--bs-link-color);">
+                                                <a @onclick="async (e) => await OpenBitbucketCommit(commit.Hash, commit.RepositorySlug, e)" @onclick:preventDefault style="cursor:pointer; text-decoration:underline; color:var(--bs-link-color);">
                                                     @commit.Hash[..7]
                                                 </a>
                                             }
@@ -530,7 +530,7 @@
         await LoadCommits();
     }
 
-    private void OpenBitbucketCommit(string hash, string? commitRepoSlug = null, MouseEventArgs? e = null)
+    private async Task OpenBitbucketCommit(string hash, string? commitRepoSlug = null, MouseEventArgs? e = null)
     {
         var workspace = WorkspaceService.SelectedWorkspace;
         if (string.IsNullOrEmpty(workspace))
@@ -550,7 +550,7 @@
 
         // Use the new service to compose the URL
         var url = BitbucketUrlService.GetCommitUrl(workspace, repoToUse, hash);
-        JSRuntime.InvokeVoidAsync("window.open", url, "_blank"); // Open in new tab
+        await JSRuntime.InvokeVoidAsync("window.open", url, "_blank"); // Open in new tab
     }
 
     private void ShowFullMessage(string message)
