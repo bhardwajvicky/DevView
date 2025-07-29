@@ -8,6 +8,7 @@
 
 using Data.Models;
 using Entities.DTOs.Analytics;
+using Entities.DTOs.Teams;
 using Integration.Common;
 using Dapper;
 using Microsoft.Data.SqlClient;
@@ -53,6 +54,7 @@ namespace API.Services
                     {prFilter}(@RepoSlug IS NULL OR r.Slug = @RepoSlug)
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@UserId IS NULL OR c.AuthorId = @UserId)
+                    AND (@TeamId IS NULL OR c.AuthorId IN (SELECT tm.UserId FROM TeamMembers tm WHERE tm.TeamId = @TeamId))
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
                     AND c.IsRevert = 0
@@ -60,7 +62,7 @@ namespace API.Services
         }
 
         public async Task<IEnumerable<CommitActivityDto>> GetCommitActivityAsync(
-            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, 
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, int? teamId = null,
             bool includePR = true, bool includeData = true, bool includeConfig = true, bool showExcluded = false)
         {
             using var connection = new SqlConnection(_connectionString);
@@ -127,11 +129,11 @@ namespace API.Services
                 ORDER BY Date;
             ";
 
-            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, includeData, includeConfig });
+            return await connection.QueryAsync<CommitActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, teamId, includeData, includeConfig });
         }
 
         public async Task<IEnumerable<ContributorActivityDto>> GetContributorActivityAsync(
-            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId,
+            string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy, int? userId, int? teamId = null,
             bool includePR = true, bool includeData = true, bool includeConfig = true, bool showExcluded = false)
         {
             using var connection = new SqlConnection(_connectionString);
@@ -203,7 +205,7 @@ namespace API.Services
                 ORDER BY Date, DisplayName;
             ";
 
-            return await connection.QueryAsync<ContributorActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, includeData, includeConfig });
+            return await connection.QueryAsync<ContributorActivityDto>(sql, new { repoSlug, workspace, startDate, endDate, userId, teamId, includeData, includeConfig });
         }
 
         public async Task<List<CommitPunchcardDto>> GetCommitPunchcardAsync(string? workspace = null, string? repoSlug = null, DateTime? startDate = null, DateTime? endDate = null)
@@ -252,7 +254,7 @@ namespace API.Services
             return await connection.QueryAsync<UserDto>(sql);
         }
 
-        public async Task<IEnumerable<dynamic>> GetTeamsAsync()
+        public async Task<IEnumerable<TeamSummaryDto>> GetTeamsAsync()
         {
             using var connection = new SqlConnection(_connectionString);
             const string sql = @"
@@ -263,7 +265,7 @@ namespace API.Services
                 WHERE t.IsActive = 1
                 GROUP BY t.Id, t.Name, t.Description, t.CreatedOn, t.IsActive
                 ORDER BY t.Name;";
-            return await connection.QueryAsync<dynamic>(sql);
+            return await connection.QueryAsync<TeamSummaryDto>(sql);
         }
 
         public async Task<IEnumerable<string>> GetWorkspacesAsync()

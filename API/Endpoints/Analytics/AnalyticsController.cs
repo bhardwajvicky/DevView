@@ -10,6 +10,7 @@ using Data.Models;
 using API.Services;
 using Microsoft.AspNetCore.Mvc;
 using Entities.DTOs.Analytics;
+using Entities.DTOs.Teams;
 using System;
 using System.Threading.Tasks;
 
@@ -34,16 +35,18 @@ namespace API.Endpoints.Analytics
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
             [FromQuery] int? userId = null,
+            [FromQuery] int? teamId = null,
             [FromQuery] bool includePR = true,
             [FromQuery] bool includeData = true,
-            [FromQuery] bool includeConfig = true)
+            [FromQuery] bool includeConfig = true,
+            [FromQuery] bool showExcluded = false)
         {
             if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
             {
                 return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
             }
 
-            var result = await _analyticsService.GetCommitActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, includePR, includeData, includeConfig);
+            var result = await _analyticsService.GetCommitActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, teamId, includePR, includeData, includeConfig, showExcluded);
             return Ok(result);
         }
 
@@ -55,16 +58,18 @@ namespace API.Endpoints.Analytics
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
             [FromQuery] int? userId = null,
+            [FromQuery] int? teamId = null,
             [FromQuery] bool includePR = true,
             [FromQuery] bool includeData = true,
-            [FromQuery] bool includeConfig = true)
+            [FromQuery] bool includeConfig = true,
+            [FromQuery] bool showExcluded = false)
         {
             if (string.IsNullOrEmpty(repoSlug) && string.IsNullOrEmpty(workspace))
             {
                 return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
             }
 
-            var result = await _analyticsService.GetContributorActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, includePR, includeData, includeConfig);
+            var result = await _analyticsService.GetContributorActivityAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, teamId, includePR, includeData, includeConfig, showExcluded);
             return Ok(result);
         }
 

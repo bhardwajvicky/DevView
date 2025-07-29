@@ -7,6 +7,63 @@
 @using Web.Components.Common
 @using System.Linq
 @using Microsoft.AspNetCore.WebUtilities
+
+<style>
+    .filter-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .filter-card {
+        transition: all 0.3s ease;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .filter-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .filter-card .card-title {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    
+    .form-check-input:checked {
+        background-color: #198754;
+        border-color: #198754;
+    }
+    
+    .alert-sm {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        margin-bottom: 0;
+    }
+    
+    .quick-date-btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        transition: all 0.2s ease;
+    }
+    
+    .quick-date-btn:hover {
+        transform: scale(1.05);
+    }
+    
+    @@media (max-width: 768px) {
+        .filter-container {
+            padding: 15px;
+        }
+        
+        .row.g-3 > * {
+            margin-bottom: 15px;
+        }
+    }
+</style>
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
@@ -35,117 +92,152 @@
     }
     else
     {
-        <!-- Filters -->
-        <div class="row mb-4">
-            @if (isLoadingRepos)
-            {
+        <!-- Filter Controls -->
+        <div class="filter-container">
+            <div class="row mb-4 g-3">
+                <!-- Repository Filter -->
                 <div class="col-md-3">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Repository</label>
-                        <input type="text" class="form-control" value="Loading repositories..." disabled />
+                    <div class="card filter-card h-100 border-primary border-opacity-25">
+                        <div class="card-body p-3">
+                            <h6 class="card-title text-primary mb-3">
+                                <i class="bi bi-folder2-open me-2"></i>Repository
+                            </h6>
+                            @if (isLoadingRepos)
+                            {
+                                <input type="text" class="form-control" value="Loading repositories..." disabled />
+                            }
+                            else if (repositories != null && repositories.Any())
+                            {
+                                <RadzenDropDown Data="@GetRepositoryOptions()"
+                                              TextProperty="Name"
+                                              ValueProperty="Slug"
+                                              AllowClear="true"
+                                              AllowFiltering="true"
+                                              FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                              Placeholder="Search repositories..."
+                                              Value="@selectedRepoSlug"
+                                              Change="@(args => OnRepositoryChanged(args))"
+                                              class="w-100" />
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning alert-sm">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    No repositories found
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
-            }
-            else
-            {
-                <div class="col-md-3">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Repository</label>
-                        @if (repositories != null && repositories.Any())
-                        {
-                            <RadzenDropDown Data="@GetRepositoryOptions()"
-                                          TextProperty="Name"
-                                          ValueProperty="Slug"
-                                          AllowClear="true"
-                                          AllowFiltering="true"
-                                          FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                          Placeholder="Search repositories..."
-                                          Value="@selectedRepoSlug"
-                                          Change="@(args => OnRepositoryChanged(args))"
-                                          class="w-100" />
-                        }
-                        else
-                        {
-                            <div class="alert alert-warning">
-                                No repositories found. Please check your configuration.
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
 
-            <div class="col-md-4">
-                <div class="mb-3">
-                    <label for="userSelect" class="form-label fw-bold">Select User</label>
-                    @if (isLoadingUsers)
-                    {
-                        <div class="d-flex align-items-center">
-                            <div class="spinner-border spinner-border-sm me-2" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <span>Loading users...</span>
-                        </div>
-                    }
-                    else if (users != null && users.Any())
-                    {
-                        <RadzenDropDown Data="@users.OrderBy(u => u.DisplayName)"
-                                      TextProperty="DisplayName"
-                                      ValueProperty="Id"
-                                      AllowClear="true"
-                                      AllowFiltering="true"
-                                      FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                      Placeholder="Search users..."
-                                      Value="@selectedUserId"
-                                      Change="@(args => OnUserChanged(args))"
-                                      class="w-100" />
-                    }
-                    else
-                    {
-                        <div class="alert alert-warning">
-                            No users found. Please check your configuration.
-                        </div>
-                    }
-                </div>
-            </div>
-
-            <!-- Date Range Selection -->
-            <div class="col-md-4">
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Date Range</label>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <RadzenDatePicker @bind-Value="startDate" DateFormat="MM/dd/yyyy" Placeholder="Start Date" 
-                                            Change="@(() => OnDateRangeChanged())" class="w-100" />
-                        </div>
-                        <div class="col-md-6">
-                            <RadzenDatePicker @bind-Value="endDate" DateFormat="MM/dd/yyyy" Placeholder="End Date" 
-                                            Change="@(() => OnDateRangeChanged())" class="w-100" />
+                <!-- User Filter -->
+                <div class="col-md-4">
+                    <div class="card filter-card h-100 border-success border-opacity-25">
+                        <div class="card-body p-3">
+                            <h6 class="card-title text-success mb-3">
+                                <i class="bi bi-person me-2"></i>Select User
+                            </h6>
+                            @if (isLoadingUsers)
+                            {
+                                <div class="text-center py-2">
+                                    <div class="spinner-border spinner-border-sm text-success me-2" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span class="text-muted">Loading users...</span>
+                                </div>
+                            }
+                            else if (users != null && users.Any())
+                            {
+                                <RadzenDropDown Data="@users.OrderBy(u => u.DisplayName)"
+                                              TextProperty="DisplayName"
+                                              ValueProperty="Id"
+                                              AllowClear="true"
+                                              AllowFiltering="true"
+                                              FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                              Placeholder="Search users..."
+                                              Value="@selectedUserId"
+                                              Change="@(args => OnUserChanged(args))"
+                                              class="w-100" />
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning alert-sm">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    No users available
+                                </div>
+                            }
                         </div>
                     </div>
-                    <div class="mt-2">
-                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 7 Days" Click="@(() => SetDateRange(7))" class="me-1" />
-                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 30 Days" Click="@(() => SetDateRange(30))" class="me-1" />
-                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="Last 90 Days" Click="@(() => SetDateRange(90))" class="me-1" />
-                        <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Secondary" Text="All Time" Click="@(() => SetDateRange(null))" />
+                </div>
+
+                <!-- Date Range Selection -->
+                <div class="col-md-5">
+                    <div class="card filter-card h-100 border-info border-opacity-25">
+                        <div class="card-body p-3">
+                            <h6 class="card-title text-info mb-3">
+                                <i class="bi bi-calendar-range me-2"></i>Date Range
+                            </h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label small text-muted mb-1">Start Date</label>
+                                    <RadzenDatePicker @bind-Value="startDate" DateFormat="MM/dd/yyyy" Placeholder="Start Date" 
+                                                    Change="@(() => OnDateRangeChanged())" class="w-100" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted mb-1">End Date</label>
+                                    <RadzenDatePicker @bind-Value="endDate" DateFormat="MM/dd/yyyy" Placeholder="End Date" 
+                                                    Change="@(() => OnDateRangeChanged())" class="w-100" />
+                                </div>
+                            </div>
+                            
+                            <!-- Quick Date Range Buttons -->
+                            <div class="d-flex flex-wrap gap-1">
+                                <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Light" 
+                                            Text="7 Days" Click="@(() => SetDateRange(7))" 
+                                            class="btn-outline-info btn-sm rounded-pill px-2 py-1" />
+                                <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Light" 
+                                            Text="30 Days" Click="@(() => SetDateRange(30))" 
+                                            class="btn-outline-info btn-sm rounded-pill px-2 py-1" />
+                                <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Light" 
+                                            Text="90 Days" Click="@(() => SetDateRange(90))" 
+                                            class="btn-outline-info btn-sm rounded-pill px-2 py-1" />
+                                <RadzenButton Size="ButtonSize.ExtraSmall" ButtonStyle="ButtonStyle.Light" 
+                                            Text="All Time" Click="@(() => SetDateRange(null))" 
+                                            class="btn-outline-info btn-sm rounded-pill px-2 py-1" />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Filters Row -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Filters</h5>
-                        <div class="d-flex gap-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="includePR" @bind="includePR" @bind:after="OnFilterChanged">
-                                <label class="form-check-label" for="includePR">Include PRs</label>
-                            </div>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="showExcluded" @bind="showExcluded" @bind:after="OnFilterChanged">
-                                <label class="form-check-label" for="showExcluded">Show Excluded</label>
+        <!-- Advanced Filters -->
+        <div class="filter-container">
+            <div class="row mb-4 g-3">
+                <!-- Content Filters -->
+                <div class="col-md-12">
+                    <div class="card filter-card border-warning border-opacity-25">
+                        <div class="card-body p-3">
+                            <h6 class="card-title text-warning mb-3">
+                                <i class="bi bi-funnel me-2"></i>Content Filters
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-lg-6 col-md-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="includePR" @bind="includePR" @bind:after="OnFilterChanged">
+                                        <label class="form-check-label fw-medium" for="includePR">
+                                            <i class="bi bi-git me-1"></i>Include PRs
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-lg-6 col-md-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="showExcluded" @bind="showExcluded" @bind:after="OnFilterChanged">
+                                        <label class="form-check-label fw-medium" for="showExcluded">
+                                            <i class="bi bi-eye-slash me-1"></i>Show Excluded
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

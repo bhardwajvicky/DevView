@@ -9,6 +9,7 @@
 @using System.Text.Json
 @using System.Linq
 @using Web.Components.Common
+@using Entities.DTOs.Teams
 
 @using System.Globalization
 @inject HttpClient Http
@@ -45,6 +46,13 @@
             IsLoadingRepos="@isLoadingRepos"
             Repositories="@repositories"
             SelectedRepoSlug="@selectedRepoSlug"
+            IsLoadingUsers="@isLoadingUsers"
+            Users="@users"
+            SelectedUserId="@selectedUserId"
+            IsLoadingTeams="@isLoadingTeams"
+            Teams="@teams"
+            SelectedTeamId="@selectedTeamId"
+            FilterType="@filterType"
             StartDate="@startDate"
             EndDate="@endDate"
             IncludePR="@includePR"
@@ -54,6 +62,9 @@
             ShowGrouping="true"
             ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
+            OnUserSelected="OnUserSelected"
+            OnTeamSelected="OnTeamSelected"
+            OnFilterTypeChanged="OnFilterTypeChanged"
             OnDateRangeUpdated="OnDateRangeUpdated"
             OnFiltersChanged="OnFiltersChanged"
             OnGroupingUpdated="OnGroupingUpdated"
@@ -921,6 +932,15 @@
     private string selectedGrouping = "Day";
     private Dictionary<int, List<CommitActivityDto>> _individualContributorCommitActivity = new();
     private bool showExcluded = false;
+    
+    // Team filtering variables
+    private bool isLoadingUsers = false;
+    private bool isLoadingTeams = false;
+    private IEnumerable<UserDto>? users;
+    private IEnumerable<TeamSummaryDto>? teams;
+    private int? selectedUserId;
+    private int? selectedTeamId;
+    private string filterType = "user";
 
     protected override async Task OnInitializedAsync()
     {
@@ -983,6 +1003,9 @@
             // Initialize JavaScript variables
             await JSRuntime.InvokeVoidAsync("eval", $"window.selectedGrouping = \"{selectedGrouping}\"");
             await JSRuntime.InvokeVoidAsync("eval", $"window.showExcluded = \"{showExcluded}\";");
+            
+            // Load users and teams for filtering
+            await LoadUsersAndTeams();
         }
 
         // Initialize contributor charts after render if we have data (firstRender or not)
@@ -1127,6 +1150,11 @@
             if (selectedRepoSlug != "ALL") url += $"&repoSlug={selectedRepoSlug}";
             if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            
+            // Add user/team filtering
+            if (filterType == "user" && selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            if (filterType == "team" && selectedTeamId.HasValue && selectedTeamId.Value != -1) url += $"&teamId={selectedTeamId.Value}";
+            
             url += $"&includePR={includePR}";
             url += $"&includeData={includeData}";
             url += $"&includeConfig={includeConfig}";
@@ -1138,6 +1166,11 @@
             if (selectedRepoSlug != "ALL") contributorUrl += $"&repoSlug={selectedRepoSlug}";
             if (startDate.HasValue) contributorUrl += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) contributorUrl += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            
+            // Add user/team filtering
+            if (filterType == "user" && selectedUserId.HasValue) contributorUrl += $"&userId={selectedUserId.Value}";
+            if (filterType == "team" && selectedTeamId.HasValue && selectedTeamId.Value != -1) contributorUrl += $"&teamId={selectedTeamId.Value}";
+            
             contributorUrl += $"&groupBy={selectedGrouping}"; // Grouping applies to contributor activity as well
             if (showExcluded) contributorUrl += "&showExcluded=true";
             contributorData = await Http.GetFromJsonAsync<ContributorActivityDto[]>(contributorUrl);
@@ -1387,9 +1420,66 @@
         return "All Repositories";
     }
 
+    // Event handlers for filtering
+    private async Task OnUserSelected(int? userId)
+    {
+        selectedUserId = userId;
+        await RefreshDashboardData();
+    }
+
+    private async Task OnTeamSelected(int? teamId)
+    {
+        selectedTeamId = teamId;
+        await RefreshDashboardData();
+    }
+
+    private async Task OnFilterTypeChanged(string newFilterType)
+    {
+        filterType = newFilterType;
+        // Clear the opposite filter when switching
+        if (filterType == "user")
+        {
+            selectedTeamId = null;
+        }
+        else if (filterType == "team")
+        {
+            selectedUserId = null;
+        }
+        await RefreshDashboardData();
+    }
+
+    private async Task LoadUsersAndTeams()
+    {
+        try
+        {
+            // Load users
+            isLoadingUsers = true;
+            StateHasChanged();
+            users = await Http.GetFromJsonAsync<IEnumerable<UserDto>>("/api/analytics/users");
+            
+            // Load teams
+            isLoadingTeams = true;
+            StateHasChanged();
+            teams = await Http.GetFromJsonAsync<IEnumerable<TeamSummaryDto>>("/api/analytics/teams");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading users/teams: {ex.Message}");
+            // Don't set errorMessage here as it might interfere with main dashboard functionality
+        }
+        finally
+        {
+            isLoadingUsers = false;
+            isLoadingTeams = false;
+            StateHasChanged();
+        }
+    }
+
     public class DashboardSummary
     {
         public List<CommitActivityDto> CommitActivities { get; set; } = new();
         public List<ContributorActivityDto> ContributorActivities { get; set; } = new();
     }
+
+
 } 
