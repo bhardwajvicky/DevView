@@ -1,9 +1,11 @@
 @page "/commits"
+@page "/user/{UserId:int}/commits"
 @using Web.Services
 @using System.Net.Http.Json
 @using Radzen
 @using Radzen.Blazor
 @using Web.Components.Common
+@using Entities.DTOs.Teams
 
 @using Microsoft.AspNetCore.WebUtilities
 @inject HttpClient Http
@@ -21,7 +23,15 @@
         <div class="col-12">
             <div class="d-flex align-items-center justify-content-between mb-4">
                 <h1 class="mb-0">
-                    <i class="bi bi-git"></i> Commits
+                    <i class="bi bi-git"></i> 
+                    @if (UserId.HasValue && selectedUser != null)
+                    {
+                        <span>Commits by @selectedUser.DisplayName</span>
+                    }
+                    else
+                    {
+                        <span>Commits</span>
+                    }
                 </h1>
                 @if (showBackButton)
                 {
@@ -53,6 +63,10 @@
             IsLoadingUsers="@isLoadingUsers"
             Users="@users"
             SelectedUserId="@selectedUserId"
+            IsLoadingTeams="@isLoadingTeams"
+            Teams="@teams"
+            SelectedTeamId="@selectedTeamId"
+            FilterType="@filterType"
             StartDate="@startDate"
             EndDate="@endDate"
             IncludePR="@includePR"
@@ -63,10 +77,24 @@
             ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
             OnUserSelected="OnUserSelected"
+            OnTeamSelected="OnTeamSelected"
+            OnFilterTypeChanged="OnFilterTypeChanged"
             OnDateRangeUpdated="EventCallback.Factory.Create<(DateTime? newStartDate, DateTime? newEndDate)>(this, OnDateRangeUpdated)"
             OnFiltersChanged="OnFiltersChanged"
             OnGroupingUpdated="OnGroupingUpdated"
             OnShowExcludedChanged="OnShowExcludedChanged" />
+            
+        @if (UserId.HasValue && selectedUser != null)
+        {
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-person-circle me-2"></i>
+                <strong>Filtered by user:</strong> @selectedUser.DisplayName
+                @if (!string.IsNullOrEmpty(selectedUser.BitbucketUserId))
+                {
+                    <span class="text-muted">(@selectedUser.BitbucketUserId)</span>
+                }
+            </div>
+        }
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
@@ -257,6 +285,21 @@
     CommitHash="@(selectedCommitHashForModal ?? string.Empty)" />
 
 @code {
+    [Parameter]
+    public int? UserId { get; set; }
+    
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? StartDate { get; set; }
+    
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? EndDate { get; set; }
+    
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? RepoSlug { get; set; }
+    
     private IEnumerable<RepositorySummaryDto>? repositories;
     private IEnumerable<UserDto>? users;
     private PaginatedCommitsResponse? paginatedCommitsResponse;
@@ -288,14 +331,48 @@
     // Chart data
     private CommitActivityDto[]? commitActivity;
     private bool isLoadingCommitActivity = false;
+    
+    // Team filtering variables
+    private bool isLoadingTeams = false;
+    private IEnumerable<TeamSummaryDto>? teams;
+    private int? selectedTeamId;
+    private string filterType = "user";
+    
+    // User data for display
+    private UserDto? selectedUser;
 
     protected override async Task OnInitializedAsync()
     {
         // Parse query parameters from URL
         ParseQueryParameters();
         
+        // Handle UserId parameter if provided
+        if (UserId.HasValue)
+        {
+            selectedUserId = UserId.Value;
+            filterType = "user";
+        }
+        
+        // Handle query parameters for date range
+        if (!string.IsNullOrEmpty(StartDate) && DateTime.TryParse(StartDate, out var startDateParsed))
+        {
+            startDate = startDateParsed;
+        }
+        
+        if (!string.IsNullOrEmpty(EndDate) && DateTime.TryParse(EndDate, out var endDateParsed))
+        {
+            endDate = endDateParsed;
+        }
+        
+        if (!string.IsNullOrEmpty(RepoSlug))
+        {
+            selectedRepoSlug = RepoSlug;
+        }
+        
         await LoadRepositories();
         await LoadUsers();
+        await LoadTeams();
+        await LoadUser();
         await LoadCommits();
         await LoadCommitActivity();
     }
@@ -386,6 +463,40 @@
         }
     }
 
+    private async Task LoadTeams()
+    {
+        try
+        {
+            isLoadingTeams = true;
+            teams = await Http.GetFromJsonAsync<IEnumerable<TeamSummaryDto>>("/api/analytics/teams");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading teams: {ex.Message}";
+            Logger.LogError(ex, "Error loading teams");
+        }
+        finally
+        {
+            isLoadingTeams = false;
+        }
+    }
+
+    private async Task LoadUser()
+    {
+        if (UserId.HasValue)
+        {
+            try
+            {
+                var users = await Http.GetFromJsonAsync<List<UserDto>>("/api/analytics/users") ?? new();
+                selectedUser = users.FirstOrDefault(u => u.Id == UserId.Value);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading user: {ex.Message}");
+            }
+        }
+    }
+
     private async Task LoadCommits()
     {
         try
@@ -399,7 +510,11 @@
             var url = $"api/commits/{repoSlug}?page={currentPage}&pageSize={pageSize}&includePR={includePR.ToString().ToLower()}";
             if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
-            if (selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            
+            // Add user/team filtering
+            if (filterType == "user" && selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            if (filterType == "team" && selectedTeamId.HasValue && selectedTeamId.Value != -1) url += $"&teamId={selectedTeamId.Value}";
+            
             if (showExcluded) url += "&showExcluded=true";
 
             paginatedCommitsResponse = await Http.GetFromJsonAsync<PaginatedCommitsResponse>(url);
@@ -442,7 +557,11 @@
             }
             if (startDate.HasValue) url += $"&startDate={startDate.Value:yyyy-MM-dd}";
             if (endDate.HasValue) url += $"&endDate={endDate.Value:yyyy-MM-dd}";
-            if (selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            
+            // Add user/team filtering
+            if (filterType == "user" && selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            if (filterType == "team" && selectedTeamId.HasValue && selectedTeamId.Value != -1) url += $"&teamId={selectedTeamId.Value}";
+            
             url += $"&includePR={includePR.ToString().ToLower()}";
             url += $"&includeData={includeData.ToString().ToLower()}";
             url += $"&includeConfig={includeConfig.ToString().ToLower()}";
@@ -472,6 +591,43 @@
     private async Task OnUserSelected(int? userId)
     {
         selectedUserId = userId;
+        currentPage = 1;
+        
+        // Update selectedUser when user is selected from dropdown
+        if (userId.HasValue)
+        {
+            selectedUser = users?.FirstOrDefault(u => u.Id == userId.Value);
+        }
+        else
+        {
+            selectedUser = null;
+        }
+        
+        await LoadCommits();
+        await LoadCommitActivity();
+    }
+
+    private async Task OnTeamSelected(int? teamId)
+    {
+        selectedTeamId = teamId;
+        currentPage = 1;
+        await LoadCommits();
+        await LoadCommitActivity();
+    }
+
+    private async Task OnFilterTypeChanged(string newFilterType)
+    {
+        filterType = newFilterType;
+        // Clear the opposite filter when switching
+        if (filterType == "user")
+        {
+            selectedTeamId = null;
+        }
+        else if (filterType == "team")
+        {
+            selectedUserId = null;
+            selectedUser = null; // Clear selected user when switching to team filter
+        }
         currentPage = 1;
         await LoadCommits();
         await LoadCommitActivity();

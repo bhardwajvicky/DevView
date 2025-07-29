@@ -8,6 +8,7 @@
 @using System.Text.Json
 @using System.Linq
 @using Web.Components.Common
+@using Entities.DTOs.Teams
 
 @inject HttpClient Http
 @inject ILogger<TopCommitters> Logger
@@ -44,6 +45,13 @@
             IsLoadingRepos="@isLoadingRepos"
             Repositories="@repositories"
             SelectedRepoSlug="@selectedRepoSlug"
+            IsLoadingUsers="@isLoadingUsers"
+            Users="@users"
+            SelectedUserId="@selectedUserId"
+            IsLoadingTeams="@isLoadingTeams"
+            Teams="@teams"
+            SelectedTeamId="@selectedTeamId"
+            FilterType="@filterType"
             StartDate="@startDate"
             EndDate="@endDate"
             IncludePR="@includePR"
@@ -52,6 +60,9 @@
             GroupBy="@groupBy"
             ShowExcluded="@showExcluded"
             OnRepositorySelected="OnRepositorySelected"
+            OnUserSelected="OnUserSelected"
+            OnTeamSelected="OnTeamSelected"
+            OnFilterTypeChanged="OnFilterTypeChanged"
             OnDateRangeUpdated="OnDateRangeUpdated"
             OnFiltersChanged="OnFiltersChanged"
             OnGroupingUpdated="OnGroupingUpdated"
@@ -230,6 +241,15 @@
     private string groupBy = "Day";
     private string selectedGrouping = "Day";
     private DotNetObjectReference<TopCommitters>? _dotNetRef;
+    
+    // Team filtering variables
+    private bool isLoadingUsers = false;
+    private bool isLoadingTeams = false;
+    private IEnumerable<UserDto>? users;
+    private IEnumerable<TeamSummaryDto>? teams;
+    private int? selectedUserId;
+    private int? selectedTeamId;
+    private string filterType = "user";
 
     protected override async Task OnInitializedAsync()
     {
@@ -246,6 +266,7 @@
             }
 
             await LoadRepositories();
+            await LoadUsersAndTeams();
             if (repositories != null && repositories.Any())
             {
                 selectedRepoSlug = "ALL";
@@ -346,6 +367,61 @@
         await RefreshData();
     }
 
+    // Event handlers for filtering
+    private async Task OnUserSelected(int? userId)
+    {
+        selectedUserId = userId;
+        await RefreshData();
+    }
+
+    private async Task OnTeamSelected(int? teamId)
+    {
+        selectedTeamId = teamId;
+        await RefreshData();
+    }
+
+    private async Task OnFilterTypeChanged(string newFilterType)
+    {
+        filterType = newFilterType;
+        // Clear the opposite filter when switching
+        if (filterType == "user")
+        {
+            selectedTeamId = null;
+        }
+        else if (filterType == "team")
+        {
+            selectedUserId = null;
+        }
+        await RefreshData();
+    }
+
+    private async Task LoadUsersAndTeams()
+    {
+        try
+        {
+            // Load users
+            isLoadingUsers = true;
+            StateHasChanged();
+            users = await Http.GetFromJsonAsync<IEnumerable<UserDto>>("/api/analytics/users");
+            
+            // Load teams
+            isLoadingTeams = true;
+            StateHasChanged();
+            teams = await Http.GetFromJsonAsync<IEnumerable<TeamSummaryDto>>("/api/analytics/teams");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading users/teams: {ex.Message}");
+            // Don't set errorMessage here as it might interfere with main functionality
+        }
+        finally
+        {
+            isLoadingUsers = false;
+            isLoadingTeams = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task RefreshData()
     {
         if (!string.IsNullOrEmpty(selectedRepoSlug) && WorkspaceService.HasSelectedWorkspace)
@@ -387,6 +463,10 @@
             {
                 url = $"/api/analytics/contributors/top-bottom?repoSlug={repoSlug}&workspace={workspace}&includePR={includePR.ToString().ToLower()}&includeData={includeData.ToString().ToLower()}&includeConfig={includeConfig.ToString().ToLower()}&showExcluded={showExcluded.ToString().ToLower()}&topCount=6&bottomCount=6";
             }
+
+            // Add user/team filtering
+            if (filterType == "user" && selectedUserId.HasValue) url += $"&userId={selectedUserId.Value}";
+            if (filterType == "team" && selectedTeamId.HasValue && selectedTeamId.Value != -1) url += $"&teamId={selectedTeamId.Value}";
 
             // Add date range parameters if specified
             if (startDate.HasValue)
@@ -435,7 +515,8 @@
         
         if (commitDate.HasValue)
         {
-            queryParams.Add($"CommitDate={commitDate.Value:yyyy-MM-dd}");
+            queryParams.Add($"StartDate={commitDate.Value:yyyy-MM-dd}");
+            queryParams.Add($"EndDate={commitDate.Value:yyyy-MM-dd}");
         }
         
         // Only add repository slug if it's not "ALL"
