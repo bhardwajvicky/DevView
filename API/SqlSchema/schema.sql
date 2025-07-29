@@ -78,6 +78,28 @@ CREATE TABLE PullRequestApprovals (
     UNIQUE (PullRequestId, UserUuid)
 );
 
+-- Teams table for organizing users into teams
+CREATE TABLE Teams (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(255) NOT NULL UNIQUE,
+    Description NVARCHAR(1000),
+    CreatedOn DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    CreatedBy NVARCHAR(255), -- BitbucketUserId of team creator
+    IsActive BIT NOT NULL DEFAULT 1
+);
+
+-- TeamMembers table for many-to-many relationship between Teams and Users
+CREATE TABLE TeamMembers (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    TeamId INT NOT NULL,
+    UserId INT NOT NULL,
+    AddedOn DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    AddedBy NVARCHAR(255), -- BitbucketUserId of person who added the member
+    FOREIGN KEY (TeamId) REFERENCES Teams(Id) ON DELETE CASCADE,
+    FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    UNIQUE (TeamId, UserId) -- Prevent duplicate team memberships
+);
+
 -- Indexes for performance
 CREATE INDEX IX_Commits_RepositoryId ON Commits(RepositoryId);
 CREATE INDEX IX_Commits_AuthorId ON Commits(AuthorId);
@@ -206,3 +228,10 @@ CREATE INDEX IX_RepositorySyncLog_StartEndDate ON RepositorySyncLog(StartDate, E
 CREATE INDEX IX_PullRequestApprovals_PullRequestId ON PullRequestApprovals(PullRequestId);
 CREATE INDEX IX_PullRequestApprovals_UserUuid ON PullRequestApprovals(UserUuid);
 CREATE INDEX IX_PullRequestApprovals_Approved ON PullRequestApprovals(Approved);
+
+-- Indexes for Teams tables
+CREATE INDEX IX_Teams_Name ON Teams(Name);
+CREATE INDEX IX_Teams_IsActive ON Teams(IsActive);
+CREATE INDEX IX_TeamMembers_TeamId ON TeamMembers(TeamId);
+CREATE INDEX IX_TeamMembers_UserId ON TeamMembers(UserId);
+CREATE INDEX IX_TeamMembers_TeamId_UserId ON TeamMembers(TeamId, UserId);

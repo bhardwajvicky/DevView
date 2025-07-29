@@ -252,6 +252,20 @@ namespace API.Services
             return await connection.QueryAsync<UserDto>(sql);
         }
 
+        public async Task<IEnumerable<dynamic>> GetTeamsAsync()
+        {
+            using var connection = new SqlConnection(_connectionString);
+            const string sql = @"
+                SELECT t.Id, t.Name, t.Description, t.CreatedOn, t.IsActive,
+                       COUNT(tm.UserId) as MemberCount
+                FROM Teams t
+                LEFT JOIN TeamMembers tm ON t.Id = tm.TeamId
+                WHERE t.IsActive = 1
+                GROUP BY t.Id, t.Name, t.Description, t.CreatedOn, t.IsActive
+                ORDER BY t.Name;";
+            return await connection.QueryAsync<dynamic>(sql);
+        }
+
         public async Task<IEnumerable<string>> GetWorkspacesAsync()
         {
             using var connection = new SqlConnection(_connectionString);

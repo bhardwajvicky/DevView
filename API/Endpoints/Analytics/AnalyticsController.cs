@@ -89,6 +89,13 @@ namespace API.Endpoints.Analytics
             return Ok(result);
         }
 
+        [HttpGet("teams")]
+        public async Task<IActionResult> GetTeams()
+        {
+            var result = await _analyticsService.GetTeamsAsync();
+            return Ok(result);
+        }
+
         [HttpGet("workspaces")]
         public async Task<IActionResult> GetWorkspaces()
         {
