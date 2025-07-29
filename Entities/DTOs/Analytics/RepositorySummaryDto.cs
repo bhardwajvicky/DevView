@@ -14,6 +14,7 @@ namespace Entities.DTOs.Analytics
         public required string Slug { get; set; }
         public required string Workspace { get; set; }
         public DateTime? OldestCommitDate { get; set; }
+        public DateTime? LastDeltaSyncDate { get; set; }
         public int OpenPullRequestCount { get; set; }
         public DateTime? OldestOpenPullRequestDate { get; set; }
         public int PRsMissingApprovalCount { get; set; }

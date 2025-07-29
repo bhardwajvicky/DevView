@@ -183,6 +183,10 @@ namespace Integration.PullRequests
                 } 
                 
                 _logger.LogInformation("PR sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
+                
+                // Update repository's last sync date
+                await UpdateRepositoryLastSyncDateAsync(connection, repoSlug);
+                
                 return currentBatchHitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
@@ -202,42 +206,9 @@ namespace Integration.PullRequests
             if (string.IsNullOrWhiteSpace(title))
                 return false;
 
-            var titleLower = title.ToLowerInvariant().Trim();
-            
-            // Common patterns for revert PRs
-            var revertPatterns = new[]
-            {
-                @"^revert\s+",                           // "Revert something"
-                @"^revert:\s*",                          // "Revert: something"
-                @"^revert\s+"".*""\s*",                  // "Revert "some title""
-                @"^revert\s+#\d+",                       // "Revert #123"
-                @"^revert\s+pr\s*#?\d+",                 // "Revert PR #123" or "Revert PR123"
-                @"^revert\s+pull\s+request\s*#?\d+",     // "Revert pull request #123"
-                @"^revert\s+merge\s+request\s*#?\d+",    // "Revert merge request #123"
-                @"^revert\s+commit\s+[a-f0-9]{6,}",      // "Revert commit abc123..."
-                @"^revert\s+changes\s+",                 // "Revert changes from..."
-                @"^revert\s+.*\s+commit",                // "Revert ... commit"
-                @"^rollback\s+",                         // "Rollback something"
-                @"^undo\s+",                             // "Undo something"
-                @"\brevert\s+this\s+",                   // "... revert this ..."
-                @"\bundo\s+this\s+",                     // "... undo this ..."
-                @"\brollback\s+this\s+",                 // "... rollback this ..."
-                @"\breverting\s+",                       // "... reverting ..."
-                @"\bundoing\s+",                         // "... undoing ..."
-                @"\brolling\s+back\s+"                   // "... rolling back ..."
-            };
-
-            foreach (var pattern in revertPatterns)
-            {
-                if (Regex.IsMatch(titleLower, pattern, RegexOptions.IgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return title.IndexOf("revert", StringComparison.OrdinalIgnoreCase) >= 0;
         }
-
+        
         private async Task SyncCommitsForPullRequest(SqlConnection connection, string workspace, string repoSlug, int bitbucketPrId, int prDbId)
         {
             try
@@ -262,44 +233,43 @@ namespace Integration.PullRequests
                         break;
                     }
                 
-                foreach (var commit in commitPagedResponse.Values)
-                {
-                    // Find the repository ID (if not already available)
-                    var repoId = await connection.QuerySingleOrDefaultAsync<int?>
-                    (
-                        "SELECT Id FROM Repositories WHERE Slug = @RepoSlug", new { RepoSlug = repoSlug });
-                    if (repoId == null) {
-                        _logger.LogWarning("Repository '{RepoSlug}' not found when inserting commit '{CommitHash}'.", repoSlug, commit.Hash);
-                        continue;
+                    foreach (var commit in commitPagedResponse.Values)
+                    {
+                        // Find the repository ID (if not already available)
+                        var repoId = await connection.QuerySingleOrDefaultAsync<int?>(
+                            "SELECT Id FROM Repositories WHERE Slug = @RepoSlug", new { RepoSlug = repoSlug });
+                        if (repoId == null) {
+                            _logger.LogWarning("Repository '{RepoSlug}' not found when inserting commit '{CommitHash}'.", repoSlug, commit.Hash);
+                            continue;
+                        }
+
+                        int commitId = await CommitCrudHelper.UpsertCommitAndFilesAsync(
+                            connection,
+                            commit,
+                            repoId.Value,
+                            workspace,
+                            repoSlug,
+                            _apiClient,
+                            _diffParser,
+                            _logger
+                        );
+                        if (commitId < 0) continue;
+
+                        _logger.LogInformation("Commit {CommitHash} for PR {PrId} in {Workspace}/{RepoSlug} was inserted/updated.", commit.Hash, bitbucketPrId, workspace, repoSlug);
+
+                        // Always upsert the PR-commit mapping, even if the commit already exists
+                        const string joinSql = @"
+                            MERGE INTO PullRequestCommits AS Target
+                            USING (SELECT @PrDbId AS PullRequestId, @CommitId AS CommitId) AS Source
+                            ON Target.PullRequestId = Source.PullRequestId AND Target.CommitId = Source.CommitId
+                            WHEN NOT MATCHED BY TARGET THEN
+                                INSERT (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
+                            -- No update needed, mapping is simple
+                        ";
+                        await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = commitId });
                     }
-
-                    int commitId = await CommitCrudHelper.UpsertCommitAndFilesAsync(
-                        connection,
-                        commit,
-                        repoId.Value,
-                        workspace,
-                        repoSlug,
-                        _apiClient,
-                        _diffParser,
-                        _logger
-                    );
-                    if (commitId < 0) continue;
-
-                    _logger.LogInformation("Commit {CommitHash} for PR {PrId} in {Workspace}/{RepoSlug} was inserted/updated.", commit.Hash, bitbucketPrId, workspace, repoSlug);
-
-                    // Always upsert the PR-commit mapping, even if the commit already exists
-                    const string joinSql = @"
-                        MERGE INTO PullRequestCommits AS Target
-                        USING (SELECT @PrDbId AS PullRequestId, @CommitId AS CommitId) AS Source
-                        ON Target.PullRequestId = Source.PullRequestId AND Target.CommitId = Source.CommitId
-                        WHEN NOT MATCHED BY TARGET THEN
-                            INSERT (PullRequestId, CommitId) VALUES (@PrDbId, @CommitId);
-                        -- No update needed, mapping is simple
-                    ";
-                    await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = commitId });
-                }
-                commitNextPageUrl = commitPagedResponse.NextPageUrl;
-            } while (!string.IsNullOrEmpty(commitNextPageUrl));
+                    commitNextPageUrl = commitPagedResponse.NextPageUrl;
+                } while (!string.IsNullOrEmpty(commitNextPageUrl));
             }
             catch (HttpRequestException ex) when (ex.Data.Contains("StatusCode") && ex.Data["StatusCode"].Equals(System.Net.HttpStatusCode.NotFound))
             {
@@ -365,8 +335,15 @@ namespace Integration.PullRequests
                 });
             }
         }
-
-        // Removed the SafeDateTime static methods as they are now in Integration.Utils.DateTimeExtensions
+        
+        private async Task UpdateRepositoryLastSyncDateAsync(SqlConnection connection, string repoSlug)
+        {
+            const string sql = @"
+                UPDATE Repositories 
+                SET LastDeltaSyncDate = GETUTCDATE() 
+                WHERE Slug = @RepoSlug";
+            await connection.ExecuteAsync(sql, new { RepoSlug = repoSlug });
+        }
     }
 }
 

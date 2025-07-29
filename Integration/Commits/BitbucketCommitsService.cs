@@ -146,6 +146,10 @@ namespace Integration.Commits
                 }
 
                 _logger.LogInformation("Commit sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
+                
+                // Update repository's last sync date
+                await UpdateRepositoryLastSyncDateAsync(connection, repoSlug);
+                
                 return hitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
@@ -153,6 +157,15 @@ namespace Integration.Commits
                 _logger.LogError(ex, "An error occurred during commit sync for {Workspace}/{RepoSlug}", workspace, repoSlug);
                 throw; // Re-throw the exception to be handled by the caller
             }
+        }
+        
+        private async Task UpdateRepositoryLastSyncDateAsync(SqlConnection connection, string repoSlug)
+        {
+            const string sql = @"
+                UPDATE Repositories 
+                SET LastDeltaSyncDate = GETUTCDATE() 
+                WHERE Slug = @RepoSlug";
+            await connection.ExecuteAsync(sql, new { RepoSlug = repoSlug });
         }
     }
 }

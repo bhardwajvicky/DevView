@@ -101,6 +101,7 @@
                                         <th>Name</th>
                                         <th>Slug</th>
                                         <th>Workspace</th>
+                                        <th>Last Delta Sync</th>
                                         <th>Oldest Commit Date</th>
                                         <th>Actions</th>
                                     </tr>
@@ -119,7 +120,24 @@
                                                 <span class="badge bg-primary">@repo.Workspace</span>
                                             </td>
                                             <td>
-                                                @repo.OldestCommitDate?.ToString("yyyy-MM-dd")
+                                                @if (repo.LastDeltaSyncDate.HasValue)
+                                                {
+                                                    <span class="text-success">@repo.LastDeltaSyncDate.Value.ToString("yyyy-MM-dd HH:mm")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Never synced</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (repo.OldestCommitDate.HasValue)
+                                                {
+                                                    @repo.OldestCommitDate.Value.ToString("yyyy-MM-dd")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No commits</span>
+                                                }
                                             </td>
                                             <td>
                                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => NavigateToCommits(repo)">

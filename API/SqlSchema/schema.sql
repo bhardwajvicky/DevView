@@ -16,7 +16,8 @@ CREATE TABLE Repositories (
     Name NVARCHAR(255) NOT NULL,
     Slug NVARCHAR(255) NOT NULL,
     Workspace NVARCHAR(255) NOT NULL,
-    CreatedOn DATETIME2
+    CreatedOn DATETIME2,
+    LastDeltaSyncDate DATETIME2 NULL -- New column for tracking last delta sync
 );
 
 -- Commits table

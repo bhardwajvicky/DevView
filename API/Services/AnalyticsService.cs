@@ -236,10 +236,11 @@ namespace API.Services
                     r.Name, 
                     r.Slug, 
                     r.Workspace,
-                    MIN(c.Date) AS OldestCommitDate
+                    MIN(c.Date) AS OldestCommitDate,
+                    r.LastDeltaSyncDate
                 FROM Repositories r
                 LEFT JOIN Commits c ON r.Id = c.RepositoryId
-                GROUP BY r.Name, r.Slug, r.Workspace
+                GROUP BY r.Name, r.Slug, r.Workspace, r.LastDeltaSyncDate
                 ORDER BY r.Name;";
             return await connection.QueryAsync<RepositorySummaryDto>(sql);
         }

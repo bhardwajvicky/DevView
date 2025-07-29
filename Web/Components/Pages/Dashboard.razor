@@ -1002,7 +1002,16 @@
             var allRepositoriesData = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("api/analytics/repositories");
 
             // Add an "All Repositories" option with its Workspace explicitly set to "All"
-            var allOption = new RepositorySummaryDto { Name = "All Repositories", Slug = "ALL", Workspace = "All" };
+            var allOption = new RepositorySummaryDto { 
+                Name = "All Repositories", 
+                Slug = "ALL", 
+                Workspace = "All",
+                OldestCommitDate = null,
+                LastDeltaSyncDate = null,
+                OpenPullRequestCount = 0,
+                OldestOpenPullRequestDate = null,
+                PRsMissingApprovalCount = 0
+            };
 
             // Combine all fetched repositories with the "All Repositories" option
             repositories = new[] { allOption }.Concat(allRepositoriesData ?? Array.Empty<RepositorySummaryDto>()).ToArray();

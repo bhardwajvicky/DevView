@@ -47,10 +47,10 @@ namespace Integration.Repositories
                         USING (SELECT @Uuid AS BitbucketRepoId, @Slug AS Slug, @Name AS Name, @Workspace AS Workspace, @CreatedOn AS CreatedOn) AS source
                         ON (target.BitbucketRepoId = source.BitbucketRepoId)
                         WHEN MATCHED THEN 
-                            UPDATE SET Name = source.Name, Workspace = source.Workspace, Slug = source.Slug
+                            UPDATE SET Name = source.Name, Workspace = source.Workspace, Slug = source.Slug, LastDeltaSyncDate = GETUTCDATE()
                         WHEN NOT MATCHED THEN
-                            INSERT (BitbucketRepoId, Slug, Name, Workspace, CreatedOn)
-                            VALUES (source.BitbucketRepoId, source.Slug, source.Name, source.Workspace, source.CreatedOn);
+                            INSERT (BitbucketRepoId, Slug, Name, Workspace, CreatedOn, LastDeltaSyncDate)
+                            VALUES (source.BitbucketRepoId, source.Slug, source.Name, source.Workspace, source.CreatedOn, GETUTCDATE());
                     ";
                     await connection.ExecuteAsync(sql, new
                     {
