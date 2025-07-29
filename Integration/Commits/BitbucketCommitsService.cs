@@ -30,11 +30,12 @@ namespace Integration.Commits
             _logger = logger;
         }
 
-        public async Task<bool> SyncCommitsAsync(string workspace, string repoSlug, DateTime startDate, DateTime endDate)
+        public async Task<(bool HasMoreHistory, int CommitCount)> SyncCommitsAsync(string workspace, string repoSlug, DateTime startDate, DateTime endDate)
         {
             _logger.LogInformation("Starting commit sync for {Workspace}/{RepoSlug} from {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}", workspace, repoSlug, startDate, endDate);
             
             bool hitStartDateBoundary = false; // Indicates if we found commits older than startDate
+            int totalCommitsSynced = 0; // Track total commits synced
 
             // Check if we're currently rate limited
             if (BitbucketApiClient.IsRateLimited())
@@ -53,7 +54,7 @@ namespace Integration.Commits
             if (repoId == null)
             {
                 _logger.LogWarning("Repository '{RepoSlug}' not found. Sync repositories first.", repoSlug);
-                return false; // Indicate no more history to fetch
+                return (false, 0); // Indicate no more history to fetch and 0 commits synced
             }
 
             string nextPageUrl = null;
@@ -138,6 +139,8 @@ namespace Integration.Commits
                             _logger
                         );
                         if (commitId < 0) continue;
+                        
+                        totalCommitsSynced++; // Increment counter for successfully synced commit
                     }
 
                     // Prepare for the next page
@@ -145,12 +148,12 @@ namespace Integration.Commits
                     if (string.IsNullOrEmpty(nextPageUrl)) keepFetching = false;
                 }
 
-                _logger.LogInformation("Commit sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
+                _logger.LogInformation("Commit sync finished for {Workspace}/{RepoSlug}. {CommitCount} commits synced.", workspace, repoSlug, totalCommitsSynced);
                 
                 // Update repository's last sync date
                 await UpdateRepositoryLastSyncDateAsync(connection, repoSlug);
                 
-                return hitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
+                return (hitStartDateBoundary, totalCommitsSynced); // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
             {

@@ -195,6 +195,7 @@ CREATE TABLE RepositorySyncLog (
     SyncedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     Status NVARCHAR(50) NOT NULL, -- e.g., 'Started', 'Completed', 'Failed'
     Message NVARCHAR(MAX) NULL,   -- error or info message
+    CommitCount INT NULL,         -- number of commits synced in this operation
     FOREIGN KEY (RepositoryId) REFERENCES Repositories(Id)
 );
 

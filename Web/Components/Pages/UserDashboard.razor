@@ -324,19 +324,57 @@
         <h3 class="mb-4 mt-4">Detailed Insights</h3>
         <div class="row">
             <!-- PR Average Age Graph -->
-            <div class="col-lg-4 mb-4">
+            <div class="col-lg-6 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">PR Average Age (Open & Merged)</h5>
-                        <div class="flex-grow-1">
+                        <div class="flex-grow-1" style="height: 300px; min-height: 300px; max-height: 300px;">
                             <canvas id="prAgeChart" class="w-100 h-100"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Commit Activity Punchcard -->
+            <div class="col-lg-6 mb-4">
+                @if (isLoadingPunchcard)
+                {
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body d-flex align-items-center justify-content-center">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Loading punchcard data...</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (punchcardData != null && punchcardData.Any())
+                {
+                    <CommitPunchcardChart Data="@punchcardData" 
+                                        Title="Commit Activity Punchcard" 
+                                        RepositoryInfo="@GetRepositoryDisplayName()"
+                                        IsLoading="@isLoadingPunchcard" />
+                }
+                else
+                {
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body d-flex align-items-center justify-content-center">
+                            <div class="text-center text-muted">
+                                <i class="bi bi-grid-3x3" style="font-size: 3rem;"></i>
+                                <p class="mt-2">No punchcard data available for the selected criteria.</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Second row for contributor tables -->
+        <div class="row">
             <!-- Biggest Contributor Users -->
-            <div class="col-lg-4 mb-4">
+            <div class="col-lg-6 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">Biggest Contributor Users (Commits & Code Lines)</h5>
@@ -374,7 +412,7 @@
             </div>
 
             <!-- Most Approvals by Top 5 Team Members -->
-            <div class="col-lg-4 mb-4">
+            <div class="col-lg-6 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title text-muted text-uppercase fs-6 fw-bold mb-3">Most Approvals by Top 5 Team Members</h5>
@@ -422,6 +460,10 @@
     private int? selectedUserId;
     private bool includePR = false;
     private bool showExcluded = false;
+
+    // Punchcard data variables
+    private List<CommitPunchcardDto>? punchcardData;
+    private bool isLoadingPunchcard = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -527,6 +569,58 @@
             isLoading = false;
             StateHasChanged();
         }
+
+        // Load punchcard data separately
+        await LoadPunchcardData();
+    }
+
+    private async Task LoadPunchcardData()
+    {
+        try
+        {
+            isLoadingPunchcard = true;
+            errorMessage = null;
+
+            if (!WorkspaceService.HasSelectedWorkspace)
+            {
+                return;
+            }
+
+            var url = $"api/analytics/commit-punchcard?workspace={WorkspaceService.SelectedWorkspace}";
+            
+            // Add date filters only if they have values (handle "All Time" scenario)
+            if (startDate.HasValue)
+            {
+                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
+            }
+            if (endDate.HasValue)
+            {
+                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
+            }
+            
+            // Add repository filter if specific repo is selected
+            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "all")
+            {
+                url += $"&repoSlug={selectedRepoSlug}";
+            }
+            
+            // Add user filter if specific user is selected
+            if (selectedUserId.HasValue)
+            {
+                url += $"&userId={selectedUserId.Value}";
+            }
+
+            punchcardData = await Http.GetFromJsonAsync<List<CommitPunchcardDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading punchcard data: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingPunchcard = false;
+            StateHasChanged();
+        }
     }
 
     private async Task LoadRepositories()
@@ -621,6 +715,17 @@
     private async Task OnFilterChanged()
     {
         await LoadDashboardData();
+    }
+
+    private string GetRepositoryDisplayName()
+    {
+        if (string.IsNullOrEmpty(selectedRepoSlug) || selectedRepoSlug == "all")
+        {
+            return "All Repositories";
+        }
+
+        var repo = repositories?.FirstOrDefault(r => r.Slug == selectedRepoSlug);
+        return repo?.Name ?? "Unknown Repository";
     }
 
     private string GetDateRangeDisplay()

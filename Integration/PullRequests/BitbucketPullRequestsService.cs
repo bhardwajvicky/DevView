@@ -31,11 +31,12 @@ namespace Integration.PullRequests
             _diffParser = diffParser;
         }
 
-        public async Task<bool> SyncPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
+        public async Task<(bool HasMoreHistory, int CommitCount)> SyncPullRequestsAsync(string workspace, string repoSlug, DateTime? startDate, DateTime? endDate)
         {
             _logger.LogInformation("Starting PR sync for {Workspace}/{RepoSlug} from {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}", workspace, repoSlug, startDate, endDate);
             
             bool currentBatchHitStartDateBoundary = false; // Indicates if we found PRs older than startDate
+            int totalCommitsSynced = 0; // Track total commits synced through PR sync
 
             // Check if we're currently rate limited
             if (BitbucketApiClient.IsRateLimited())
@@ -53,7 +54,7 @@ namespace Integration.PullRequests
             if (repoId == null)
             {
                 _logger.LogWarning("Repository '{RepoSlug}' not found. Sync repositories first.", repoSlug);
-                return false;
+                return (false, 0);
             }
 
             string nextPageUrl = null;
@@ -167,7 +168,8 @@ namespace Integration.PullRequests
                         }
 
                         // Now, sync commits for this PR
-                        await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
+                        var (commitsSyncedInThisBatch, _) = await SyncCommitsForPullRequest(connection, workspace, repoSlug, pr.Id, prDbId);
+                        totalCommitsSynced += commitsSyncedInThisBatch;
                     }
                     // Determine if we should keep fetching more pages
                     if (currentBatchHitStartDateBoundary)
@@ -182,12 +184,12 @@ namespace Integration.PullRequests
                     }
                 } 
                 
-                _logger.LogInformation("PR sync finished for {Workspace}/{RepoSlug}", workspace, repoSlug);
+                _logger.LogInformation("PR sync finished for {Workspace}/{RepoSlug}. {CommitCount} commits synced through PR sync.", workspace, repoSlug, totalCommitsSynced);
                 
                 // Update repository's last sync date
                 await UpdateRepositoryLastSyncDateAsync(connection, repoSlug);
                 
-                return currentBatchHitStartDateBoundary; // Return true if we hit the boundary, meaning there's more history to fetch
+                return (currentBatchHitStartDateBoundary, totalCommitsSynced); // Return true if we hit the boundary, meaning there's more history to fetch
             }
             catch (Exception ex)
             {
@@ -209,8 +211,9 @@ namespace Integration.PullRequests
             return title.IndexOf("revert", StringComparison.OrdinalIgnoreCase) >= 0;
         }
         
-        private async Task SyncCommitsForPullRequest(SqlConnection connection, string workspace, string repoSlug, int bitbucketPrId, int prDbId)
+        private async Task<(int CommitCount, int PullRequestCount)> SyncCommitsForPullRequest(SqlConnection connection, string workspace, string repoSlug, int bitbucketPrId, int prDbId)
         {
+            int commitsSyncedInThisBatch = 0;
             try
             {
                 string commitNextPageUrl = null;
@@ -267,6 +270,7 @@ namespace Integration.PullRequests
                             -- No update needed, mapping is simple
                         ";
                         await connection.ExecuteAsync(joinSql, new { PrDbId = prDbId, CommitId = commitId });
+                        commitsSyncedInThisBatch++;
                     }
                     commitNextPageUrl = commitPagedResponse.NextPageUrl;
                 } while (!string.IsNullOrEmpty(commitNextPageUrl));
@@ -283,6 +287,7 @@ namespace Integration.PullRequests
             {
                 _logger.LogError(ex, "Failed to sync commits for PR {PrId} in {Workspace}/{RepoSlug}. This PR will be skipped.", bitbucketPrId, workspace, repoSlug);
             }
+            return (commitsSyncedInThisBatch, 1); // Return 1 for the PR itself
         }
 
         private async Task SyncPullRequestApprovalsAsync(SqlConnection connection, int prDbId, System.Collections.Generic.List<BitbucketPullRequestParticipantDto> participants)

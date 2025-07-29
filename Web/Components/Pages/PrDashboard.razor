@@ -168,40 +168,6 @@
                 No data for top unapproved PRs found for the selected criteria.
             </div>
         }
-
-        @if (isLoadingPunchcard)
-        {
-            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
-                <div class="d-flex align-items-center">
-                    <div class="spinner-border spinner-border-sm me-2" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <span>Loading commit punchcard...</span>
-                </div>
-            </RadzenAlert>
-        }
-        else if (punchcardData != null && punchcardData.Any())
-        {
-            <div class="row mb-4">
-                <div style="max-width: 600px; margin-left: 0; margin-right: auto; padding-left: 0; padding-right: 0;">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">Commit Activity Punchcard</h5>
-                        </div>
-                        <div class="card-body">
-                            <CommitPunchcardChart Data="@punchcardData" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
-                No punchcard data found for the selected criteria.
-            </div>
-        }
     }
 </div>
 
@@ -210,12 +176,10 @@
     private List<RepositorySummaryDto>? topOpenPrs;
     private List<RepositorySummaryDto>? topOldestOpenPrs;
     private List<RepositorySummaryDto>? topUnapprovedPrs;
-    private List<CommitPunchcardDto>? punchcardData;
     private bool isLoadingRepos = true;
     private bool isLoadingTopOpenPrs = false;
     private bool isLoadingTopOldestOpenPrs = false;
     private bool isLoadingTopUnapprovedPrs = false;
-    private bool isLoadingPunchcard = false;
     private string? selectedRepoSlug;
     private DateTime? startDate;
     private DateTime? endDate;
@@ -250,7 +214,6 @@
             await LoadTopOpenPrs();
             await LoadTopOldestOpenPrs();
             await LoadTopUnapprovedPrs();
-            await LoadPunchcardData();
         }
     }
 
@@ -293,7 +256,6 @@
             await LoadTopOpenPrs();
             await LoadTopOldestOpenPrs();
             await LoadTopUnapprovedPrs();
-            await LoadPunchcardData();
             StateHasChanged();
         }
         else
@@ -301,7 +263,6 @@
             topOpenPrs = null;
             topOldestOpenPrs = null;
             topUnapprovedPrs = null;
-            punchcardData = null;
             StateHasChanged();
         }
     }
@@ -431,46 +392,6 @@
         finally
         {
             isLoadingTopUnapprovedPrs = false;
-            StateHasChanged();
-        }
-    }
-
-    private async Task LoadPunchcardData()
-    {
-        try
-        {
-            isLoadingPunchcard = true;
-            errorMessage = null;
-            var workspace = WorkspaceService.SelectedWorkspace;
-            if (string.IsNullOrEmpty(workspace))
-            {
-                errorMessage = "No workspace selected. Please configure workspace in Settings.";
-                Logger.LogWarning("LoadPunchcardData: No workspace provided");
-                return;
-            }
-            var url = $"api/analytics/commit-punchcard?workspace={workspace}";
-            if (!string.IsNullOrEmpty(selectedRepoSlug) && selectedRepoSlug != "ALL")
-            {
-                url += $"&repoSlug={selectedRepoSlug}";
-            }
-            if (startDate.HasValue)
-            {
-                url += $"&startDate={startDate.Value:yyyy-MM-dd}";
-            }
-            if (endDate.HasValue)
-            {
-                url += $"&endDate={endDate.Value:yyyy-MM-dd}";
-            }
-            punchcardData = await Http.GetFromJsonAsync<List<CommitPunchcardDto>>(url);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error loading punchcard data: {ex.Message}";
-            Logger.LogError(ex, "Error loading punchcard data");
-        }
-        finally
-        {
-            isLoadingPunchcard = false;
             StateHasChanged();
         }
     }

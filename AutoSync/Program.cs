@@ -128,22 +128,26 @@ namespace tVar.AutoSync
 
                     try
                     {
+                        int totalCommitsSynced = 0;
+                        
                         if (syncSettings.SyncTargets.Commits)
                         {
                             Console.WriteLine($"[Repo: {repo.Slug}] Syncing commits...");
-                            await commitService.SyncCommitsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                            var (hasMoreCommits, commitCount) = await commitService.SyncCommitsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                            totalCommitsSynced += commitCount;
                         }
                         if (syncSettings.SyncTargets.PullRequests)
                         {
                             Console.WriteLine($"[Repo: {repo.Slug}] Syncing pull requests...");
-                            await prService.SyncPullRequestsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                            var (hasMorePRs, prCommitCount) = await prService.SyncPullRequestsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                            totalCommitsSynced += prCommitCount;
                         }
-                        Console.WriteLine($"[Repo: {repo.Slug}] DELTA Batch complete.");
+                        Console.WriteLine($"[Repo: {repo.Slug}] DELTA Batch complete. {totalCommitsSynced} commits synced.");
 
-                        // Log sync complete
+                        // Log sync complete with commit count
                         await connection.ExecuteAsync(@"
-                            UPDATE RepositorySyncLog SET Status = @Status, Message = @Message WHERE Id = @Id",
-                            new { Id = logId, Status = "Completed", Message = "" });
+                            UPDATE RepositorySyncLog SET Status = @Status, Message = @Message, CommitCount = @CommitCount WHERE Id = @Id",
+                            new { Id = logId, Status = "Completed", Message = "", CommitCount = totalCommitsSynced });
                     }
                     catch (Exception ex)
                     {
@@ -211,23 +215,28 @@ namespace tVar.AutoSync
                         {
                             bool hasMoreCommits = false;
                             bool hasMorePRs = false;
+                            int totalCommitsSynced = 0;
 
                             if (syncSettings.SyncTargets.Commits)
                             {
                                 Console.WriteLine($"[Repo: {repo.Slug}] Syncing commits...");
-                                hasMoreCommits = await commitService.SyncCommitsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                                var (moreCommits, commitCount) = await commitService.SyncCommitsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                                hasMoreCommits = moreCommits;
+                                totalCommitsSynced += commitCount;
                             }
                             if (syncSettings.SyncTargets.PullRequests)
                             {
                                 Console.WriteLine($"[Repo: {repo.Slug}] Syncing pull requests...");
-                                hasMorePRs = await prService.SyncPullRequestsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                                var (morePRs, prCommitCount) = await prService.SyncPullRequestsAsync(repo.Workspace, repo.Slug, startDate, endDate);
+                                hasMorePRs = morePRs;
+                                totalCommitsSynced += prCommitCount;
                             }
-                            Console.WriteLine($"[Repo: {repo.Slug}] Batch complete.");
+                            Console.WriteLine($"[Repo: {repo.Slug}] Batch complete. {totalCommitsSynced} commits synced.");
 
-                            // Log sync complete
+                            // Log sync complete with commit count
                             await connection.ExecuteAsync(@"
-                                UPDATE RepositorySyncLog SET Status = @Status, Message = @Message WHERE Id = @Id",
-                                new { Id = logId, Status = "Completed", Message = "" });
+                                UPDATE RepositorySyncLog SET Status = @Status, Message = @Message, CommitCount = @CommitCount WHERE Id = @Id",
+                                new { Id = logId, Status = "Completed", Message = "", CommitCount = totalCommitsSynced });
 
                             // Update the end date for the next iteration for this specific repo
                             if (hasMoreCommits || hasMorePRs)
