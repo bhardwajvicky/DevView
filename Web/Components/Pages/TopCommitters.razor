@@ -59,6 +59,7 @@
             IncludeConfig="@includeConfig"
             GroupBy="@groupBy"
             ShowExcluded="@showExcluded"
+            DisableIndividualFilter="true"
             OnRepositorySelected="OnRepositorySelected"
             OnUserSelected="OnUserSelected"
             OnTeamSelected="OnTeamSelected"
@@ -249,7 +250,7 @@
     private IEnumerable<TeamSummaryDto>? teams;
     private int? selectedUserId;
     private int? selectedTeamId;
-    private string filterType = "user";
+    private string filterType = "team";
 
     protected override async Task OnInitializedAsync()
     {

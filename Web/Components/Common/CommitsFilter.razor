@@ -120,8 +120,9 @@
                     <div class="col-6">
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="filterType" id="filterByUser" 
-                                   checked="@(FilterType == @"user")" @onchange="@(() => HandleFilterTypeChanged(@"user"))" />
-                            <label class="form-check-label fw-medium" for="filterByUser">
+                                   checked="@(FilterType == @"user")" @onchange="@(() => HandleFilterTypeChanged(@"user"))" 
+                                   disabled="@DisableIndividualFilter" />
+                            <label class="form-check-label fw-medium @(DisableIndividualFilter ? "text-muted" : "")" for="filterByUser">
                                 <i class="bi bi-person me-1"></i>Individual
                             </label>
                         </div>
@@ -136,6 +137,14 @@
                         </div>
                     </div>
                 </div>
+                
+                @if (DisableIndividualFilter)
+                {
+                    <div class="alert alert-info alert-sm mb-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <small>Individual filter is not available on this page. Use team filtering to analyze group performance.</small>
+                    </div>
+                }
 
                 <!-- Selection Dropdown -->
                 <div class="selection-container">
@@ -395,6 +404,9 @@
     public bool ShowGrouping { get; set; } = true;
 
     [Parameter]
+    public bool DisableIndividualFilter { get; set; } = false;
+
+    [Parameter]
     public EventCallback<string> OnRepositorySelected { get; set; }
 
     [Parameter]
@@ -457,6 +469,12 @@
 
     private async Task HandleFilterTypeChanged(string filterType)
     {
+        // Prevent switching to user filter if it's disabled
+        if (filterType == "user" && DisableIndividualFilter)
+        {
+            return;
+        }
+        
         FilterType = filterType;
         
         // Clear selections when switching between user and team
