@@ -173,9 +173,12 @@ namespace API.Endpoints.Analytics
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] GroupingType groupBy = GroupingType.Day,
+            [FromQuery] int? userId = null,
+            [FromQuery] int? teamId = null,
             [FromQuery] bool includePR = true,
             [FromQuery] bool includeData = true,
             [FromQuery] bool includeConfig = true,
+            [FromQuery] bool showExcluded = false,
             [FromQuery] int topCount = 3,
             [FromQuery] int bottomCount = 3)
         {
@@ -184,7 +187,7 @@ namespace API.Endpoints.Analytics
                 return BadRequest("Either 'repoSlug' or 'workspace' must be provided.");
             }
 
-            var result = await _analyticsService.GetTopBottomCommittersAsync(repoSlug, workspace, startDate, endDate, groupBy, includePR, includeData, includeConfig, topCount, bottomCount);
+            var result = await _analyticsService.GetTopBottomCommittersAsync(repoSlug, workspace, startDate, endDate, groupBy, userId, teamId, includePR, includeData, includeConfig, showExcluded, topCount, bottomCount);
             return Ok(result);
         }
 

@@ -448,8 +448,9 @@ namespace API.Services
 
         public async Task<TopCommittersResponseDto> GetTopBottomCommittersAsync(
             string? repoSlug, string? workspace, DateTime? startDate, DateTime? endDate, GroupingType groupBy,
+            int? userId = null, int? teamId = null,
             bool includePR = true, bool includeData = true, bool includeConfig = true,
-            int topCount = 5, int bottomCount = 5, bool showExcluded = false)
+            bool showExcluded = false, int topCount = 5, int bottomCount = 5)
         {
             using var connection = new SqlConnection(_connectionString);
 
@@ -504,6 +505,12 @@ namespace API.Services
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
                         AND c.IsRevert = 0
+                        AND (@userId IS NULL OR c.AuthorId = @userId)
+                        AND (@teamId IS NULL OR c.AuthorId IN (
+                            SELECT tm.UserId 
+                            FROM TeamMembers tm 
+                            WHERE tm.TeamId = @teamId
+                        ))
                     GROUP BY c.AuthorId, u.DisplayName, u.AvatarUrl
                 ),
                 ActivityData AS (
@@ -532,6 +539,12 @@ namespace API.Services
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
                         AND c.IsRevert = 0
+                        AND (@userId IS NULL OR c.AuthorId = @userId)
+                        AND (@teamId IS NULL OR c.AuthorId IN (
+                            SELECT tm.UserId 
+                            FROM TeamMembers tm 
+                            WHERE tm.TeamId = @teamId
+                        ))
                     GROUP BY c.AuthorId, DATEADD(DAY, DATEDIFF(DAY, 0, c.Date), 0), c.IsMerge
                 ),
                 TopCommitters AS (
@@ -605,6 +618,8 @@ namespace API.Services
                 workspace,
                 startDate,
                 endDate,
+                userId,
+                teamId,
                 includePR,
                 includeData,
                 includeConfig,
