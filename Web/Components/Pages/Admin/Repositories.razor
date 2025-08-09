@@ -200,7 +200,7 @@
     {
         try
         {
-            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("http://localhost:5000/api/analytics/repositories");
+            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("api/analytics/repositories");
         }
         catch (Exception ex)
         {
@@ -221,7 +221,7 @@
 
         try
         {
-            var response = await Http.PostAsync($"http://localhost:5000/api/sync/repositories/{workspaceForSync}", null);
+            var response = await Http.PostAsync($"api/sync/repositories/{workspaceForSync}", null);
             
             if (response.IsSuccessStatusCode)
             {

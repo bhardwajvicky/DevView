@@ -148,7 +148,7 @@
     {
         try
         {
-            users = await Http.GetFromJsonAsync<IEnumerable<UserDto>>("http://localhost:5000/api/analytics/users");
+            users = await Http.GetFromJsonAsync<IEnumerable<UserDto>>("api/analytics/users");
         }
         catch (Exception ex)
         {
@@ -169,7 +169,7 @@
 
         try
         {
-            var response = await Http.PostAsync($"http://localhost:5000/api/sync/users/{WorkspaceService.SelectedWorkspace}", null);
+            var response = await Http.PostAsync($"api/sync/users/{WorkspaceService.SelectedWorkspace}", null);
             
             if (response.IsSuccessStatusCode)
             {

@@ -506,7 +506,7 @@
     {
         try
         {
-            teams = await Http.GetFromJsonAsync<IEnumerable<TeamDto>>("http://localhost:5000/api/teams");
+            teams = await Http.GetFromJsonAsync<IEnumerable<TeamDto>>("api/teams");
         }
         catch (Exception ex)
         {
@@ -519,8 +519,8 @@
         try
         {
             var url = teamId.HasValue 
-                ? $"http://localhost:5000/api/teams/available-users/{teamId}" 
-                : "http://localhost:5000/api/teams/available-users";
+                ? $"api/teams/available-users/{teamId}" 
+                : "api/teams/available-users";
             availableUsers = await Http.GetFromJsonAsync<IEnumerable<AvailableUserDto>>(url);
         }
         catch (Exception ex)
@@ -569,7 +569,7 @@
     {
         try
         {
-            var url = $"http://localhost:5000/api/teams/available-users/{teamId}?includeAlreadyMapped={includeAlreadyMapped}";
+            var url = $"api/teams/available-users/{teamId}?includeAlreadyMapped={includeAlreadyMapped}";
             
             if (!string.IsNullOrWhiteSpace(userSearchText))
             {
@@ -588,7 +588,7 @@
     {
         try
         {
-            selectedTeam = await Http.GetFromJsonAsync<TeamDto>($"http://localhost:5000/api/teams/{teamId}");
+            selectedTeam = await Http.GetFromJsonAsync<TeamDto>($"api/teams/{teamId}");
             await JSRuntime.InvokeVoidAsync("eval", "new bootstrap.Modal(document.getElementById('teamDetailsModal')).show()");
         }
         catch (Exception ex)
@@ -625,7 +625,7 @@
         try
         {
             newTeam.UserIds = selectedUserIds.ToList();
-            var response = await Http.PostAsJsonAsync("http://localhost:5000/api/teams", newTeam);
+            var response = await Http.PostAsJsonAsync("api/teams", newTeam);
             
             if (response.IsSuccessStatusCode)
             {
@@ -663,7 +663,7 @@
             // Add debugging info
             Console.WriteLine($"Updating team {editTeamId} with name: {editTeam.Name}");
             
-            var response = await Http.PutAsJsonAsync($"http://localhost:5000/api/teams/{editTeamId}", editTeam);
+            var response = await Http.PutAsJsonAsync($"api/teams/{editTeamId}", editTeam);
             
             Console.WriteLine($"Update response status: {response.StatusCode}");
             
@@ -711,7 +711,7 @@
                 IncludeAlreadyMapped = includeAlreadyMapped
             };
 
-            var response = await Http.PostAsJsonAsync($"http://localhost:5000/api/teams/{addMembersTeamId}/members", addMemberDto);
+            var response = await Http.PostAsJsonAsync($"api/teams/{addMembersTeamId}/members", addMemberDto);
             
             if (response.IsSuccessStatusCode)
             {
@@ -772,7 +772,7 @@
     {
         try
         {
-            var response = await Http.DeleteAsync($"http://localhost:5000/api/teams/{teamId}/members/{userId}");
+            var response = await Http.DeleteAsync($"api/teams/{teamId}/members/{userId}");
             
             if (response.IsSuccessStatusCode)
             {
@@ -797,7 +797,7 @@
         try
         {
             // Refresh the selected team data without closing the modal
-            selectedTeam = await Http.GetFromJsonAsync<TeamDto>($"http://localhost:5000/api/teams/{teamId}");
+            selectedTeam = await Http.GetFromJsonAsync<TeamDto>($"api/teams/{teamId}");
             StateHasChanged();
         }
         catch (Exception ex)
@@ -813,7 +813,7 @@
 
         try
         {
-            var response = await Http.DeleteAsync($"http://localhost:5000/api/teams/{teamId}");
+            var response = await Http.DeleteAsync($"api/teams/{teamId}");
             
             if (response.IsSuccessStatusCode)
             {

@@ -388,7 +388,7 @@
     {
         try
         {
-            workspaces = await Http.GetFromJsonAsync<IEnumerable<string>>("http://localhost:5000/api/analytics/workspaces");
+            workspaces = await Http.GetFromJsonAsync<IEnumerable<string>>("api/analytics/workspaces");
             if (workspaces != null && workspaces.Any() && string.IsNullOrEmpty(selectedWorkspace))
             {
                 selectedWorkspace = WorkspaceService.SelectedWorkspace ?? workspaces.First();
@@ -607,7 +607,7 @@
 
         try
         {
-            var response = await Http.PostAsync("http://localhost:5000/api/sync/refresh-commit-line-counts", null);
+            var response = await Http.PostAsync("api/sync/refresh-commit-line-counts", null);
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
