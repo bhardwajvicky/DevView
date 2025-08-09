@@ -21,6 +21,8 @@
 *.bak
 *.backup
 **/publish/
+autosync_publish/
+autosync.zip
 
 # SQL
 *.mdf

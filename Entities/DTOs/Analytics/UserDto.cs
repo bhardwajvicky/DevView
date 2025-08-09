@@ -15,5 +15,6 @@ namespace Entities.DTOs.Analytics
         public string DisplayName { get; set; } = string.Empty;
         public string AvatarUrl { get; set; } = string.Empty;
         public DateTime? CreatedOn { get; set; }
+        public bool ExcludeFromReporting { get; set; }
     }
 } 

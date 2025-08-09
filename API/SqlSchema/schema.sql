@@ -18,7 +18,8 @@ CREATE TABLE Users (
     BitbucketUserId NVARCHAR(255) NOT NULL UNIQUE,
     DisplayName NVARCHAR(255) NOT NULL,
     AvatarUrl NVARCHAR(500),
-    CreatedOn DATETIME2
+    CreatedOn DATETIME2,
+    ExcludeFromReporting BIT NOT NULL DEFAULT 0 -- Hide user from reporting/UI
 );
 
 -- Repositories table
@@ -133,6 +134,9 @@ CREATE INDEX IX_PullRequests_IsRevert ON PullRequests(IsRevert);
 CREATE INDEX IX_Repositories_ExcludeFromSync ON Repositories(ExcludeFromSync);
 CREATE INDEX IX_Repositories_ExcludeFromReporting ON Repositories(ExcludeFromReporting);
 
+-- Index for user exclusion flag
+CREATE INDEX IX_Users_ExcludeFromReporting ON Users(ExcludeFromReporting);
+
 -- PullRequestCommits join table
 CREATE TABLE PullRequestCommits (
     PullRequestId INT NOT NULL,
@@ -182,6 +186,18 @@ END
 IF COL_LENGTH('Repositories','ExcludeFromReporting') IS NULL
 BEGIN
     ALTER TABLE Repositories ADD ExcludeFromReporting BIT NOT NULL DEFAULT 0;
+END
+
+-- Add user exclusion flag if missing
+IF COL_LENGTH('Users','ExcludeFromReporting') IS NULL
+BEGIN
+    ALTER TABLE Users ADD ExcludeFromReporting BIT NOT NULL DEFAULT 0;
+END
+
+-- Create index on Users.ExcludeFromReporting if missing
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Users_ExcludeFromReporting' AND object_id = OBJECT_ID('Users'))
+BEGIN
+    CREATE INDEX IX_Users_ExcludeFromReporting ON Users(ExcludeFromReporting);
 END
 
 -- DEPRECATED: Old message-based logic (kept for reference)

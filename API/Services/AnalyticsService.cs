@@ -284,7 +284,7 @@ namespace API.Services
         public async Task<IEnumerable<UserDto>> GetUsersAsync()
         {
             using var connection = new SqlConnection(_connectionString);
-            const string sql = "SELECT Id, BitbucketUserId, DisplayName, AvatarUrl, CreatedOn FROM Users ORDER BY DisplayName;";
+            const string sql = "SELECT Id, BitbucketUserId, DisplayName, AvatarUrl, CreatedOn, ExcludeFromReporting FROM Users WHERE ExcludeFromReporting = 0 ORDER BY DisplayName;";
             return await connection.QueryAsync<UserDto>(sql);
         }
 
