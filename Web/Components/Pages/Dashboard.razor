@@ -1023,6 +1023,11 @@
             errorMessage = null; // Clear previous errors
             // Fetch all repositories first, without any initial filtering
             var allRepositoriesData = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("api/analytics/repositories");
+            // Filter out repositories excluded from reporting for selection
+            if (allRepositoriesData != null)
+            {
+                allRepositoriesData = allRepositoriesData.Where(r => !r.ExcludeFromReporting).ToArray();
+            }
 
             // Add an "All Repositories" option with its Workspace explicitly set to "All"
             var allOption = new RepositorySummaryDto { 

@@ -305,7 +305,11 @@
         try
         {
             isLoadingRepos = true;
-            var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("/api/analytics/repositories");
+           var allRepositories = await Http.GetFromJsonAsync<RepositorySummaryDto[]>("/api/analytics/repositories");
+           if (allRepositories != null)
+           {
+               allRepositories = allRepositories.Where(r => !r.ExcludeFromReporting).ToArray();
+           }
             
             if (allRepositories != null && allRepositories.Any())
             {

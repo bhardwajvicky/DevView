@@ -67,7 +67,7 @@ namespace tVar.AutoSync
 
             // 1. Get all repositories from DB (moved here to be available for user/repo sync checks)
             var repos = await connection.QueryAsync<(int Id, string Slug, string Workspace)>(
-                "SELECT Id, Slug, Workspace FROM Repositories");
+                "SELECT Id, Slug, Workspace FROM Repositories WHERE ExcludeFromSync = 0");
 
             // Optional: Sync Users and Repositories first if enabled
             if (syncSettings.SyncTargets.Users)

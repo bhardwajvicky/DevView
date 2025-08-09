@@ -432,7 +432,11 @@
         try
         {
             isLoadingRepos = true;
-            repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("api/analytics/repositories");
+        repositories = await Http.GetFromJsonAsync<IEnumerable<RepositorySummaryDto>>("api/analytics/repositories");
+        if (repositories != null)
+        {
+            repositories = repositories.Where(r => !r.ExcludeFromReporting).ToArray();
+        }
         }
         catch (Exception ex)
         {

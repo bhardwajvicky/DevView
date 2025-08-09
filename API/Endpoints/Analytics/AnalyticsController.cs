@@ -87,6 +87,22 @@ namespace API.Endpoints.Analytics
             return Ok(result);
         }
 
+        [HttpPost("repositories/{id}/flags")]
+        public async Task<IActionResult> UpdateRepositoryFlags([FromRoute] int id, [FromQuery] bool? excludeFromSync = null, [FromQuery] bool? excludeFromReporting = null)
+        {
+            if (excludeFromSync is null && excludeFromReporting is null)
+            {
+                return BadRequest("At least one flag must be provided.");
+            }
+
+            var updated = await _analyticsService.UpdateRepositoryFlagsAsync(id, excludeFromSync, excludeFromReporting);
+            if (!updated)
+            {
+                return NotFound();
+            }
+            return Ok();
+        }
+
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers()
         {

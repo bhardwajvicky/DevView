@@ -103,6 +103,8 @@
                                         <th>Workspace</th>
                                         <th>Last Delta Sync</th>
                                         <th>Oldest Commit Date</th>
+                                        <th>Exclude From Sync</th>
+                                        <th>Exclude From Reporting</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -138,6 +140,12 @@
                                                 {
                                                     <span class="text-muted">No commits</span>
                                                 }
+                                            </td>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input" checked="@repo.ExcludeFromSync" @onchange="async e => await UpdateFlag(repo, nameof(repo.ExcludeFromSync), (bool)e.Value)" />
+                                            </td>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input" checked="@repo.ExcludeFromReporting" @onchange="async e => await UpdateFlag(repo, nameof(repo.ExcludeFromReporting), (bool)e.Value)" />
                                             </td>
                                             <td>
                                                 <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => NavigateToCommits(repo)">
@@ -234,6 +242,28 @@
         finally
         {
             isSyncing = false;
+        }
+    }
+
+    private async Task UpdateFlag(RepositorySummaryDto repo, string flagName, bool value)
+    {
+        try
+        {
+            var query = flagName == nameof(repo.ExcludeFromSync)
+                ? $"excludeFromSync={value.ToString().ToLower()}"
+                : $"excludeFromReporting={value.ToString().ToLower()}";
+            var response = await Http.PostAsync($"/api/analytics/repositories/{repo.Id}/flags?{query}", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                ShowMessage($"Failed to update {flagName} for {repo.Name}", "error");
+                await LoadRepositories();
+                return;
+            }
+            await LoadRepositories();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error updating flag: {ex.Message}", "error");
         }
     }
 

@@ -10,6 +10,7 @@ namespace Entities.DTOs.Analytics
 {
     public class RepositorySummaryDto
     {
+        public int Id { get; set; }
         public required string Name { get; set; }
         public required string Slug { get; set; }
         public required string Workspace { get; set; }
@@ -18,5 +19,7 @@ namespace Entities.DTOs.Analytics
         public int OpenPullRequestCount { get; set; }
         public DateTime? OldestOpenPullRequestDate { get; set; }
         public int PRsMissingApprovalCount { get; set; }
+        public bool ExcludeFromSync { get; set; }
+        public bool ExcludeFromReporting { get; set; }
     }
 } 

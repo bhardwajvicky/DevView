@@ -58,6 +58,7 @@ namespace API.Services
                     AND (@StartDate IS NULL OR c.Date >= @StartDate)
                     AND (@EndDate IS NULL OR c.Date <= @EndDate)
                     AND c.IsRevert = 0
+                    AND r.ExcludeFromReporting = 0
             ";
         }
 
@@ -223,6 +224,7 @@ namespace API.Services
                   AND (@startDate IS NULL OR c.Date >= @startDate)
                   AND (@endDate IS NULL OR c.Date <= @endDate)
                   AND c.IsRevert = 0
+                  AND r.ExcludeFromReporting = 0
                 GROUP BY DATEPART(WEEKDAY, [Date]) - 1, DATEPART(HOUR, [Date])
                 ORDER BY DayOfWeek, HourOfDay;";
 
@@ -235,16 +237,48 @@ namespace API.Services
             using var connection = new SqlConnection(_connectionString);
             const string sql = @"
                 SELECT 
+                    r.Id,
                     r.Name, 
                     r.Slug, 
                     r.Workspace,
                     MIN(c.Date) AS OldestCommitDate,
-                    r.LastDeltaSyncDate
+                    r.LastDeltaSyncDate,
+                    r.ExcludeFromSync,
+                    r.ExcludeFromReporting
                 FROM Repositories r
                 LEFT JOIN Commits c ON r.Id = c.RepositoryId
-                GROUP BY r.Name, r.Slug, r.Workspace, r.LastDeltaSyncDate
+                GROUP BY r.Id, r.Name, r.Slug, r.Workspace, r.LastDeltaSyncDate, r.ExcludeFromSync, r.ExcludeFromReporting
                 ORDER BY r.Name;";
             return await connection.QueryAsync<RepositorySummaryDto>(sql);
+        }
+
+        public async Task<bool> UpdateRepositoryFlagsAsync(int id, bool? excludeFromSync, bool? excludeFromReporting)
+        {
+            if (excludeFromSync is null && excludeFromReporting is null)
+            {
+                return false;
+            }
+
+            using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var updates = new List<string>();
+            var parameters = new DynamicParameters();
+            parameters.Add("Id", id);
+            if (excludeFromSync is not null)
+            {
+                updates.Add("ExcludeFromSync = @ExcludeFromSync");
+                parameters.Add("ExcludeFromSync", excludeFromSync.Value);
+            }
+            if (excludeFromReporting is not null)
+            {
+                updates.Add("ExcludeFromReporting = @ExcludeFromReporting");
+                parameters.Add("ExcludeFromReporting", excludeFromReporting.Value);
+            }
+
+            var sql = $"UPDATE Repositories SET {string.Join(", ", updates)} WHERE Id = @Id";
+            var rows = await connection.ExecuteAsync(sql, parameters);
+            return rows > 0;
         }
 
         public async Task<IEnumerable<UserDto>> GetUsersAsync()
@@ -505,6 +539,7 @@ namespace API.Services
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
                         AND c.IsRevert = 0
+                        AND r.ExcludeFromReporting = 0
                         AND (@userId IS NULL OR c.AuthorId = @userId)
                         AND (@teamId IS NULL OR c.AuthorId IN (
                             SELECT tm.UserId 
@@ -539,6 +574,7 @@ namespace API.Services
                         AND (@endDate IS NULL OR c.Date <= @endDate)
                         AND (@includePR = 1 OR c.IsPRMergeCommit = 0)
                         AND c.IsRevert = 0
+                        AND r.ExcludeFromReporting = 0
                         AND (@userId IS NULL OR c.AuthorId = @userId)
                         AND (@teamId IS NULL OR c.AuthorId IN (
                             SELECT tm.UserId 
@@ -716,6 +752,7 @@ namespace API.Services
                 FROM Repositories r
                 JOIN PullRequests pr ON r.Id = pr.RepositoryId
                 WHERE pr.State = 'OPEN'
+                    AND r.ExcludeFromReporting = 0
                     AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
@@ -740,6 +777,7 @@ namespace API.Services
                 FROM Repositories r
                 JOIN PullRequests pr ON r.Id = pr.RepositoryId
                 WHERE pr.State = 'OPEN'
+                    AND r.ExcludeFromReporting = 0
                     AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)
@@ -767,6 +805,7 @@ namespace API.Services
                             PullRequestApprovals pa ON pr.Id = pa.PullRequestId AND pa.Approved = 1
                         WHERE
                             r.Workspace = @workspace
+                            AND r.ExcludeFromReporting = 0
                             AND (@repoSlug IS NULL OR r.Slug = @repoSlug)
                             AND (@startDate IS NULL OR pr.CreatedOn >= @startDate)
                             AND (@endDate IS NULL OR pr.CreatedOn <= @endDate)
@@ -798,6 +837,7 @@ namespace API.Services
                 FROM PullRequests pr
                 JOIN Repositories r ON pr.RepositoryId = r.Id
                 WHERE pr.State = 'OPEN'
+                    AND r.ExcludeFromReporting = 0
                     AND (@RepoSlug IS NULL OR r.Slug = @RepoSlug)
                     AND (@Workspace IS NULL OR r.Workspace = @Workspace)
                     AND (@StartDate IS NULL OR pr.CreatedOn >= @StartDate)

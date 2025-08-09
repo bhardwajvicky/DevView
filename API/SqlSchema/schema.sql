@@ -1,5 +1,17 @@
 -- Database schema for BitBucket Analytics
 
+-- DEV/RESET: Drop existing tables to allow clean re-create (order matters due to FKs)
+IF OBJECT_ID('dbo.PullRequestApprovals','U') IS NOT NULL DROP TABLE dbo.PullRequestApprovals;
+IF OBJECT_ID('dbo.PullRequestCommits','U') IS NOT NULL DROP TABLE dbo.PullRequestCommits;
+IF OBJECT_ID('dbo.CommitFiles','U') IS NOT NULL DROP TABLE dbo.CommitFiles;
+IF OBJECT_ID('dbo.RepositorySyncLog','U') IS NOT NULL DROP TABLE dbo.RepositorySyncLog;
+IF OBJECT_ID('dbo.PullRequests','U') IS NOT NULL DROP TABLE dbo.PullRequests;
+IF OBJECT_ID('dbo.Commits','U') IS NOT NULL DROP TABLE dbo.Commits;
+IF OBJECT_ID('dbo.TeamMembers','U') IS NOT NULL DROP TABLE dbo.TeamMembers;
+IF OBJECT_ID('dbo.Teams','U') IS NOT NULL DROP TABLE dbo.Teams;
+IF OBJECT_ID('dbo.Users','U') IS NOT NULL DROP TABLE dbo.Users;
+IF OBJECT_ID('dbo.Repositories','U') IS NOT NULL DROP TABLE dbo.Repositories;
+
 -- Users table
 CREATE TABLE Users (
     Id INT IDENTITY(1,1) PRIMARY KEY,
@@ -17,7 +29,9 @@ CREATE TABLE Repositories (
     Slug NVARCHAR(255) NOT NULL,
     Workspace NVARCHAR(255) NOT NULL,
     CreatedOn DATETIME2,
-    LastDeltaSyncDate DATETIME2 NULL -- New column for tracking last delta sync
+    LastDeltaSyncDate DATETIME2 NULL, -- New column for tracking last delta sync
+    ExcludeFromSync BIT NOT NULL DEFAULT 0, -- Exclude this repository from synchronization
+    ExcludeFromReporting BIT NOT NULL DEFAULT 0 -- Exclude this repository from analytics/reporting
 );
 
 -- Commits table
@@ -113,11 +127,11 @@ CREATE INDEX IX_PullRequests_RepositoryId ON PullRequests(RepositoryId);
 CREATE INDEX IX_PullRequests_AuthorId ON PullRequests(AuthorId);
 CREATE INDEX IX_PullRequests_State ON PullRequests(State);
 CREATE INDEX IX_PullRequests_IsRevert ON PullRequests(IsRevert);
-CREATE INDEX IX_CommitFiles_CommitId ON CommitFiles(CommitId);
-CREATE INDEX IX_CommitFiles_FileType ON CommitFiles(FileType);
-CREATE INDEX IX_CommitFiles_ChangeStatus ON CommitFiles(ChangeStatus);
-CREATE INDEX IX_CommitFiles_FileExtension ON CommitFiles(FileExtension);
-CREATE INDEX IX_CommitFiles_ExcludeFromReporting ON CommitFiles(ExcludeFromReporting);
+-- (CommitFiles indexes moved below, after table creation)
+
+-- Indexes for repository exclusion flags
+CREATE INDEX IX_Repositories_ExcludeFromSync ON Repositories(ExcludeFromSync);
+CREATE INDEX IX_Repositories_ExcludeFromReporting ON Repositories(ExcludeFromReporting);
 
 -- PullRequestCommits join table
 CREATE TABLE PullRequestCommits (
@@ -145,9 +159,30 @@ CREATE TABLE CommitFiles (
     FOREIGN KEY (CommitId) REFERENCES Commits(Id) ON DELETE CASCADE
 );
 
+-- Indexes for CommitFiles (must come after table creation)
+CREATE INDEX IX_CommitFiles_CommitId ON CommitFiles(CommitId);
+CREATE INDEX IX_CommitFiles_FileType ON CommitFiles(FileType);
+CREATE INDEX IX_CommitFiles_ChangeStatus ON CommitFiles(ChangeStatus);
+CREATE INDEX IX_CommitFiles_FileExtension ON CommitFiles(FileExtension);
+CREATE INDEX IX_CommitFiles_ExcludeFromReporting ON CommitFiles(ExcludeFromReporting);
+
 -- Update script for existing DB
--- Add the new column
-ALTER TABLE Commits ADD IsPRMergeCommit BIT NOT NULL DEFAULT 0;
+-- Add the new column only if it doesn't already exist
+IF COL_LENGTH('Commits','IsPRMergeCommit') IS NULL
+BEGIN
+    ALTER TABLE Commits ADD IsPRMergeCommit BIT NOT NULL DEFAULT 0;
+END
+
+-- Add columns to Repositories if running as an update script (ignore errors if they already exist)
+-- Add repository exclusion flags only if they don't already exist
+IF COL_LENGTH('Repositories','ExcludeFromSync') IS NULL
+BEGIN
+    ALTER TABLE Repositories ADD ExcludeFromSync BIT NOT NULL DEFAULT 0;
+END
+IF COL_LENGTH('Repositories','ExcludeFromReporting') IS NULL
+BEGIN
+    ALTER TABLE Repositories ADD ExcludeFromReporting BIT NOT NULL DEFAULT 0;
+END
 
 -- DEPRECATED: Old message-based logic (kept for reference)
 -- Set IsMerge for commits whose message starts with 'merge' or 'Merged' (case-insensitive)
